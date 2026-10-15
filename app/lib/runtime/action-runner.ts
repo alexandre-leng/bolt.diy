@@ -4,6 +4,7 @@ import type { ActionCallbackData } from './message-parser';
 import type { ActionAlert, BoltAction, DeployAlert, FileHistory, SupabaseAction, SupabaseAlert } from '~/types/actions';
 import { createScopedLogger } from '~/utils/logger';
 import { path as nodePath } from '~/utils/path';
+import { parseCdTarget, parseStartCommand, withDependencyInstall } from '~/utils/projectCommands';
 import type { BoltShell } from '~/utils/shell';
 import { unreachable } from '~/utils/unreachable';
 
@@ -328,9 +329,11 @@ export class ActionRunner {
       unreachable('Shell terminal not found');
     }
 
+    const command = await this.#ensureDependenciesBeforeStart(action.content);
+
     const resp = await shell.executeCommand(
       this.runnerId.get(),
-      action.content,
+      command,
       () => {
         logger.debug(`[${action.type}]:Aborting Action\n\n`, action);
         action.abort();
@@ -344,6 +347,74 @@ export class ActionRunner {
     }
 
     return resp;
+  }
+
+  /**
+   * Never start a package script without its dependencies.
+   *
+   * A restored chat runs `npm install` and `npm run dev` as two separate
+   * actions in a container that has just booted. When the install action does
+   * not complete — a failure swallowed by the action chain, or a race while
+   * the fresh container and shell come up — the start action still runs and
+   * dies with `jsh: command not found: vite`, which hides the real cause.
+   * The failure was intermittent: the same snapshot restored fine on reload.
+   *
+   * So the start action checks for itself: if the project has a package.json
+   * but no `node_modules/.bin`, the install is chained in front of the script.
+   * When dependencies are present the command is left untouched.
+   */
+  async #ensureDependenciesBeforeStart(command: string): Promise<string> {
+    const parsed = parseStartCommand(command);
+
+    if (!parsed) {
+      return command;
+    }
+
+    try {
+      const webcontainer = await this.#webcontainer;
+      const directory = this.#toWorkdirRelative(webcontainer, parsed.directory);
+      const inDirectory = (name: string) => (directory === '.' ? name : `${directory}/${name}`);
+
+      try {
+        await webcontainer.fs.readFile(inDirectory('package.json'), 'utf-8');
+      } catch {
+        return command; // not a package project: nothing to install
+      }
+
+      try {
+        await webcontainer.fs.readdir(inDirectory('node_modules/.bin'));
+
+        return command; // dependencies already installed
+      } catch {
+        const guarded = withDependencyInstall(parsed);
+        logger.warn(`Dependencies missing before start; installing first: ${guarded}`);
+
+        return guarded;
+      }
+    } catch (error) {
+      logger.debug('Could not check dependencies before start', error);
+
+      return command;
+    }
+  }
+
+  /**
+   * WebContainer's fs API resolves paths from the project workdir, while shell
+   * commands use absolute paths such as `/home/project`. Map the latter onto
+   * the former; '.' stands for the workdir itself.
+   */
+  #toWorkdirRelative(webcontainer: WebContainer, directory: string): string {
+    if (!directory || directory === '.') {
+      return '.';
+    }
+
+    if (!nodePath.isAbsolute(directory)) {
+      return nodePath.normalize(directory);
+    }
+
+    const relative = nodePath.relative(webcontainer.workdir, directory);
+
+    return relative === '' ? '.' : relative;
   }
 
   async #runFileAction(action: ActionState) {
@@ -692,18 +763,28 @@ export class ActionRunner {
 
     // Handle cd commands to non-existent directories
     if (trimmedCommand.startsWith('cd ')) {
-      const cdMatch = trimmedCommand.match(/^cd\s+(.+)$/);
+      /*
+       * Only the directory itself — never the rest of the line.
+       *
+       * The previous `/^cd\s+(.+)$/` captured everything after `cd`, so the
+       * restore command `cd "/home/project" && npm install --no-audit --no-fund`
+       * yielded the "directory" `"/home/project" && npm install ...`. readdir()
+       * always failed on that, and the command was rewritten into
+       * `mkdir -p <whole line> && cd <whole line>`, which ran the install twice
+       * and seeded a stray `home/project/` folder inside every project.
+       */
+      const targetDir = parseCdTarget(trimmedCommand);
 
-      if (cdMatch) {
-        const targetDir = cdMatch[1].trim();
-
+      if (targetDir) {
         try {
           const webcontainer = await this.#webcontainer;
-          await webcontainer.fs.readdir(targetDir);
+          await webcontainer.fs.readdir(this.#toWorkdirRelative(webcontainer, targetDir));
         } catch {
+          const quoted = JSON.stringify(targetDir);
+
           return {
             shouldModify: true,
-            modifiedCommand: `mkdir -p ${targetDir} && cd ${targetDir}`,
+            modifiedCommand: `mkdir -p ${quoted} && ${trimmedCommand}`,
             warning: 'Directory does not exist, created it first',
           };
         }

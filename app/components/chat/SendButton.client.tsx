@@ -1,6 +1,7 @@
-import { AnimatePresence, cubicBezier, motion } from 'framer-motion';
+import { cubicBezier, motion } from 'framer-motion';
 
 interface SendButtonProps {
+  /** There is something to send (text or attachments). */
   show: boolean;
   isStreaming?: boolean;
   disabled?: boolean;
@@ -10,30 +11,39 @@ interface SendButtonProps {
 
 const customEasingFn = cubicBezier(0.4, 0, 0.2, 1);
 
+/*
+ * Always rendered (bolt.new / Lovable): a round button at the right of the
+ * composer toolbar. It used to appear only once text was typed, so an empty
+ * composer showed no send affordance at all. Empty + idle = disabled.
+ */
 export const SendButton = ({ show, isStreaming, disabled, onClick }: SendButtonProps) => {
-  return (
-    <AnimatePresence>
-      {show ? (
-        <motion.button
-          className="absolute flex justify-center items-center top-[18px] right-[22px] p-1 bg-accent-500 hover:brightness-94 color-white rounded-md w-[34px] h-[34px] transition-theme disabled:opacity-50 disabled:cursor-not-allowed"
-          transition={{ ease: customEasingFn, duration: 0.17 }}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 10 }}
-          disabled={disabled}
-          onClick={(event) => {
-            event.preventDefault();
+  const inactive = disabled || (!show && !isStreaming);
+  const label = isStreaming ? 'Stop generating' : 'Send message';
 
-            if (!disabled) {
-              onClick?.(event);
-            }
-          }}
-        >
-          <div className="text-lg">
-            {!isStreaming ? <div className="i-ph:arrow-right"></div> : <div className="i-ph:stop-circle-bold"></div>}
-          </div>
-        </motion.button>
-      ) : null}
-    </AnimatePresence>
+  return (
+    <motion.button
+      type="button"
+      data-testid="send-button"
+      aria-label={label}
+      title={label}
+      className="bolt-primary-button flex shrink-0 justify-center items-center w-9 h-9 rounded-full transition-[background-color,opacity,transform] hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
+      transition={{ ease: customEasingFn, duration: 0.17 }}
+      initial={false}
+      animate={{ scale: 1 }}
+      disabled={inactive}
+      onClick={(event) => {
+        event.preventDefault();
+
+        if (!inactive) {
+          onClick?.(event);
+        }
+      }}
+    >
+      {isStreaming ? (
+        <span className="i-ph:stop-fill text-base" aria-hidden="true" />
+      ) : (
+        <span className="i-ph:arrow-up-bold text-lg" aria-hidden="true" />
+      )}
+    </motion.button>
   );
 };

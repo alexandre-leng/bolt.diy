@@ -3,13 +3,13 @@ import { Fragment } from 'react';
 import { forwardRef } from 'react';
 import type { ForwardedRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { toast } from 'react-toastify';
 import { AssistantMessage } from './AssistantMessage';
 import { isModelThinking, ThinkingIndicator } from './Thinking';
 import { UserMessage } from './UserMessage';
 import { forkChat } from '~/lib/persistence/db';
 import { getMessageText, hasMessageFlag } from '~/lib/persistence/messageMigration';
 import { db, chatId } from '~/lib/persistence/useChatHistory';
+import { toast } from '~/lib/toastify';
 import type { ProviderInfo } from '~/types/model';
 import { classNames } from '~/utils/classNames';
 

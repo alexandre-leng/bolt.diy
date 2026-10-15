@@ -2,7 +2,6 @@ import { useStore } from '@nanostores/react';
 import { formatDistanceToNow } from 'date-fns';
 import { motion } from 'framer-motion';
 import React, { useState, useEffect } from 'react';
-import { toast } from 'react-toastify';
 import {
   ConnectorActionPermissions,
   getConnectorPermissionKey,
@@ -12,6 +11,7 @@ import { Button } from '~/components/ui/Button';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '~/components/ui/Collapsible';
 import { useMCPStore } from '~/lib/stores/mcp';
 import { netlifyConnection, updateNetlifyConnection, initializeNetlifyConnection } from '~/lib/stores/netlify';
+import { toast } from '~/lib/toastify';
 import type { NetlifySite, NetlifyDeploy, NetlifyBuild, NetlifyUser } from '~/types/netlify';
 import { classNames } from '~/utils/classNames';
 

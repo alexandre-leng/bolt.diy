@@ -4,6 +4,7 @@ import { Checkbox } from '~/components/ui/Checkbox';
 import WithTooltip from '~/components/ui/Tooltip';
 import { useEditChatDescription } from '~/lib/hooks';
 import { db, prefetchChat, type ChatHistoryItem } from '~/lib/persistence';
+import { closeSidebar } from '~/lib/stores/sidebar';
 import { classNames } from '~/utils/classNames';
 
 interface HistoryItemProps {
@@ -68,7 +69,7 @@ export function HistoryItem({
   return (
     <div
       className={classNames(
-        'group rounded-lg text-sm text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-item-backgroundActive overflow-hidden flex justify-between items-center px-3 py-2 transition-colors',
+        'group rounded-xl text-sm text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-item-backgroundActive overflow-hidden flex justify-between items-center px-2 py-1.5 transition-colors',
         { 'text-bolt-elements-textPrimary bg-bolt-elements-item-backgroundActive': isActiveChat },
         { 'cursor-pointer': selectionMode },
       )}
@@ -106,9 +107,26 @@ export function HistoryItem({
       ) : (
         <Link
           to={`/chat/${item.urlId}`}
-          className="flex w-full relative truncate block"
-          onClick={selectionMode ? handleItemClick : undefined}
+          className="flex w-full relative items-center gap-3 min-w-0"
+          onClick={(event) => {
+            if (selectionMode) {
+              handleItemClick(event);
+
+              return;
+            }
+
+            /*
+             * Close the panel when a chat is opened.
+             *
+             * The sidebar is `position: fixed` at z-index 997 and overlays the
+             * chat column. Left open, it covers the error banner's Dismiss and
+             * Copy buttons, so they cannot be clicked — which reads to the user
+             * as "the error never closes and can't be copied".
+             */
+            closeSidebar();
+          }}
         >
+          <ProjectMonogram title={currentDescription} />
           <WithTooltip tooltip={currentDescription}>
             <span className="truncate pr-24">{currentDescription}</span>
           </WithTooltip>
@@ -117,7 +135,8 @@ export function HistoryItem({
               'absolute right-0 top-0 bottom-0 flex items-center bg-transparent px-2 transition-colors',
             )}
           >
-            <div className="flex items-center gap-2.5 text-gray-400 dark:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* bolt-touch-visible: always shown on touch screens, where hover never happens. */}
+            <div className="bolt-touch-visible flex items-center gap-2.5 text-gray-400 dark:text-gray-500 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
               <ChatActionButton
                 toolTipContent="Export"
                 icon="i-ph:download-simple h-4 w-4"
@@ -186,3 +205,44 @@ const ChatActionButton = forwardRef(
     );
   },
 );
+
+/*
+ * Lovable-style project tile: the first letter on a colour derived from the
+ * title, so every project is recognisable at a glance without a screenshot.
+ */
+const MONOGRAM_COLORS = [
+  'bg-violet-500/15 text-violet-600 dark:text-violet-300',
+  'bg-pink-500/15 text-pink-600 dark:text-pink-300',
+  'bg-sky-500/15 text-sky-600 dark:text-sky-300',
+  'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300',
+  'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+  'bg-indigo-500/15 text-indigo-600 dark:text-indigo-300',
+];
+
+export function monogramFor(title: string) {
+  const letter = (title.trim().match(/[\p{L}\p{N}]/u)?.[0] ?? '?').toUpperCase();
+
+  let hash = 0;
+
+  for (const char of title) {
+    hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  }
+
+  return { letter, color: MONOGRAM_COLORS[hash % MONOGRAM_COLORS.length] };
+}
+
+function ProjectMonogram({ title }: { title: string }) {
+  const { letter, color } = monogramFor(title);
+
+  return (
+    <span
+      aria-hidden="true"
+      className={classNames(
+        'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold',
+        color,
+      )}
+    >
+      {letter}
+    </span>
+  );
+}

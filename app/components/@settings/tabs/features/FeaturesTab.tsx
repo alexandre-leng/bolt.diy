@@ -1,10 +1,10 @@
 // Remove unused imports
 import { motion } from 'framer-motion';
 import React, { memo, useCallback } from 'react';
-import { toast } from 'react-toastify';
 import { Switch } from '~/components/ui/Switch';
 import { PromptLibrary } from '~/lib/common/prompt-library';
 import { useSettings } from '~/lib/hooks/useSettings';
+import { toast } from '~/lib/toastify';
 import { classNames } from '~/utils/classNames';
 
 interface FeatureToggle {

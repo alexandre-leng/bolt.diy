@@ -1,8 +1,8 @@
 import type { UIMessage } from 'ai';
-import { toast } from 'react-toastify';
 import { ImportFolderButton } from '~/components/chat/ImportFolderButton';
 import { ImportZipButton } from '~/components/chat/ImportZipButton';
 import { Button } from '~/components/ui/Button';
+import { toast } from '~/lib/toastify';
 import { classNames } from '~/utils/classNames';
 
 type ChatData = {

@@ -1,7 +1,6 @@
 import { useStore } from '@nanostores/react';
 import { motion } from 'framer-motion';
 import React, { useEffect, useState, useRef } from 'react';
-import { toast } from 'react-toastify';
 import { logStore } from '~/lib/stores/logs';
 import {
   vercelConnection,
@@ -11,6 +10,7 @@ import {
   fetchVercelStats,
   autoConnectVercel,
 } from '~/lib/stores/vercel';
+import { toast } from '~/lib/toastify';
 import { classNames } from '~/utils/classNames';
 
 export default function VercelConnection() {

@@ -2,7 +2,6 @@ import { generateId, type UIMessage } from 'ai';
 import ignore from 'ignore';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { toast } from 'react-toastify';
 import { ClientOnly } from 'remix-utils/client-only';
 import { BaseChat } from '~/components/chat/BaseChat';
 import { Chat } from '~/components/chat/Chat.client';
@@ -10,6 +9,7 @@ import { LoadingOverlay } from '~/components/ui/LoadingOverlay';
 import { useGit } from '~/lib/hooks/useGit';
 import { useChatHistory } from '~/lib/persistence';
 import { createMessage } from '~/lib/persistence/messageMigration';
+import { toast } from '~/lib/toastify';
 import { createCommandsMessage, detectProjectCommands, escapeBoltTags } from '~/utils/projectCommands';
 
 const IGNORE_PATTERNS = [

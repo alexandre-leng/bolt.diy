@@ -34,6 +34,7 @@ const ENABLED_PROVIDERS = new Set([
   'Ollama',
   'LMStudio',
   'OpenAILike',
+  'OpenCodeGo',
 ]);
 
 export class LLMManager {
@@ -265,6 +266,17 @@ export class LLMManager {
   }
 
   getDefaultProvider(): BaseProvider {
+    /*
+     * A deployment can pin its own default with VITE_DEFAULT_PROVIDER (inlined
+     * at build time). Unknown names fall through to the stock behaviour.
+     */
+    const configured = (import.meta.env?.VITE_DEFAULT_PROVIDER as string | undefined)?.trim();
+    const pinned = configured ? this._providers.get(configured) : undefined;
+
+    if (pinned) {
+      return pinned;
+    }
+
     /*
      * Prefer OpenRouter explicitly. Registration order follows the export
      * order of ./registry, which would otherwise make the default depend on

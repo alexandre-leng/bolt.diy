@@ -1,8 +1,8 @@
 import { motion } from 'framer-motion';
 import React, { useState } from 'react';
-import { toast } from 'react-toastify';
 import { Button } from '~/components/ui/Button';
 import { useGitLabConnection } from '~/lib/hooks';
+import { toast } from '~/lib/toastify';
 import { classNames } from '~/utils/classNames';
 
 interface ConnectionTestResult {

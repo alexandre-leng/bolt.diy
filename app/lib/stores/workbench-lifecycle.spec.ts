@@ -11,6 +11,10 @@ vi.mock('./files', () => ({
     reset() {
       return Promise.resolve();
     }
+
+    // workbench._runAction registers files the watcher has not seen yet.
+    getFile = vi.fn(() => undefined);
+    createFile = vi.fn(async () => true);
   },
 }));
 vi.mock('./editor', () => ({

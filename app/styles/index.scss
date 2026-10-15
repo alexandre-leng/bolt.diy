@@ -7,6 +7,15 @@
 @use 'components/editor.scss';
 @use 'components/toast.scss';
 
+/* Inter, self-hosted (public/fonts/InterVariable.woff2, SIL OFL 1.1). */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/InterVariable.woff2') format('woff2');
+}
+
 html,
 body {
   height: 100%;
@@ -22,16 +31,17 @@ html[data-accent-intensity] .bg-accent-500 {
   ) !important;
 }
 
+/*
+ * Corner-radius preference. 'soft' (the default) keeps the designed radii: forcing one
+ * value on every `rounded-*` flattened the hierarchy (28px composer, 16px bubbles, 8px
+ * chips all became 8px). 'sharp' and 'round' remain explicit opt-in overrides.
+ */
 html[data-corner-radius='sharp'] [class*='rounded-']:not([class*='rounded-full']),
-html[data-corner-radius='soft'] [class*='rounded-']:not([class*='rounded-full']),
 html[data-corner-radius='round'] [class*='rounded-']:not([class*='rounded-full']) {
   border-radius: var(--interface-corner-radius) !important;
 }
 html[data-corner-radius='sharp'] {
   --interface-corner-radius: 2px;
-}
-html[data-corner-radius='soft'] {
-  --interface-corner-radius: 8px;
 }
 html[data-corner-radius='round'] {
   --interface-corner-radius: 16px;
@@ -106,5 +116,167 @@ html[data-animated-transitions='false'] *::after {
 
   &:hover {
     scrollbar-color: var(--modern-scrollbar-thumb-backgroundHover) transparent;
+  }
+}
+
+/*
+ * Touch-device compatibility (Firefox for Android in particular).
+ *
+ * Firefox Android synthesises mouse events after each tap, which makes
+ * hover-only affordances either stick or fire twice. Scope every hover rule
+ * and the tap-related cosmetics below so they apply to real pointers only.
+ */
+@media (hover: none), (pointer: coarse) {
+  /* Taps should not leave a lingering hover/focus ring on the tapped control. */
+  button,
+  [role='button'],
+  a {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation; /* removes the 300ms double-tap zoom delay */
+  }
+
+  /* Hover styling is meaningless on touch and can get stuck "on" in Firefox. */
+  .hover\:bg-bolt-elements-background-depth-2:hover {
+    background-color: inherit;
+  }
+
+  /* Keep scrollable chrome feeling native instead of hijacking the gesture. */
+  .overflow-y-auto,
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/*
+ * Error toasts must stay readable and COPYABLE.
+ *
+ * Toasts are transient by default, and a closed toast loses the only record of
+ * what went wrong. Selection is explicitly allowed here so a user can highlight
+ * the message even though the toast container sets other interaction styles.
+ */
+.bolt-error-toast,
+.bolt-error-toast .Toastify__toast-body,
+.bolt-error-toast .Toastify__toast-message {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Inline chat error banner: same rule, so "Error Details" can be selected. */
+.llm-error-details {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* App-wide typeface: Inter first, system stack as fallback. */
+html,
+body {
+  font-family:
+    'Inter',
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Hover-revealed controls (history item actions) stay visible on touch screens. */
+@media (hover: none) {
+  .bolt-touch-visible {
+    opacity: 1 !important;
+  }
+}
+
+/*
+ * Landing background (HeroGlow.tsx), after Lovable (app + lovable.dev): a vertical wash,
+ * near-white at the top, sky blue through the middle, saturated pink at the bottom.
+ * Text never sits on the strongest part (the pink band is below the prompt card).
+ */
+.bolt-hero-wash {
+  /* Stops sampled from Alex's Lovable screenshot: grey 10%, blue 45%, magenta 70%, pink 85%. */
+  background: linear-gradient(
+    180deg,
+    #f4f4f3 0%,
+    #f2f3f7 28%,
+    #bed1f9 46%,
+    #d3b6f2 58%,
+    #e97bde 71%,
+    #fb4f98 86%,
+    #ffc9da 100%
+  );
+}
+
+[data-theme='dark'] .bolt-hero-wash {
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    transparent 30%,
+    rgba(59, 130, 246, 0.3) 48%,
+    rgba(168, 85, 247, 0.3) 60%,
+    rgba(236, 72, 153, 0.45) 75%,
+    rgba(244, 63, 94, 0.5) 88%,
+    rgba(236, 72, 153, 0.25) 100%
+  );
+}
+
+/* Lovable's primary button: charcoal with a hairline inset highlight (light), cream (dark). */
+.bolt-primary-button {
+  background-color: #1c1c1c;
+  color: #fcfbf8;
+  box-shadow:
+    rgba(255, 255, 255, 0.2) 0 0.5px 0 0 inset,
+    rgba(0, 0, 0, 0.2) 0 0 0 0.5px inset,
+    rgba(0, 0, 0, 0.05) 0 1px 2px 0;
+}
+
+[data-theme='dark'] .bolt-primary-button {
+  background-color: #fcfbf8;
+  color: #1c1c1c;
+}
+
+/* Horizontally scrollable chip rows on phones: visible scrollbar signals more options. */
+.bolt-scroll-row {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(28, 28, 28, 0.5) transparent;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-inline: contain;
+
+  &:focus-visible {
+    outline: 2px solid var(--bolt-elements-borderColorActive, #7645e8);
+    outline-offset: 2px;
+  }
+
+  &::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+    background: rgba(28, 28, 28, 0.5);
+  }
+}
+
+[data-theme='dark'] .bolt-scroll-row {
+  scrollbar-color: rgba(255, 255, 255, 0.6) transparent;
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.6);
+  }
+}
+
+@media (min-width: 768px) {
+  .bolt-scroll-row {
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
   }
 }

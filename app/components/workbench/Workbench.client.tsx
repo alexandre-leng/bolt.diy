@@ -7,7 +7,6 @@ import { computed } from 'nanostores';
 import { memo, useCallback, useEffect, useState, useMemo, useRef, lazy, Suspense } from 'react';
 import type { JSX } from 'react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
-import { toast } from 'react-toastify';
 import { EditorPanel } from './EditorPanel';
 import type { ElementInfo } from './Inspector';
 import { DEFAULT_TERMINAL_SIZE, TerminalTabs } from './terminal/TerminalTabs';
@@ -24,6 +23,7 @@ import { chatStore } from '~/lib/stores/chat';
 import { usePreviewStore } from '~/lib/stores/previews';
 import { streamingState } from '~/lib/stores/streaming';
 import { workbenchStore, type WorkbenchViewType } from '~/lib/stores/workbench';
+import { toast } from '~/lib/toastify';
 import type { FileHistory } from '~/types/actions';
 import { classNames } from '~/utils/classNames';
 import { debounce } from '~/utils/debounce';
@@ -428,7 +428,7 @@ export const Workbench = memo(
         >
           <div
             className={classNames(
-              'fixed top-[calc(var(--header-height)+1.2rem)] bottom-6 w-[var(--workbench-inner-width)] z-0 transition-[left,width] duration-200 bolt-ease-cubic-bezier',
+              'fixed top-[calc(var(--header-height)+0.5rem)] lg:top-[calc(var(--header-height)+1.2rem)] bottom-0 lg:bottom-6 w-[var(--workbench-inner-width)] z-0 transition-[left,width] duration-200 bolt-ease-cubic-bezier',
               {
                 'w-full': isSmallViewport,
                 'left-0': showWorkbench && isSmallViewport,
@@ -437,8 +437,8 @@ export const Workbench = memo(
               },
             )}
           >
-            <div className="absolute inset-0 px-2 lg:px-4">
-              <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
+            <div className="absolute inset-0 lg:px-4">
+              <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border-t lg:border border-bolt-elements-borderColor shadow-sm lg:rounded-lg overflow-hidden">
                 <div className="flex items-center px-3 py-2 border-b border-bolt-elements-borderColor gap-1.5">
                   <button
                     className={`${showChat ? 'i-ph:sidebar-simple-fill' : 'i-ph:sidebar-simple'} text-lg text-bolt-elements-textSecondary mr-1`}
@@ -564,6 +564,26 @@ export const Workbench = memo(
                   <Separator />
                   <TerminalTabs />
                 </Group>
+                {/*
+                 * Lovable's mobile preview bar: one obvious way back to the chat.
+                 * The top-right X was the only exit and is easy to miss on a phone.
+                 */}
+                {isSmallViewport && (
+                  <div
+                    data-testid="workbench-mobile-bar"
+                    className="flex items-center gap-2 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]"
+                  >
+                    <button
+                      type="button"
+                      data-testid="back-to-chat"
+                      onClick={() => workbenchStore.showWorkbench.set(false)}
+                      className="inline-flex h-10 items-center gap-1.5 rounded-full border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-4 text-sm font-medium text-bolt-elements-textPrimary shadow-xs transition-colors hover:bg-bolt-elements-background-depth-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500"
+                    >
+                      <span className="i-ph:caret-left text-base" aria-hidden="true" />
+                      Chat
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

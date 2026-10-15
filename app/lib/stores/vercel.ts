@@ -1,6 +1,6 @@
 import { atom } from 'nanostores';
-import { toast } from 'react-toastify';
 import { logStore } from './logs';
+import { toast } from '~/lib/toastify';
 import type { VercelConnection } from '~/types/vercel';
 
 // Auto-connect using environment variable

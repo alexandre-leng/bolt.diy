@@ -1,6 +1,5 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import { toast } from 'react-toastify';
 import BrowserUseCloudTab from '~/components/@settings/tabs/connectors/BrowserUseCloudTab';
 import GitHubTab from '~/components/@settings/tabs/github/GitHubTab';
 import GitLabTab from '~/components/@settings/tabs/gitlab/GitLabTab';
@@ -11,6 +10,7 @@ import { Dialog, DialogDescription, DialogRoot, DialogTitle, DialogButton } from
 import { Switch } from '~/components/ui/Switch';
 import { activateConnector, type ConnectorActivationId } from '~/lib/services/connectorActivation';
 import { useMCPStore, type ConnectorId } from '~/lib/stores/mcp';
+import { toast } from '~/lib/toastify';
 import { classNames } from '~/utils/classNames';
 
 type ConnectorType = 'github' | 'gitlab' | 'vercel' | 'netlify' | 'supabase' | 'browser-use-cloud';
@@ -331,7 +331,7 @@ export default function ConnectorsTab() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    className="group flex w-full items-center gap-4 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-5 py-4 text-left text-bolt-elements-textPrimary transition-colors hover:border-bolt-elements-borderColorActive hover:bg-bolt-elements-background-depth-3"
+                    className="group flex w-full flex-col items-start gap-3 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-4 text-left text-bolt-elements-textPrimary transition-colors hover:border-bolt-elements-borderColorActive hover:bg-bolt-elements-background-depth-3 sm:flex-row sm:items-center sm:gap-4 sm:px-5"
                   >
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary">
                       {connector.icon}
@@ -345,7 +345,7 @@ export default function ConnectorsTab() {
                       </div>
                       <p className="text-sm text-bolt-elements-textSecondary">{connector.description}</p>
                     </div>
-                    <div className="flex shrink-0 items-center gap-4">
+                    <div className="flex w-full flex-wrap items-center justify-between gap-3 border-t border-bolt-elements-borderColor pt-3 sm:w-auto sm:shrink-0 sm:flex-nowrap sm:justify-start sm:gap-4 sm:border-0 sm:pt-0">
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-bolt-elements-textSecondary">
                           {connectorEnabled[getSettingsId(connector)] ? 'On' : 'Off'}
@@ -360,7 +360,7 @@ export default function ConnectorsTab() {
                       <button
                         type="button"
                         onClick={() => setSelectedConnector(connector.id)}
-                        className="flex items-center gap-2 rounded-md border border-bolt-elements-borderColor bg-bolt-elements-background-depth-3 px-3 py-1.5 text-sm font-medium text-bolt-elements-textSecondary transition-colors hover:border-bolt-elements-borderColorActive hover:bg-bolt-elements-background-depth-1 hover:text-bolt-elements-textPrimary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/50"
+                        className="flex min-h-11 items-center gap-2 rounded-md border border-bolt-elements-borderColor bg-bolt-elements-background-depth-3 px-3 py-1.5 text-sm font-medium text-bolt-elements-textSecondary transition-colors hover:border-bolt-elements-borderColorActive hover:bg-bolt-elements-background-depth-1 hover:text-bolt-elements-textPrimary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/50"
                       >
                         Configure <span aria-hidden="true">→</span>
                       </button>

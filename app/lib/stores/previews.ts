@@ -1,5 +1,6 @@
 import type { WebContainer } from '@webcontainer/api';
 import { atom } from 'nanostores';
+import { parsePreviewId } from '~/lib/webcontainer/coep';
 
 // Extend Window interface to include our custom property
 declare global {
@@ -210,8 +211,7 @@ export class PreviewsStore {
 
   // Helper to extract preview ID from URL
   getPreviewId(url: string): string | null {
-    const match = url.match(/^https?:\/\/([^.]+)\.local-credentialless\.webcontainer-api\.io/);
-    return match ? match[1] : null;
+    return parsePreviewId(url);
   }
 
   // Broadcast state change to all tabs

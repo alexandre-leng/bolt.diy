@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { toast as toastify } from 'react-toastify';
+import { toast as toastify } from '~/lib/toastify';
 
 // Configure standard toast settings
 export const configuredToast = {

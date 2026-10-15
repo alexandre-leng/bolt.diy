@@ -1,9 +1,9 @@
 import { useStore } from '@nanostores/react';
 import Cookies from 'js-cookie';
 import { useState, useEffect, useCallback } from 'react';
-import { toast } from 'react-toastify';
 import { useGitLabAPI } from './useGitLabAPI';
 import { gitlabConnectionStore, gitlabConnection, isGitLabConnected } from '~/lib/stores/gitlabConnection';
+import { toast } from '~/lib/toastify';
 import type { GitLabConnection } from '~/types/GitLab';
 
 export interface ConnectionState {

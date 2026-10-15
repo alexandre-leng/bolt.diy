@@ -3,8 +3,9 @@ import { ClientOnly } from 'remix-utils/client-only';
 import { BaseChat } from '~/components/chat/BaseChat';
 import { Chat } from '~/components/chat/Chat.client';
 import { Header } from '~/components/header/Header';
+import { MobileNav } from '~/components/mobile/MobileNav';
 import { FirstRunOnboarding } from '~/components/onboarding/FirstRunOnboarding';
-import BackgroundRays from '~/components/ui/BackgroundRays';
+import { HeroGlow } from '~/components/ui/HeroGlow';
 
 export const meta: MetaFunction = () => {
   return [{ title: 'Bolt' }, { name: 'description', content: 'Talk with Bolt, an AI assistant from StackBlitz' }];
@@ -21,9 +22,10 @@ export const loader = () => Response.json({});
 export default function Index() {
   return (
     <div className="flex flex-col h-full w-full bg-bolt-elements-background-depth-1">
-      <BackgroundRays />
+      <HeroGlow />
       <Header />
       <ClientOnly fallback={<BaseChat />}>{() => <Chat />}</ClientOnly>
+      <ClientOnly>{() => <MobileNav />}</ClientOnly>
       <FirstRunOnboarding />
     </div>
   );

@@ -1,13 +1,13 @@
 import { useStore } from '@nanostores/react';
 import { motion } from 'framer-motion';
 import React, { useState, useEffect } from 'react';
-import { toast } from 'react-toastify';
 import type { UserProfile } from '~/components/@settings/core/types';
 import { Card, CardContent } from '~/components/ui/Card';
 import { Switch } from '~/components/ui/Switch';
 import { getAllChats } from '~/lib/persistence/chats';
 import { openDatabase } from '~/lib/persistence/db';
 import { setTheme, themeStore } from '~/lib/stores/theme';
+import { toast } from '~/lib/toastify';
 import { THEMES } from '~/types/theme';
 import { classNames } from '~/utils/classNames';
 import { isMac } from '~/utils/os';

@@ -62,6 +62,7 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
   const [loadingTab, setLoadingTab] = useState<TabType | null>(null);
   const [isDocumentationOpen, setIsDocumentationOpen] = useState(false);
   const [hasVisitedCloudProviders, setHasVisitedCloudProviders] = useState(false);
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(true);
 
   // Store values
   const tabConfiguration = useStore(tabConfigurationStore);
@@ -104,13 +105,26 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
       .sort((a, b) => a.order - b.order);
   }, [tabConfiguration, profile?.preferences?.notifications, baseTabConfig]);
 
+  // Keep the floating mobile navigation out of the settings dialog.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('bolt:settings-visibility', { detail: { open } }));
+
+    return () => {
+      window.dispatchEvent(new CustomEvent('bolt:settings-visibility', { detail: { open: false } }));
+    };
+  }, [open]);
+
   // Reset to default view when modal opens/closes
   useEffect(() => {
     if (!open) {
       // Reset when closing
       setActiveTab(null);
       setLoadingTab(null);
+      setMobileNavigationOpen(true);
     } else {
+      // A deep link goes straight to its content on phones; the overview starts at navigation.
+      setMobileNavigationOpen(!initialTab);
+
       // When opening, set initial tab if provided
       if (initialTab) {
         setActiveTab(initialTab);
@@ -214,6 +228,7 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
   };
 
   const handleTabClick = (tabId: TabType) => {
+    setMobileNavigationOpen(false);
     setLoadingTab(tabId);
     setActiveTab(tabId);
 
@@ -262,7 +277,7 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
           >
             <div
               className={classNames(
-                'w-[min(1440px,calc(100vw-2rem))] h-[90vh]',
+                'w-screen h-[100dvh] sm:w-[min(1440px,calc(100vw-2rem))] sm:h-[90vh]',
                 'bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary',
                 'rounded-2xl shadow-2xl',
                 'border border-bolt-elements-borderColor',
@@ -273,7 +288,13 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
               )}
             >
               <div className="relative z-10 flex h-full min-h-0">
-                <aside className="flex w-[248px] shrink-0 flex-col border-r border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+                <aside
+                  data-testid="settings-navigation"
+                  className={classNames(
+                    'w-full shrink-0 flex-col border-r border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 sm:w-[248px]',
+                    mobileNavigationOpen ? 'flex' : 'hidden sm:flex',
+                  )}
+                >
                   <button
                     onClick={handleClose}
                     className="mx-4 mt-4 flex appearance-none items-center gap-2 border-0 border-b border-solid border-bolt-elements-borderColor bg-transparent px-2 pb-5 pt-2 text-left text-sm font-semibold text-bolt-elements-textPrimary hover:text-bolt-elements-item-contentAccent"
@@ -312,7 +333,20 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
                     <AvatarDropdown onSelectTab={handleTabClick} onOpenDocs={() => setIsDocumentationOpen(true)} />
                   </div>
                 </aside>
-                <main className="min-w-0 flex-1 overflow-y-auto modern-scrollbar p-6 md:px-10 md:py-8">
+                <main
+                  data-testid="settings-content"
+                  className={classNames(
+                    'min-w-0 flex-1 overflow-y-auto modern-scrollbar p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 md:px-10 md:py-8',
+                    mobileNavigationOpen ? 'hidden sm:block' : 'block',
+                  )}
+                >
+                  <button
+                    type="button"
+                    className="mb-5 flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-medium text-bolt-elements-textPrimary hover:text-bolt-elements-item-contentAccent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500 sm:hidden"
+                    onClick={() => setMobileNavigationOpen(true)}
+                  >
+                    <span className="i-ph:arrow-left text-lg" aria-hidden="true" /> All settings
+                  </button>
                   {activeTab && activeTab !== 'cloud-providers' ? (
                     <div className="mx-auto max-w-5xl">{getTabComponent(activeTab)}</div>
                   ) : !activeTab ? (

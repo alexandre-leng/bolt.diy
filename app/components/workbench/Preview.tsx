@@ -1,6 +1,6 @@
 import { useStore } from '@nanostores/react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { toast } from 'react-toastify';
+import { FirefoxAndroidPreviewNotice } from './FirefoxAndroidPreviewNotice';
 import type { ElementInfo } from './Inspector';
 import { InspectorPanel } from './InspectorPanel';
 import { PortDropdown } from './PortDropdown';
@@ -9,6 +9,8 @@ import { IconButton } from '~/components/ui/IconButton';
 import { ExpoQrModal } from '~/components/workbench/ExpoQrModal';
 import { expoUrlAtom } from '~/lib/stores/qrCodeStore';
 import { workbenchStore } from '~/lib/stores/workbench';
+import { toast } from '~/lib/toastify';
+import { currentCoepMode, parsePreviewId } from '~/lib/webcontainer/coep';
 
 type ResizeSide = 'left' | 'right' | null;
 
@@ -385,10 +387,9 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
 
   const openInNewWindow = (size: WindowSize) => {
     if (activePreview?.baseUrl) {
-      const match = activePreview.baseUrl.match(/^https?:\/\/([^.]+)\.local-credentialless\.webcontainer-api\.io/);
+      const previewId = parsePreviewId(activePreview.baseUrl);
 
-      if (match) {
-        const previewId = match[1];
+      if (previewId) {
         const previewUrl = `/webcontainer/preview/${previewId}`;
 
         // Adjust dimensions for landscape mode if applicable
@@ -958,16 +959,13 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
                             return;
                           }
 
-                          const match = activePreview.baseUrl.match(
-                            /^https?:\/\/([^.]+)\.local-credentialless\.webcontainer-api\.io/,
-                          );
+                          const previewId = parsePreviewId(activePreview.baseUrl);
 
-                          if (!match) {
+                          if (!previewId) {
                             console.warn('[Preview] Invalid WebContainer URL:', activePreview.baseUrl);
                             return;
                           }
 
-                          const previewId = match[1];
                           const previewUrl = `/webcontainer/preview/${previewId}`;
 
                           // Open in a new window with simple parameters
@@ -1082,6 +1080,9 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
             alignItems: 'center',
           }}
         >
+          {activePreview && currentCoepMode() === 'require-corp' && (
+            <FirefoxAndroidPreviewNotice onOpenInNewTab={openInNewTab} />
+          )}
           {activePreview ? (
             <>
               {isPreviewPaused ? (

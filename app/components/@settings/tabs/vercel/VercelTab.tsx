@@ -2,7 +2,6 @@ import { useStore } from '@nanostores/react';
 import { motion } from 'framer-motion';
 import Cookies from 'js-cookie';
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { toast } from 'react-toastify';
 import {
   ConnectorActionPermissions,
   getConnectorPermissionKey,
@@ -22,6 +21,7 @@ import {
   fetchVercelStatsViaAPI,
   initializeVercelConnection,
 } from '~/lib/stores/vercel';
+import { toast } from '~/lib/toastify';
 import type { VercelUserResponse } from '~/types/vercel';
 import { classNames } from '~/utils/classNames';
 

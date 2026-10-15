@@ -16,11 +16,11 @@ import {
   Settings as CogIcon,
 } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
-import { toast } from 'react-toastify';
 import { Badge } from '~/components/ui/Badge';
 import { Button } from '~/components/ui/Button';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '~/components/ui/Collapsible';
 import { netlifyConnection, updateNetlifyConnection, initializeNetlifyConnection } from '~/lib/stores/netlify';
+import { toast } from '~/lib/toastify';
 import type { NetlifySite, NetlifyDeploy, NetlifyBuild, NetlifyUser } from '~/types/netlify';
 import { classNames } from '~/utils/classNames';
 

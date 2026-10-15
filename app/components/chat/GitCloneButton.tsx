@@ -2,7 +2,6 @@ import type { UIMessage } from 'ai';
 import ignore from 'ignore';
 import { X, GitBranch } from 'lucide-react';
 import { useState } from 'react';
-import { toast } from 'react-toastify';
 
 // Import the new repository selector components
 import { GitHubRepositorySelector } from '~/components/@settings/tabs/github/components/GitHubRepositorySelector';
@@ -12,6 +11,7 @@ import { LoadingOverlay } from '~/components/ui/LoadingOverlay';
 import { useGit } from '~/lib/hooks/useGit';
 import type { IChatMetadata } from '~/lib/persistence/db';
 import { createMessage } from '~/lib/persistence/messageMigration';
+import { toast } from '~/lib/toastify';
 import { classNames } from '~/utils/classNames';
 import { generateId } from '~/utils/fileUtils';
 import { detectProjectCommands, createCommandsMessage, escapeBoltTags } from '~/utils/projectCommands';

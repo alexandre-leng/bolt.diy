@@ -5,10 +5,10 @@ import { useAnimate } from 'framer-motion';
 import Cookies from 'js-cookie';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { toast } from 'react-toastify';
 import { BaseChat } from './BaseChat';
 import type { ElementInfo } from '~/components/workbench/Inspector';
 import { API_KEYS_UPDATED_EVENT, type ApiKeysUpdatedDetail } from '~/lib/api/apiKeys';
+import { isNetworkStreamError, reportChatFailure, trackedChatFetch } from '~/lib/chatStreamDiagnostics';
 import { isServerAgentTool } from '~/lib/common/agentLoop';
 import { STARTER_BUILD_FLAG } from '~/lib/common/starterBuild';
 import { useMessageParser, usePromptEnhancer, useShortcuts } from '~/lib/hooks';
@@ -37,6 +37,7 @@ import { usePluginStore } from '~/lib/stores/plugins';
 import { streamingState } from '~/lib/stores/streaming';
 import { supabaseConnection } from '~/lib/stores/supabase';
 import { workbenchStore } from '~/lib/stores/workbench';
+import { toast } from '~/lib/toastify';
 import type { LlmErrorAlertType } from '~/types/actions';
 import type { ProgressAnnotation } from '~/types/context';
 import { defaultDesignScheme, type DesignScheme } from '~/types/design-scheme';
@@ -256,6 +257,9 @@ export const ChatImpl = memo(
     } = useChat({
       transport: new DefaultChatTransport({
         api: '/api/chat',
+
+        // Records timings/bytes so a mid-stream network failure can be diagnosed.
+        fetch: trackedChatFetch,
 
         /*
          * body is resolved per request, but only if it is a function. Passing a
@@ -808,6 +812,16 @@ export const ChatImpl = memo(
         } else if (errorInfo.message.toLowerCase().includes('quota')) {
           errorType = 'quota';
           title = 'Quota Exceeded';
+        } else if (isNetworkStreamError(errorInfo.message)) {
+          /*
+           * The browser lost the connection while the reply was streaming
+           * (Firefox: "Error in input stream"). Not a server error: the server
+           * logs a normal 200. Reported to /client-report for diagnosis.
+           */
+          reportChatFailure(errorInfo.message, { context, provider: provider.name });
+          errorType = 'network';
+          title = 'Connection lost';
+          errorInfo.message = `The connection was interrupted while the reply was streaming (network change, screen off or switching apps). Your project is safe: tap Continue. (${errorInfo.message})`;
         } else if (errorInfo.statusCode >= 500) {
           errorType = 'network';
           title = 'Server Error';

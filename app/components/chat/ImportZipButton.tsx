@@ -1,8 +1,8 @@
 import type { UIMessage } from 'ai';
 import React, { useRef, useState } from 'react';
-import { toast } from 'react-toastify';
 import { Button } from '~/components/ui/Button';
 import { logStore } from '~/lib/stores/logs';
+import { toast } from '~/lib/toastify';
 import { classNames } from '~/utils/classNames';
 import { createChatFromZip } from '~/utils/zipImport';
 

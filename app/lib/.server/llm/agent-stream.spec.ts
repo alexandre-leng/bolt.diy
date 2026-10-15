@@ -460,3 +460,80 @@ describe('agent provider recovery', () => {
     expect(chunks.some((chunk) => chunk.type === 'error')).toBe(false);
   });
 });
+
+/*
+ * Real provider models (e.g. @ai-sdk/openai) expose `provider` and `modelId`
+ * as prototype getters. Spreading such a model dropped them and the SDK
+ * crashed on `model.provider.split('.')` before any request was sent.
+ */
+describe('agent wrappers keep the model identity', () => {
+  class GetterModel {
+    readonly #inner: MockLanguageModelV4;
+
+    constructor(inner: MockLanguageModelV4) {
+      this.#inner = inner;
+    }
+
+    get specificationVersion() {
+      return this.#inner.specificationVersion;
+    }
+
+    get provider() {
+      return 'openai.chat';
+    }
+
+    get modelId() {
+      return 'deepseek-v4.1-flash';
+    }
+
+    get supportedUrls() {
+      return {};
+    }
+
+    doGenerate(params: any) {
+      return this.#inner.doGenerate(params);
+    }
+
+    doStream(params: any) {
+      return this.#inner.doStream(params);
+    }
+  }
+
+  const textModel = () =>
+    new GetterModel(
+      new MockLanguageModelV4({
+        doStream: async () => ({
+          stream: new ReadableStream({
+            start(controller) {
+              controller.enqueue({ type: 'text-start', id: 't' });
+              controller.enqueue({ type: 'text-delta', id: 't', delta: 'OK' });
+              controller.enqueue({ type: 'text-end', id: 't' });
+              finish(controller);
+            },
+          }),
+        }),
+      }),
+    );
+
+  it('exposes provider and modelId through both wrappers', () => {
+    const wrapped = withAgentToolCallRecovery(withAgentStreamDeadlines(textModel() as any), () => undefined) as any;
+
+    expect(wrapped.provider).toBe('openai.chat');
+    expect(wrapped.modelId).toBe('deepseek-v4.1-flash');
+  });
+
+  it('streams through both wrappers without a TypeError', async () => {
+    const errors: unknown[] = [];
+
+    const result = streamText({
+      model: withAgentToolCallRecovery(withAgentStreamDeadlines(textModel() as any), () => undefined) as any,
+      prompt: 'hi',
+      onError: ({ error }) => {
+        errors.push(error);
+      },
+    });
+
+    expect(await result.text).toBe('OK');
+    expect(errors).toEqual([]);
+  });
+});

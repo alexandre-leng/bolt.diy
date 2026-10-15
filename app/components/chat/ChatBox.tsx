@@ -157,10 +157,16 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
     supabaseConnected,
   ]);
 
+  // Lovable: one translucent surface, large radius, soft shadow, no animated outline.
   return (
     <div
       className={classNames(
-        'relative bg-bolt-elements-background-depth-2 backdrop-blur p-3 rounded-lg border border-bolt-elements-borderColor relative w-full max-w-chat mx-auto z-prompt',
+        'relative w-full mx-auto z-prompt p-2 rounded-[1.75rem]',
+        'bg-white/85 dark:bg-[#1f1f22]/85 backdrop-blur-xl border border-black/[0.06] dark:border-white/10',
+        'shadow-[0_1px_2px_rgba(16,24,40,0.04),0_16px_40px_-16px_rgba(16,24,40,0.22)]',
+        'dark:shadow-[0_16px_40px_-16px_rgba(0,0,0,0.7)]',
+        'transition-[border-color,box-shadow] duration-200',
+        'focus-within:border-bolt-elements-borderColorActive',
 
         /*
          * {
@@ -169,7 +175,7 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
          */
       )}
     >
-      <svg className={classNames(styles.PromptEffectContainer)}>
+      <svg className={classNames(styles.PromptEffectContainer, 'hidden')}>
         <defs>
           <linearGradient
             id="line-gradient"
@@ -259,13 +265,11 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
           </button>
         </div>
       )}
-      <div
-        className={classNames('relative shadow-xs border border-bolt-elements-borderColor backdrop-blur rounded-lg')}
-      >
+      <div className="relative rounded-2xl bg-transparent">
         <textarea
           ref={props.textareaRef}
           className={classNames(
-            'w-full pl-4 pt-4 pr-16 outline-none resize-none text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary bg-transparent text-sm',
+            'w-full px-4 pt-4 outline-none resize-none text-bolt-elements-textPrimary placeholder-[#5f5f5d] dark:placeholder-white/55 bg-transparent text-[15px] leading-6',
             'transition-all duration-200',
             'hover:border-bolt-elements-focus',
           )}
@@ -329,30 +333,14 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
             minHeight: props.TEXTAREA_MIN_HEIGHT,
             maxHeight: props.TEXTAREA_MAX_HEIGHT,
           }}
-          placeholder={props.chatMode === 'build' ? 'How can Bolt help you today?' : 'What would you like to discuss?'}
+          placeholder={
+            props.chatMode === 'build' ? 'Describe the app you want to build…' : 'What would you like to discuss?'
+          }
+          aria-label={props.chatMode === 'build' ? 'Describe the app you want to build' : 'Message'}
           translate="no"
         />
-        <ClientOnly>
-          {() => (
-            <SendButton
-              show={props.input.length > 0 || props.isStreaming || props.uploadedFiles.length > 0}
-              isStreaming={props.isStreaming}
-              disabled={!props.providerList || props.providerList.length === 0}
-              onClick={(event) => {
-                if (props.isStreaming) {
-                  props.handleStop?.();
-                  return;
-                }
-
-                if (props.input.length > 0 || props.uploadedFiles.length > 0) {
-                  props.handleSendMessage?.(event);
-                }
-              }}
-            />
-          )}
-        </ClientOnly>
-        <div className="flex justify-between items-center text-sm p-4 pt-2">
-          <div className="flex gap-1 items-center">
+        <div className="flex justify-between items-center gap-2 text-sm px-3 pb-3 pt-1">
+          <div className="flex gap-1 items-center min-w-0">
             <ClientOnly>
               {() => (
                 <AttachmentMenu
@@ -391,6 +379,7 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
                 <button
                   type="button"
                   title={props.chatMode === 'discuss' ? 'Discuss Mode' : 'Agent Mode'}
+                  aria-label={props.chatMode === 'discuss' ? 'Mode: Discuss' : 'Mode: Agent'}
                   className={classNames(
                     'transition-all flex items-center gap-1 rounded-md px-1.5 py-1 text-xs',
                     props.chatMode === 'discuss'
@@ -403,15 +392,15 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
                   {props.chatMode === 'discuss' ? (
                     <>
                       <div className="i-ph:chats text-lg" />
-                      <span>Discuss</span>
+                      <span className="hidden sm:inline">Discuss</span>
                     </>
                   ) : (
                     <>
                       <div className="i-ph:robot text-lg" />
-                      <span>Agent</span>
+                      <span className="hidden sm:inline">Agent</span>
                     </>
                   )}
-                  <div className="i-ph:caret-down text-sm" />
+                  <div className="i-ph:caret-down text-sm hidden sm:block" />
                 </button>
               </DropdownMenu.Trigger>
               <DropdownMenu.Portal>
@@ -475,7 +464,7 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
             />
             <IconButton
               title="Model Settings"
-              className={classNames('transition-all flex items-center gap-1', {
+              className={classNames('transition-all flex items-center gap-1 min-w-0', {
                 'bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent':
                   props.isModelSettingsCollapsed,
                 'bg-bolt-elements-item-backgroundDefault text-bolt-elements-item-contentDefault':
@@ -486,14 +475,36 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
             >
               <div className={`i-ph:caret-${props.isModelSettingsCollapsed ? 'right' : 'down'} text-lg`} />
               {props.isModelSettingsCollapsed ? (
-                <span className="text-xs" title={props.model}>
-                  {props.model && props.model.length > 25 ? `${props.model.slice(0, 22)}...` : props.model}
+                <span
+                  className="text-xs truncate max-w-[7.5rem] sm:max-w-[14rem] text-bolt-elements-textSecondary"
+                  title={props.model}
+                >
+                  {props.model}
                 </span>
               ) : (
                 <span />
               )}
             </IconButton>
           </div>
+          <ClientOnly>
+            {() => (
+              <SendButton
+                show={props.input.length > 0 || props.isStreaming || props.uploadedFiles.length > 0}
+                isStreaming={props.isStreaming}
+                disabled={!props.providerList || props.providerList.length === 0}
+                onClick={(event) => {
+                  if (props.isStreaming) {
+                    props.handleStop?.();
+                    return;
+                  }
+
+                  if (props.input.length > 0 || props.uploadedFiles.length > 0) {
+                    props.handleSendMessage?.(event);
+                  }
+                }}
+              />
+            )}
+          </ClientOnly>
           <ExpoQrModal open={props.qrModalOpen} onClose={() => props.setQrModalOpen(false)} />
         </div>
       </div>

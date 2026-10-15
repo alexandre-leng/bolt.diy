@@ -138,6 +138,13 @@ export function toSafeStreamErrorMessage(error: unknown): string {
 
   logger.error(`Streaming provider error (${error instanceof Error ? error.name : 'UnknownError'})`);
 
+  /*
+   * Server-side diagnostics only (never sent to the client). Without the
+   * message, every failure looked identical in the logs ("TypeError") and could
+   * not be diagnosed. Credentials are masked before logging.
+   */
+  logger.error(`Streaming provider error detail: ${redactForLog(describeErrorForLog(error))}`);
+
   if ((error instanceof Error && error.name === 'TimeoutError') || /timeout|timed\s*out/.test(normalizedMessage)) {
     return 'Custom error: The AI provider stopped responding before the next step completed. Completed file changes and tool results are preserved. Retry to continue, or select a different model.';
   }
@@ -334,4 +341,32 @@ function formatBytes(bytes: number): string {
   }
 
   return `${Math.round(bytes / 1024)} KB`;
+}
+
+/** Error name, message, status and first stack frames, for server logs. */
+export function describeErrorForLog(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return String(error).slice(0, 600);
+  }
+
+  const status =
+    typeof error === 'object' && error !== null && 'statusCode' in error ? ` status=${String(error.statusCode)}` : '';
+
+  const cause = error.cause instanceof Error ? ` cause=${error.cause.name}: ${error.cause.message}` : '';
+
+  const frames = (error.stack ?? '')
+    .split('\n')
+    .slice(1, 5)
+    .map((line) => line.trim())
+    .join(' | ');
+
+  return `${error.name}: ${error.message}${status}${cause} @ ${frames}`.slice(0, 1200);
+}
+
+/** Masks bearer tokens, API-key-looking strings and key=value secrets. */
+export function redactForLog(text: string): string {
+  return text
+    .replace(/(bearer\s+)[^\s"']+/gi, '$1[REDACTED]')
+    .replace(/\b(sk|pk|rk|key|tok)[-_][A-Za-z0-9_-]{8,}/g, '[REDACTED]')
+    .replace(/((?:api[_-]?key|token|secret|password|authorization)["']?\s*[:=]\s*["']?)[^\s"'&,}]+/gi, '$1[REDACTED]');
 }

@@ -1,6 +1,5 @@
 import { useStore } from '@nanostores/react';
 import { useCallback, useEffect, useState } from 'react';
-import { toast } from 'react-toastify';
 import {
   chatId as chatIdStore,
   db,
@@ -8,6 +7,7 @@ import {
   getMessages,
   updateChatDescription,
 } from '~/lib/persistence';
+import { toast } from '~/lib/toastify';
 
 interface EditChatDescriptionOptions {
   initialDescription?: string;

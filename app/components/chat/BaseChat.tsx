@@ -8,6 +8,7 @@ import { getApiKeysFromCookies } from './APIKeyManager';
 import styles from './BaseChat.module.scss';
 import ChatAlert from './ChatAlert';
 import { ChatBox } from './ChatBox';
+import { ConnectToolsPill } from './ConnectToolsPill';
 import GitCloneButton from './GitCloneButton';
 import LlmErrorAlert from './LLMApiAlert';
 import { Messages, type DisplayMessage } from './Messages.client';
@@ -28,6 +29,7 @@ const LazyWorkbench = lazy(() =>
 );
 import { StickToBottom, useStickToBottomContext } from '~/lib/hooks';
 import type { ModelInfo } from '~/lib/modules/llm/types';
+import { profileStore } from '~/lib/stores/profile';
 import { expoUrlAtom } from '~/lib/stores/qrCodeStore';
 import { workbenchStore } from '~/lib/stores/workbench';
 import type { ActionAlert, DeployAlert, LlmErrorAlertType } from '~/types/actions';
@@ -139,7 +141,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
     const [apiKeys, setApiKeys] = useState<Record<string, string>>(getApiKeysFromCookies());
     const [modelList, setModelList] = useState<ModelInfo[]>([]);
-    const [isModelSettingsCollapsed, setIsModelSettingsCollapsed] = useState(false);
+
+    // Collapsed by default: the toolbar's model chip opens provider/model/API key settings.
+    const [isModelSettingsCollapsed, setIsModelSettingsCollapsed] = useState(true);
     const [isListening, setIsListening] = useState(false);
     const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
     const [transcript, setTranscript] = useState('');
@@ -381,15 +385,16 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         {chatStarted && showChat && !showWorkbench && (
           <WorkbenchReopenButton onClick={() => workbenchStore.showWorkbench.set(true)} />
         )}
-        <div className="flex flex-col lg:flex-row overflow-y-auto w-full h-full">
+        <div className="flex flex-col lg:flex-row overflow-y-auto overflow-x-hidden w-full h-full">
           <div className={classNames(styles.Chat, 'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] h-full')}>
             {!chatStarted && (
-              <div id="intro" className="mt-[16vh] max-w-2xl mx-auto text-center px-4 lg:px-0">
-                <h1 className="text-3xl lg:text-6xl font-bold text-bolt-elements-textPrimary mb-4 animate-fade-in">
-                  Where ideas begin
+              <div id="intro" className="mt-[8vh] lg:mt-[12vh] max-w-2xl mx-auto text-center px-4 lg:px-0">
+                <ConnectToolsPill />
+                <h1 className="text-[2rem] leading-[1.1] sm:text-5xl font-semibold tracking-[-0.03em] text-bolt-elements-textPrimary mb-3 animate-fade-in">
+                  <HeroTitle />
                 </h1>
-                <p className="text-md lg:text-xl mb-8 text-bolt-elements-textSecondary animate-fade-in animation-delay-200">
-                  Bring ideas to life in seconds or get help on existing projects.
+                <p className="text-base sm:text-lg mb-8 text-bolt-elements-textSecondary animate-fade-in animation-delay-200">
+                  Describe your app and Bolt builds it, live, in your browser.
                 </p>
               </div>
             )}
@@ -421,8 +426,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 <ScrollToBottom />
               </StickToBottom.Content>
               <div
-                className={classNames('my-auto flex flex-col gap-2 w-full max-w-chat mx-auto z-prompt mb-6', {
-                  'sticky bottom-2': chatStarted,
+                className={classNames('my-auto flex flex-col gap-2 w-full mx-auto z-prompt mb-6', {
+                  'sticky bottom-2 max-w-chat': chatStarted,
+                  'max-w-[44rem]': !chatStarted,
                 })}
               >
                 <div className="flex flex-col gap-2">
@@ -445,7 +451,16 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       }}
                     />
                   )}
-                  {llmErrorAlert && <LlmErrorAlert alert={llmErrorAlert} clearAlert={() => clearLlmErrorAlert?.()} />}
+                  {llmErrorAlert && (
+                    <LlmErrorAlert
+                      alert={llmErrorAlert}
+                      clearAlert={() => clearLlmErrorAlert?.()}
+                      onContinue={() => {
+                        clearLlmErrorAlert?.();
+                        sendMessage?.({} as any, 'Continue where you stopped.');
+                      }}
+                    />
+                  )}
                 </div>
                 <ToolApprovalTray messages={messages} addToolOutput={addToolOutput} />
                 {incomingProgressAnnotations && <ProgressCompilation data={incomingProgressAnnotations} />}
@@ -495,47 +510,29 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 />
               </div>
             </StickToBottom>
-            <div className="flex flex-col justify-center">
-              {!chatStarted && (
-                <div className="flex justify-center gap-2">
-                  <ImportFolderButton
-                    importChat={importChat}
-                    className={classNames(
-                      'gap-2 bg-bolt-elements-background-depth-1',
-                      'text-bolt-elements-textPrimary',
-                      'hover:bg-bolt-elements-background-depth-2',
-                      'border border-[rgba(0,0,0,0.08)] dark:border-[rgba(255,255,255,0.08)]',
-                      'h-10 px-4 py-2 min-w-[120px] justify-center',
-                      'transition-all duration-200 ease-in-out rounded-lg',
-                    )}
-                  />
-                  <ImportZipButton
-                    importChat={importChat}
-                    className={classNames(
-                      'gap-2 bg-bolt-elements-background-depth-1',
-                      'text-bolt-elements-textPrimary',
-                      'hover:bg-bolt-elements-background-depth-2',
-                      'border border-[rgba(0,0,0,0.08)] dark:border-[rgba(255,255,255,0.08)]',
-                      'h-10 px-4 py-2 min-w-[120px] justify-center',
-                      'transition-all duration-200 ease-in-out rounded-lg',
-                    )}
-                  />
-                  <GitCloneButton importChat={importChat} />
-                </div>
-              )}
-              <div className="flex flex-col gap-5">
-                {!chatStarted &&
-                  ExamplePrompts((event, messageInput) => {
-                    if (isStreaming) {
-                      handleStop?.();
-                      return;
-                    }
+            {!chatStarted && (
+              <div className="flex flex-col items-center gap-8 px-4 pb-28 md:pb-12 w-full">
+                {ExamplePrompts((event, messageInput) => {
+                  if (isStreaming) {
+                    handleStop?.();
+                    return;
+                  }
 
-                    handleSendMessage?.(event, messageInput);
-                  })}
-                {!chatStarted && <StarterTemplates />}
+                  handleSendMessage?.(event, messageInput);
+                })}
+                <div
+                  className="flex flex-wrap justify-center items-center gap-1 text-sm text-[#1c1c1c]/80 dark:text-white/80"
+                  aria-label="Import an existing project"
+                  role="group"
+                >
+                  <span className="mr-1">or import</span>
+                  <ImportFolderButton importChat={importChat} className={SECONDARY_ACTION} />
+                  <ImportZipButton importChat={importChat} className={SECONDARY_ACTION} />
+                  <GitCloneButton importChat={importChat} className={SECONDARY_ACTION} />
+                </div>
+                <StarterTemplates />
               </div>
-            </div>
+            )}
           </div>
           <ClientOnly>
             {() => (
@@ -557,6 +554,31 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     return <Tooltip.Provider delayDuration={200}>{baseChat}</Tooltip.Provider>;
   },
 );
+
+/*
+ * Secondary landing actions (import folder / ZIP / clone) as quiet ghost
+ * buttons, so they do not compete with the prompt. `!` overrides the default
+ * Button styles, since classNames() concatenates instead of merging.
+ */
+const SECONDARY_ACTION = classNames(
+  '!h-8 !min-w-0 !px-2.5 !py-1 !gap-1.5 !text-sm !font-normal !rounded-lg',
+
+  // Sits on the landing wash: near-black / near-white text keeps AA contrast on the pink band.
+  '!bg-transparent !border-transparent !text-[#1c1c1c] dark:!text-white',
+  'hover:!bg-white/60 dark:hover:!bg-white/10',
+  'focus-visible:!outline focus-visible:!outline-2 focus-visible:!outline-accent-500',
+);
+
+/*
+ * Lovable greets the user by name. Client-only (the profile lives in
+ * localStorage), so the server render shows the generic title.
+ */
+function HeroTitle() {
+  const profile = useStore(profileStore);
+  const name = profile?.username?.trim();
+
+  return <>{name ? `What will you build, ${name}?` : 'What will you build today?'}</>;
+}
 
 function ScrollToBottom() {
   const { isAtBottom, scrollToBottom } = useStickToBottomContext();

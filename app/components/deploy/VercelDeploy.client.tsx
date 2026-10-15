@@ -1,11 +1,11 @@
 import { useStore } from '@nanostores/react';
 import { useState } from 'react';
-import { toast } from 'react-toastify';
 import { formatBuildFailureOutput } from './deployUtils';
 import { chatId } from '~/lib/persistence/useChatHistory';
 import type { ActionCallbackData } from '~/lib/runtime/message-parser';
 import { vercelConnection } from '~/lib/stores/vercel';
 import { workbenchStore } from '~/lib/stores/workbench';
+import { toast } from '~/lib/toastify';
 import { webcontainer } from '~/lib/webcontainer';
 import { path } from '~/utils/path';
 

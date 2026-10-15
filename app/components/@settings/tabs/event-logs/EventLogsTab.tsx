@@ -3,10 +3,10 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { motion } from 'framer-motion';
 import { jsPDF } from 'jspdf';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { toast } from 'react-toastify';
 import { Dialog, DialogRoot, DialogTitle } from '~/components/ui/Dialog';
 import { Switch } from '~/components/ui/Switch';
 import { logStore, type LogEntry } from '~/lib/stores/logs';
+import { toast } from '~/lib/toastify';
 import { classNames } from '~/utils/classNames';
 
 interface SelectOption {

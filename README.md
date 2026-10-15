@@ -1,4 +1,8 @@
-# bolt.diy
+# bolt.diy — Alexandre's fork
+
+This repository is [Alexandre's fork](https://github.com/alexandre-leng/bolt.diy) of [stackblitz-labs/bolt.diy](https://github.com/stackblitz-labs/bolt.diy). It contains the Bolt interface, mobile and reliability improvements used by the self-hosted instance. It is not an official upstream release. Upstream remains the source for general documentation and community support.
+
+> **Security:** Never commit API keys, credentials, `.env.local`, browser storage, or production logs. The GitHub fork is public. Server-side authentication, reverse-proxy configuration, and runtime credentials are managed outside this repository.
 
 [![bolt.diy: AI-Powered Full-Stack Web Development in the Browser](./public/social_preview_index(1).jpg)](https://bolt.diy)
 
@@ -17,6 +21,7 @@ bolt.diy was originally started by [Cole Medin](https://www.youtube.com/@ColeMed
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+- [This Fork: Changes and Deployment](#this-fork-changes-and-deployment)
 - [Running with Docker](#running-with-docker)
 - [Desktop App (Electron)](#desktop-app-electron)
 - [Configuring API Keys and Providers](#configuring-api-keys-and-providers)
@@ -37,7 +42,7 @@ bolt.diy was originally started by [Cole Medin](https://www.youtube.com/@ColeMed
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/stackblitz-labs/bolt.diy.git
+git clone https://github.com/alexandre-leng/bolt.diy.git
 cd bolt.diy
 pnpm install
 ```
@@ -50,7 +55,19 @@ pnpm run dev
 
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-> **Pre-built Desktop Binaries**: Prefer a standalone app? Download binaries for Windows, macOS, and Linux from our [Latest Releases](https://github.com/stackblitz-labs/bolt.diy/releases/latest).
+> **Pre-built Desktop Binaries**: This fork does not publish standalone installers. Upstream binaries, which do not contain this fork's changes, are available from [upstream Releases](https://github.com/stackblitz-labs/bolt.diy/releases/latest).
+
+---
+
+## This Fork: Changes and Deployment
+
+This fork adds OpenCode Go as a provider (default `deepseek-v4.1-flash` for a new browser), a prompt-first home, touch-friendly Projects and chat/preview navigation, mobile-first Settings and connector cards, accessible navigation labels, and recovery messaging when an AI stream loses its connection. It also includes fixes for WebContainer restore and preview handling. Provider availability still requires your own configuration; a cloned repository does not inherit the self-hosted server's keys.
+
+**Local quality gates:** `pnpm run typecheck`, `pnpm run lint`, `pnpm test -- --run`, and `pnpm run build`. The mobile interface must also be checked in a browser at 360, 390, 768 and 1440 px, in both themes, after changes to layout or navigation.
+
+**Self-hosted deployment is separate from GitHub.** The live instance uses an external Docker Compose file, an entrypoint that forwards selected environment variables to the Cloudflare Worker, and an nginx authentication/proxy layer. Those files and secrets are not in this repository. To reproduce the deployment, provide your own secrets and authentication, build the `bolt-ai-production` Docker target, and use `wrangler dev` to serve the generated Worker behind a protected reverse proxy. A Git push does **not** rebuild or restart the live instance; consult the maintainer before deploying.
+
+**Audit boundary:** UI changes in this fork are not a claim that every screen, browser and device has been manually verified. In particular, Firefox for Android and a real Agent/Preview project require their own end-to-end checks.
 
 ---
 
@@ -77,7 +94,7 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 bolt.diy is also available as a cross-platform desktop application:
 
-- **Download**: Grab pre-built installers from [Latest Releases](https://github.com/stackblitz-labs/bolt.diy/releases/latest).
+- **Download**: This fork provides no installer; [upstream releases](https://github.com/stackblitz-labs/bolt.diy/releases/latest) are built from upstream source, not this fork.
 - **Build from Source**:
   ```bash
   pnpm electron:build:dist
@@ -90,7 +107,7 @@ bolt.diy is also available as a cross-platform desktop application:
 You can configure model providers either directly in the UI or via environment variables:
 
 ### Option A: In the UI (Recommended)
-Click the **Settings** icon (⚙️) in the sidebar → **Providers**. Enter your API keys or configure local endpoints (Ollama, LM Studio, OpenAI-compatible). Keys are validated in real time and stored securely in your browser cookies.
+Click the model settings control in the composer to select a provider/model and enter a key when needed. For integration settings, open **Settings → Cloud Providers**. Browser-entered keys are stored on that browser; use server-side environment variables instead if you do not want to store keys in browser cookies.
 
 ### Option B: Environment Variables
 Copy `.env.example` to `.env.local` and add your keys or local endpoints:
@@ -112,7 +129,7 @@ LMSTUDIO_BASE_URL=http://127.0.0.1:1234
 
 - **In-Browser Web Development**: Full-stack Node.js development environment powered by WebContainers.
 - **22+ AI Providers**: Cloud (Anthropic, OpenAI, Google, DeepSeek, Groq, xAI, Mistral, etc.) and Local (Ollama, LM Studio). OpenRouter, Anthropic, OpenAI, and Google are enabled by default.
-- **Interactive Workbench**: Integrated code editor, terminal, visual diff viewer, and real-time live preview. Opens by default for a started chat and can be reopened after closing.
+- **Interactive Workbench**: Integrated code editor, terminal, visual diff viewer, and real-time live preview. On compact layouts the chat stays in front; use Preview to open the workbench and Chat to return.
 - **Starter Setup**: Explicit framework requests select a matching starter in code. Starter files include detected install and development server commands before the first customization request.
 - **Prompt Library**: Choose a system prompt under Settings → Workspace → Features, including Simple Sal for concise guidance and Tiny Tim for smaller models.
 - **Project Workflows**: Git cloning/pushing, snapshot restoration, file conflict locking, and ZIP export.

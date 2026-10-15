@@ -8,6 +8,7 @@ import { FilesStore, type FileMap } from './files';
 import { PreviewsStore } from './previews';
 import { TerminalStore } from './terminal';
 import type { EditorDocument, ScrollPosition } from '~/components/editor/codemirror/CodeMirrorEditor';
+import { isCompactLayout } from '~/lib/layout';
 import { description } from '~/lib/persistence';
 import { ActionRunner } from '~/lib/runtime/action-runner';
 import type { ActionCallbackData, ArtifactCallbackData } from '~/lib/runtime/message-parser';
@@ -53,7 +54,8 @@ export class WorkbenchStore {
 
   artifacts: Artifacts = import.meta.hot?.data.artifacts ?? map({});
 
-  showWorkbench: WritableAtom<boolean> = import.meta.hot?.data.showWorkbench ?? atom(true);
+  // Initially closed in the compact layout: the chat stays on screen (Lovable mobile).
+  showWorkbench: WritableAtom<boolean> = import.meta.hot?.data.showWorkbench ?? atom(!isCompactLayout());
   projectGeneration: WritableAtom<number> = import.meta.hot?.data.projectGeneration ?? atom(0);
   currentView: WritableAtom<WorkbenchViewType> = import.meta.hot?.data.currentView ?? atom('code');
   userSelectedView: WritableAtom<WorkbenchViewType | undefined> =
@@ -269,7 +271,9 @@ export class WorkbenchStore {
 
     this.artifacts.set({});
     this.artifactIdList = [];
-    this.showWorkbench.set(true);
+
+    // Compact layout keeps the chat visible (see useMessageParser).
+    this.showWorkbench.set(!isCompactLayout());
     this.currentView.set('code');
     this.userSelectedView.set(undefined);
     this.unsavedFiles.set(new Set<string>());

@@ -1,8 +1,8 @@
 import type { UIMessage } from 'ai';
 import React, { useState } from 'react';
-import { toast } from 'react-toastify';
 import { Button } from '~/components/ui/Button';
 import { logStore } from '~/lib/stores/logs'; // Assuming logStore is imported from this location
+import { toast } from '~/lib/toastify';
 import { classNames } from '~/utils/classNames';
 import { MAX_FILES, isBinaryFile, shouldIncludeFile } from '~/utils/fileUtils';
 import { createChatFromFolder } from '~/utils/folderImport';

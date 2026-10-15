@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { toast } from 'react-toastify';
 import { Button } from '~/components/ui/Button';
 import { Switch } from '~/components/ui/Switch';
 import { useMCPStore } from '~/lib/stores/mcp';
+import { toast } from '~/lib/toastify';
 import { classNames } from '~/utils/classNames';
 
 const SERVER_NAME = 'browser-use-cloud';

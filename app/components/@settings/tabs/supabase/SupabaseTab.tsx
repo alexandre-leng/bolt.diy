@@ -1,7 +1,6 @@
 import { useStore } from '@nanostores/react';
 import { motion } from 'framer-motion';
 import React, { useEffect, useState } from 'react';
-import { toast } from 'react-toastify';
 import {
   ConnectorActionPermissions,
   getConnectorPermissionKey,
@@ -20,6 +19,7 @@ import {
   initializeSupabaseConnection,
   type SupabaseProject,
 } from '~/lib/stores/supabase';
+import { toast } from '~/lib/toastify';
 import { classNames } from '~/utils/classNames';
 
 interface ConnectionTestResult {

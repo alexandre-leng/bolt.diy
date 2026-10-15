@@ -16,6 +16,7 @@ import OllamaProvider from './providers/ollama';
 import OpenRouterProvider from './providers/open-router';
 import OpenAIProvider from './providers/openai';
 import OpenAILikeProvider from './providers/openai-like';
+import OpenCodeGoProvider from './providers/opencode-go';
 import PerplexityProvider from './providers/perplexity';
 import TogetherProvider from './providers/together';
 import XAIProvider from './providers/xai';
@@ -37,6 +38,7 @@ export {
   OpenAIProvider,
   OpenRouterProvider,
   OpenAILikeProvider,
+  OpenCodeGoProvider,
   PerplexityProvider,
   XAIProvider,
   TogetherProvider,

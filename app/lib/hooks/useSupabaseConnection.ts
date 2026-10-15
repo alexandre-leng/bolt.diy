@@ -1,6 +1,5 @@
 import { useStore } from '@nanostores/react';
 import { useEffect, useState } from 'react';
-import { toast } from 'react-toastify';
 import { logStore } from '~/lib/stores/logs';
 import {
   supabaseConnection,
@@ -11,6 +10,7 @@ import {
   fetchProjectApiKeys,
   initializeSupabaseConnection,
 } from '~/lib/stores/supabase';
+import { toast } from '~/lib/toastify';
 
 export function useSupabaseConnection({ enabled = true }: { enabled?: boolean } = {}) {
   const connection = useStore(supabaseConnection);

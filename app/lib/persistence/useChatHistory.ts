@@ -2,7 +2,6 @@ import { generateId, type UIMessage } from 'ai';
 import { atom } from 'nanostores';
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { useLoaderData, useNavigate, useParams, useSearchParams, type NavigateFunction } from 'react-router';
-import { toast } from 'react-toastify';
 import { getCachedMessages, getCachedSnapshot, invalidateChatCache } from './chatCache';
 import {
   getMessagesByIdRaw,
@@ -20,6 +19,7 @@ import type { Snapshot } from './types';
 import type { FileMap } from '~/lib/stores/files';
 import { logStore } from '~/lib/stores/logs'; // Import logStore
 import { workbenchStore } from '~/lib/stores/workbench';
+import { toast } from '~/lib/toastify';
 import { webcontainer } from '~/lib/webcontainer';
 import type { ContextAnnotation } from '~/types/context';
 import { detectProjectCommands, createCommandActionsString } from '~/utils/projectCommands';
@@ -356,7 +356,30 @@ ${value.content}
           console.error(error);
 
           logStore.logError('Failed to load chat messages or snapshot', error);
-          toast.error('Failed to load chat: ' + (error instanceof Error ? error.message : 'Unknown error'));
+
+          /*
+           * WebContainer's failure modes are opaque and one of them is actively
+           * misleading. Translate the known ones into something the user can act
+           * on, and keep the raw text so a bug report still carries it.
+           */
+          const raw = error instanceof Error ? error.message : 'Unknown error';
+          const lower = raw.toLowerCase();
+
+          let hint = '';
+
+          if (lower.includes('unable to create more instances')) {
+            hint =
+              ' Close every other Bolt tab or window and reload — the in-browser runtime only allows one instance per site.';
+          } else if (lower.includes('crossorigin') || lower.includes('cross-origin')) {
+            hint =
+              ' This page is not cross-origin isolated (crossOriginIsolated=' +
+              String(typeof window !== 'undefined' && window.crossOriginIsolated) +
+              '): the isolation headers are missing or this browser does not support the policy sent.';
+          } else if (lower.includes('network') || lower.includes('failed to fetch')) {
+            hint = ' The runtime could not be downloaded — check the connection and reload.';
+          }
+
+          toast.error(`Failed to load chat: ${raw}${hint}`);
 
           try {
             await serializeFilesystemTransition(async () => {

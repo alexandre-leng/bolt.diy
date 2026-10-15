@@ -9,7 +9,13 @@ import {
 } from 'ai';
 import type { ActionFunctionArgs } from 'react-router';
 import { createChatUIMessageStream } from '~/lib/.server/api/chat-stream';
-import { toApiErrorResponse, toMissingCredentialError, toSafeStreamErrorMessage } from '~/lib/.server/api/errors';
+import {
+  describeErrorForLog,
+  redactForLog,
+  toApiErrorResponse,
+  toMissingCredentialError,
+  toSafeStreamErrorMessage,
+} from '~/lib/.server/api/errors';
 import { readJsonBody } from '~/lib/.server/api/read-body';
 import {
   REQUEST_LIMITS,
@@ -121,10 +127,11 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
      * onChunk rather than by iterating the stream alongside the UI merge.
      */
     const observeChunk = ({ chunk }: { chunk: unknown }) => {
-      const part = chunk as { type?: string };
+      const part = chunk as { type?: string; error?: unknown };
 
       if (part.type === 'error') {
         logger.error('Streaming provider error');
+        logger.error(`Streaming provider chunk error: ${redactForLog(describeErrorForLog(part.error))}`);
       }
     };
 

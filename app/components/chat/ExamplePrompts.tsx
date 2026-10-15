@@ -1,13 +1,16 @@
 import React from 'react';
 
+/*
+ * Landing suggestions. Five, each with an icon, so they read as concrete
+ * starting points rather than a wall of grey text. Literal class names only:
+ * UnoCSS cannot see classes assembled at runtime.
+ */
 const EXAMPLE_PROMPTS = [
-  { text: 'Build a personal portfolio' },
-  { text: 'Make a recipe finder' },
-  { text: 'Build a markdown blog' },
-  { text: 'Create a Kanban board in react' },
-  { text: 'Make a Pomodoro timer' },
-  { text: 'Make a simple landing page' },
-  { text: 'Make a slide deck about dogs' },
+  { text: 'Build a personal portfolio', icon: 'i-ph:user-circle' },
+  { text: 'Create a Kanban board in React', icon: 'i-ph:kanban' },
+  { text: 'Make a recipe finder', icon: 'i-ph:cooking-pot' },
+  { text: 'Build a markdown blog', icon: 'i-ph:article' },
+  { text: 'Make a Pomodoro timer', icon: 'i-ph:timer' },
 ];
 
 /**
@@ -18,27 +21,28 @@ const EXAMPLE_PROMPTS = [
  */
 export function ExamplePrompts(sendMessage?: { (event: React.UIEvent, messageInput?: string): void | undefined }) {
   return (
-    <div id="examples" className="relative flex flex-col gap-9 w-full max-w-3xl mx-auto flex justify-center mt-6">
-      <div
-        className="flex flex-wrap justify-center gap-2"
-        style={{
-          animation: '.25s ease-out 0s 1 _fade-and-move-in_g2ptj_1 forwards',
-        }}
+    <div id="examples" className="w-full max-w-3xl mx-auto">
+      {/* Phones: one horizontally scrollable row (Lovable); from 768px: centred, wrapping. */}
+      <ul
+        className="bolt-scroll-row flex flex-nowrap gap-2 overflow-x-auto -mx-4 px-4 pb-2 snap-x md:mx-0 md:px-0 md:flex-wrap md:justify-center md:overflow-visible animate-fade-in animation-delay-200"
+        aria-label="Suggestions"
+        tabIndex={0}
       >
-        {EXAMPLE_PROMPTS.map((examplePrompt, index: number) => {
-          return (
+        {EXAMPLE_PROMPTS.map((examplePrompt) => (
+          <li key={examplePrompt.text} className="shrink-0 snap-start">
             <button
-              key={index}
+              type="button"
               onClick={(event) => {
                 sendMessage?.(event, examplePrompt.text);
               }}
-              className="border border-bolt-elements-borderColor rounded-full bg-gray-50 hover:bg-gray-100 dark:border-white/10 dark:bg-white/[0.06] dark:hover:bg-purple-500/15 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary px-3 py-1 text-xs transition-theme"
+              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-[#eceae4] dark:border-white/10 bg-white/75 dark:bg-white/5 backdrop-blur-md px-3.5 py-1.5 text-sm text-[#1c1c1c] dark:text-white/90 shadow-xs transition-colors hover:bg-white dark:hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500"
             >
+              <span className={`${examplePrompt.icon} text-base`} aria-hidden="true" />
               {examplePrompt.text}
             </button>
-          );
-        })}
-      </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

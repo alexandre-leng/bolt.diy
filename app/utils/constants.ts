@@ -6,7 +6,10 @@ export const WORK_DIR = `/home/${WORK_DIR_NAME}`;
 export const MODIFICATIONS_TAG_NAME = 'bolt_file_modifications';
 export const MODEL_REGEX = /^\[Model: (.*?)\]\n\n/;
 export const PROVIDER_REGEX = /\[Provider: (.*?)\]\n\n/;
-export const DEFAULT_MODEL = 'claude-3-5-sonnet-latest';
+
+// Overridable per deployment at build time; pair it with VITE_DEFAULT_PROVIDER.
+export const DEFAULT_MODEL =
+  (import.meta.env?.VITE_DEFAULT_MODEL as string | undefined)?.trim() || 'claude-3-5-sonnet-latest';
 export const PROMPT_COOKIE_KEY = 'cachedPrompt';
 export const TOOL_EXECUTION_APPROVAL = {
   APPROVE: 'Yes, approved.',

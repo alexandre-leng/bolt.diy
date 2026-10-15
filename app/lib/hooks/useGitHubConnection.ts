@@ -1,9 +1,9 @@
 import { useStore } from '@nanostores/react';
 import Cookies from 'js-cookie';
 import { useState, useEffect, useCallback } from 'react';
-import { toast } from 'react-toastify';
 import { useGitHubAPI } from './useGitHubAPI';
 import { githubConnection, isConnecting, updateGitHubConnection } from '~/lib/stores/github';
+import { toast } from '~/lib/toastify';
 import type { GitHubUserResponse, GitHubConnection } from '~/types/GitHub';
 
 export interface ConnectionState {

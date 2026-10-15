@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { isCompactLayout } from '~/lib/layout';
 import { getMessageText } from '~/lib/persistence/messageMigration';
 import { EnhancedStreamingMessageParser } from '~/lib/runtime/enhanced-message-parser';
 import { workbenchStore } from '~/lib/stores/workbench';
@@ -11,7 +12,15 @@ const messageParser = new EnhancedStreamingMessageParser({
     onArtifactOpen: (data) => {
       logger.trace('onArtifactOpen', data);
 
-      workbenchStore.showWorkbench.set(true);
+      /*
+       * Compact layout (phones, small tablets): keep the chat on screen, like
+       * Lovable. The workbench would cover it entirely; the header's Preview
+       * button opens it on demand.
+       */
+      if (!isCompactLayout()) {
+        workbenchStore.showWorkbench.set(true);
+      }
+
       workbenchStore.addArtifact(data);
     },
     onArtifactClose: (data) => {

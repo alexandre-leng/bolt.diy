@@ -3,12 +3,12 @@ import { Octokit } from '@octokit/rest';
 import * as Dialog from '@radix-ui/react-dialog';
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
-import { toast } from 'react-toastify';
 import { GitHubAuthDialog } from '~/components/@settings/tabs/github/components/GitHubAuthDialog';
 import { SearchInput, EmptyState, StatusIndicator, Badge } from '~/components/ui';
 import { getLocalStorage } from '~/lib/persistence/localStorage';
 import { chatId } from '~/lib/persistence/useChatHistory';
 import { logStore } from '~/lib/stores/logs';
+import { toast } from '~/lib/toastify';
 import type { GitHubUserResponse, GitHubRepoInfo } from '~/types/GitHub';
 import { classNames } from '~/utils/classNames';
 

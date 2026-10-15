@@ -87,7 +87,7 @@ const getInitialProviderSettings = (): ProviderSetting => {
   const initialSettings: ProviderSetting = {};
 
   // Default enabled providers (only these 4 are enabled by default)
-  const DEFAULT_ENABLED_PROVIDERS = ['OpenRouter', 'Anthropic', 'OpenAI', 'Google'];
+  const DEFAULT_ENABLED_PROVIDERS = ['OpenRouter', 'Anthropic', 'OpenAI', 'Google', 'OpenCodeGo'];
 
   // Start with default settings
   PROVIDER_LIST.forEach((provider) => {

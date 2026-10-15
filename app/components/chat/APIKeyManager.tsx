@@ -36,7 +36,16 @@ export function getApiKeysFromCookies() {
 export const APIKeyManager: React.FC<APIKeyManagerProps> = ({ provider, apiKey, setApiKey }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [tempKey, setTempKey] = useState(apiKey);
-  const [isEnvKeySet, setIsEnvKeySet] = useState(false);
+
+  /*
+   * true / false = answer from /api/check-env-key; null = not known yet.
+   * Starting at `false` flashed a red "Not Set" on every load until the
+   * request returned, and a failed request (401 after the Basic Auth session
+   * expired, network error) was reported as a missing key.
+   */
+  const [isEnvKeySet, setIsEnvKeySet] = useState<boolean | null>(
+    () => providerEnvKeyStatusCache[provider.name] ?? null,
+  );
 
   // Reset states and load saved key when provider changes
   useEffect(() => {
@@ -56,8 +65,15 @@ export const APIKeyManager: React.FC<APIKeyManagerProps> = ({ provider, apiKey, 
       return;
     }
 
+    setIsEnvKeySet(null);
+
     try {
       const response = await fetch(`/api/check-env-key?provider=${encodeURIComponent(provider.name)}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
       const data = await response.json();
       const isSet = (data as { isSet: boolean }).isSet;
 
@@ -65,8 +81,9 @@ export const APIKeyManager: React.FC<APIKeyManagerProps> = ({ provider, apiKey, 
       providerEnvKeyStatusCache[provider.name] = isSet;
       setIsEnvKeySet(isSet);
     } catch (error) {
+      // Unknown, not "missing": do not cache, do not claim the key is absent.
       console.error('Failed to check environment API key:', error);
-      setIsEnvKeySet(false);
+      setIsEnvKeySet(null);
     }
   }, [provider.name]);
 
@@ -103,6 +120,10 @@ export const APIKeyManager: React.FC<APIKeyManagerProps> = ({ provider, apiKey, 
                   <div className="i-ph:check-circle-fill text-green-500 w-4 h-4" />
                   <span className="text-xs text-green-500">Set via environment variable</span>
                 </>
+              ) : isEnvKeySet === null ? (
+                <span className="text-xs text-bolt-elements-textTertiary" data-testid="api-key-status-checking">
+                  Checking…
+                </span>
               ) : (
                 <>
                   <div className="i-ph:x-circle-fill text-red-500 w-4 h-4" />

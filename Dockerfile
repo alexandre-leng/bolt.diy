@@ -17,6 +17,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends git \
 ARG VITE_PUBLIC_APP_URL
 ENV VITE_PUBLIC_APP_URL=${VITE_PUBLIC_APP_URL}
 
+# Default provider/model shown to a new browser (inlined by Vite at build).
+ARG VITE_DEFAULT_PROVIDER=OpenCodeGo
+ARG VITE_DEFAULT_MODEL=deepseek-v4.1-flash
+ENV VITE_DEFAULT_PROVIDER=${VITE_DEFAULT_PROVIDER} \
+    VITE_DEFAULT_MODEL=${VITE_DEFAULT_MODEL}
+
 # Install deps efficiently
 COPY package.json pnpm-lock.yaml* ./
 RUN pnpm fetch
@@ -57,8 +63,12 @@ ENV WRANGLER_SEND_METRICS=false \
 # Note: API keys should be provided at runtime via docker run -e or docker-compose
 # Example: docker run -e OPENAI_API_KEY=your_key_here ...
 
-# Install curl for healthchecks
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+# Install curl for healthchecks + ca-certificates for outbound HTTPS.
+# workerd validates TLS against the SYSTEM trust store, unlike Node which ships
+# its own; without ca-certificates every outbound call from a Worker fails with
+# "TLS peer's certificate is not trusted; unable to get local issuer certificate".
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+  && update-ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
 # Copy built files

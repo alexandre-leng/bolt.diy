@@ -1,5 +1,5 @@
 import Cookies from 'js-cookie';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogDescription, DialogRoot, DialogTitle } from '~/components/ui/Dialog';
 import { API_KEYS_UPDATED_EVENT, type ApiKeysUpdatedDetail } from '~/lib/api/apiKeys';
 import { getAll, openDatabase } from '~/lib/persistence/db';
@@ -16,6 +16,13 @@ const EMPTY_MCP_CONFIG = { mcpServers: {} };
 export function FirstRunOnboarding() {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
+
+  /*
+   * Re-entry guard. `saving` only disables the button after a re-render, so a
+   * double click ran next() twice with the same `step`; both incremented it
+   * and the wizard ran past its last screen ("Step 6 of 4", empty body).
+   */
+  const advancing = useRef(false);
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState<string>(DEFAULT_AVATAR);
   const [providerName, setProviderName] = useState(PROVIDER_LIST[0]?.name ?? '');
@@ -126,6 +133,20 @@ export function FirstRunOnboarding() {
   };
 
   const next = async () => {
+    if (advancing.current) {
+      return;
+    }
+
+    advancing.current = true;
+
+    try {
+      await advance();
+    } finally {
+      advancing.current = false;
+    }
+  };
+
+  const advance = async () => {
     setError('');
 
     if (step === 0 && name.trim()) {
@@ -174,7 +195,7 @@ export function FirstRunOnboarding() {
     if (step >= 3) {
       finish();
     } else {
-      setStep((current) => current + 1);
+      setStep(Math.min(step + 1, stepTitles.length - 1));
     }
   };
 
@@ -448,7 +469,7 @@ export function FirstRunOnboarding() {
             {step > 0 && (
               <button
                 type="button"
-                onClick={() => setStep((current) => current - 1)}
+                onClick={() => setStep((current) => Math.max(current - 1, 0))}
                 className="appearance-none rounded-md border border-[#393641] bg-[#302e39] px-4 py-2 text-sm text-[#eeeaf5] hover:bg-[#3b3846] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8b5cf6]"
               >
                 Back

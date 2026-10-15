@@ -6,6 +6,28 @@ import {
   type StreamTextOnErrorRetryCallback,
 } from 'ai';
 
+/**
+ * The fields a wrapped model must keep, read explicitly.
+ *
+ * `wrapLanguageModel` returns a class instance whose `provider`, `modelId`,
+ * `specificationVersion` and `supportedUrls` are prototype getters. Spreading
+ * it (`{ ...normalized }`) copies own properties only, so `provider` became
+ * undefined and the AI SDK crashed in streamLanguageModelCall on
+ * `model.provider.split('.')` — "TypeError: Cannot read properties of undefined
+ * (reading 'split')", shown to users as "The AI provider request failed". This
+ * hit every provider on the agent path.
+ */
+function languageModelIdentity(model: ReturnType<typeof wrapLanguageModel>) {
+  return {
+    specificationVersion: model.specificationVersion,
+    provider: model.provider,
+    modelId: model.modelId,
+    supportedUrls: model.supportedUrls,
+    doGenerate: (params: Parameters<typeof model.doGenerate>[0]) => model.doGenerate(params),
+    doStream: (params: Parameters<typeof model.doStream>[0]) => model.doStream(params),
+  };
+}
+
 const DEFAULT_ATTEMPT_LIMITS = { firstMs: 120_000, idleMs: 120_000, attemptMs: 300_000 };
 const MAX_RECOVERY_ATTEMPTS = 2;
 const MAX_RECOVERED_CALLS = 8;
@@ -19,7 +41,7 @@ export function withAgentToolCallRecovery(model: LanguageModel, onRetry: () => v
   const normalized = wrapLanguageModel({ model, middleware: [] });
 
   return {
-    ...normalized,
+    ...languageModelIdentity(normalized),
     doStream: async (params: Parameters<typeof normalized.doStream>[0]) => {
       const choice = params.toolChoice;
 
@@ -254,7 +276,7 @@ export function withAgentStreamDeadlines(model: LanguageModel, limits = DEFAULT_
   const normalized = wrapLanguageModel({ model, middleware: [] });
 
   return {
-    ...normalized,
+    ...languageModelIdentity(normalized),
     doStream: async (params: Parameters<typeof normalized.doStream>[0]) => {
       const attempt = new AbortController();
       const signal = params.abortSignal ? AbortSignal.any([params.abortSignal, attempt.signal]) : attempt.signal;

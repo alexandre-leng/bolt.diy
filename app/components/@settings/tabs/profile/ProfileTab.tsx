@@ -1,7 +1,7 @@
 import { useStore } from '@nanostores/react';
 import { useState, useCallback } from 'react';
-import { toast } from 'react-toastify';
 import { DEFAULT_AVATARS, profileStore, updateProfile } from '~/lib/stores/profile';
+import { toast } from '~/lib/toastify';
 import { classNames } from '~/utils/classNames';
 import { debounce } from '~/utils/debounce';
 

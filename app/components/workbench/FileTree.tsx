@@ -1,9 +1,9 @@
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import { diffLines, type Change } from 'diff';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { toast } from 'react-toastify';
 import type { FileMap } from '~/lib/stores/files';
 import { workbenchStore } from '~/lib/stores/workbench';
+import { toast } from '~/lib/toastify';
 import type { FileHistory } from '~/types/actions';
 import { classNames } from '~/utils/classNames';
 import { createScopedLogger, renderLogger } from '~/utils/logger';

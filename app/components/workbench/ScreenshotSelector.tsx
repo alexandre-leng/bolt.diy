@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { toast } from 'react-toastify';
+import { toast } from '~/lib/toastify';
 
 interface ScreenshotSelectorProps {
   isSelectionMode: boolean;

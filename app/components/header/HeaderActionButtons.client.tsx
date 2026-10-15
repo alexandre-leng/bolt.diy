@@ -30,7 +30,7 @@ export function HeaderActionButtons({ chatStarted: _chatStarted }: HeaderActionB
             title="Report Bug"
           >
             <div className="i-ph:bug" />
-            <span>Report Bug</span>
+            <span className="hidden sm:inline">Report Bug</span>
           </button>
         </div>
       )}

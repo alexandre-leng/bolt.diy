@@ -167,3 +167,61 @@ export function createCommandActionsString(commands: ProjectCommands): string {
 
   return commandString;
 }
+
+/** Install command per package manager — kept in sync with detectProjectCommands. */
+export const INSTALL_COMMANDS: Record<'npm' | 'pnpm' | 'yarn' | 'bun', string> = {
+  npm: 'npm install --no-audit --no-fund',
+  pnpm: 'pnpm install --no-frozen-lockfile',
+  yarn: 'yarn install --non-interactive',
+  bun: 'bun install',
+};
+
+export interface ParsedStartCommand {
+  /** The leading `cd <dir> && ` segment, verbatim, or '' when absent. */
+  cdPrefix: string;
+
+  /** Directory the script runs in ('.' when there is no cd). Quotes removed. */
+  directory: string;
+  packageManager: keyof typeof INSTALL_COMMANDS;
+
+  /** Everything after the cd prefix. */
+  rest: string;
+}
+
+/**
+ * Recognise a start command that runs a package script, optionally behind a
+ * `cd <dir> && ` prefix: `npm run dev`, `cd "/home/project" && pnpm run dev`,
+ * `yarn dev`, `npm start`... Returns undefined for anything else.
+ */
+export function parseStartCommand(command: string): ParsedStartCommand | undefined {
+  const trimmed = command.trim();
+  const cd = trimmed.match(/^cd\s+(?:"([^"]+)"|'([^']+)'|([^\s;&|]+))\s*&&\s*/);
+  const cdPrefix = cd ? cd[0] : '';
+  const directory = cd ? (cd[1] ?? cd[2] ?? cd[3]) : '.';
+  const rest = trimmed.slice(cdPrefix.length);
+  const pm = rest.match(/^(npm|pnpm|yarn|bun)\s+(?:run\s+\S+|start|dev|preview)\b/);
+
+  if (!pm) {
+    return undefined;
+  }
+
+  return { cdPrefix, directory, packageManager: pm[1] as ParsedStartCommand['packageManager'], rest };
+}
+
+/**
+ * Prefix the dependency install to a start command, keeping its `cd`:
+ * `cd "/p" && npm run dev` -> `cd "/p" && npm install --no-audit --no-fund && npm run dev`.
+ */
+export function withDependencyInstall(parsed: ParsedStartCommand): string {
+  return `${parsed.cdPrefix}${INSTALL_COMMANDS[parsed.packageManager]} && ${parsed.rest}`;
+}
+
+/**
+ * Extract only the target directory of a leading `cd`, stopping at the first
+ * `&&`, `;` or `|` — never the rest of the line. Quotes are removed.
+ */
+export function parseCdTarget(command: string): string | undefined {
+  const cd = command.trim().match(/^cd\s+(?:"([^"]+)"|'([^']+)'|([^\s;&|]+))/);
+
+  return cd ? (cd[1] ?? cd[2] ?? cd[3]) : undefined;
+}

@@ -53,7 +53,7 @@ describe('LLMManager', () => {
     const manager = LLMManager.getInstance({});
     const names = manager.getAllProviders().map((p) => p.name);
 
-    // All 22 providers should now be registered
+    // All 23 providers should now be registered (22 upstream + OpenCodeGo)
     expect(names.sort()).toEqual([
       'AmazonBedrock',
       'Anthropic',
@@ -72,6 +72,7 @@ describe('LLMManager', () => {
       'Ollama',
       'OpenAI',
       'OpenAILike',
+      'OpenCodeGo',
       'OpenRouter',
       'Perplexity',
       'Together',
@@ -80,7 +81,7 @@ describe('LLMManager', () => {
     ]);
   });
 
-  it('registers all 22 providers including newly restored ones', () => {
+  it('registers all 23 providers including newly restored ones', () => {
     const manager = LLMManager.getInstance({});
     const names = manager.getAllProviders().map((p) => p.name);
 
@@ -91,7 +92,8 @@ describe('LLMManager', () => {
     expect(names).toContain('HuggingFace');
     expect(names).toContain('Cohere');
     expect(names).toContain('Mistral');
-    expect(names.length).toBe(22);
+    expect(names).toContain('OpenCodeGo');
+    expect(names.length).toBe(23);
   });
 
   it('exposes each enabled provider via getProvider', () => {
@@ -124,5 +126,24 @@ describe('LLMManager', () => {
   it('getModelList contains static models from providers', () => {
     const manager = LLMManager.getInstance({});
     expect(manager.getModelList().length).toBeGreaterThan(0);
+  });
+});
+
+describe('LLMManager default provider override', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('keeps OpenRouter when VITE_DEFAULT_PROVIDER is unset', () => {
+    vi.stubEnv('VITE_DEFAULT_PROVIDER', '');
+    expect(LLMManager.getInstance({}).getDefaultProvider().name).toBe('OpenRouter');
+  });
+
+  it('uses VITE_DEFAULT_PROVIDER when it names a registered provider', () => {
+    vi.stubEnv('VITE_DEFAULT_PROVIDER', 'OpenCodeGo');
+    expect(LLMManager.getInstance({}).getDefaultProvider().name).toBe('OpenCodeGo');
+  });
+
+  it('ignores an unknown VITE_DEFAULT_PROVIDER', () => {
+    vi.stubEnv('VITE_DEFAULT_PROVIDER', 'NoSuchProvider');
+    expect(LLMManager.getInstance({}).getDefaultProvider().name).toBe('OpenRouter');
   });
 });

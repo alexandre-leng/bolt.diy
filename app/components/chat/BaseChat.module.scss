@@ -33,7 +33,7 @@
   height: calc(100% - var(--prompt-container-offset) + var(--prompt-line-stroke-width));
   x: calc(var(--prompt-container-offset) / 2 - var(--prompt-line-stroke-width) / 2);
   y: calc(var(--prompt-container-offset) / 2 - var(--prompt-line-stroke-width) / 2);
-  rx: calc(8px - var(--prompt-line-stroke-width));
+  rx: calc(1.75rem - var(--prompt-line-stroke-width)); /* matches the composer's rounded-[1.75rem] */
   fill: transparent;
   stroke-width: var(--prompt-line-stroke-width);
   stroke: url(#line-gradient);

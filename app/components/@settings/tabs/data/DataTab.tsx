@@ -1,13 +1,13 @@
 import { motion } from 'framer-motion';
 import Cookies from 'js-cookie';
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { toast } from 'react-toastify';
 import { Button } from '~/components/ui/Button';
 import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from '~/components/ui/Card';
 import { ConfirmationDialog, SelectionDialog } from '~/components/ui/Dialog';
 import { useDataOperations } from '~/lib/hooks/useDataOperations';
 import { getAllChats, type Chat } from '~/lib/persistence/chats';
 import { openDatabase } from '~/lib/persistence/db';
+import { toast } from '~/lib/toastify';
 import { classNames } from '~/utils/classNames';
 
 // Create a custom hook to connect to the boltHistory database

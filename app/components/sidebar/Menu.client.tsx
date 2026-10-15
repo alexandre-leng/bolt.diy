@@ -1,9 +1,9 @@
 import { useStore } from '@nanostores/react';
 import { motion, type Variants } from 'framer-motion';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { toast } from 'react-toastify';
 import { HistoryItem } from './HistoryItem';
 import { binDates } from './date-binning';
+import { OPEN_SETTINGS_EVENT } from '~/components/mobile/MobileNav';
 
 /*
  * Lazy-load the heavy ControlPanel (settings UI).  Most users don't open it on
@@ -21,6 +21,16 @@ import { ThemeSwitch } from '~/components/ui/ThemeSwitch';
 import { useSearchFilter } from '~/lib/hooks/useSearchFilter';
 import { db, deleteById, getAll, chatId, type ChatHistoryItem, useChatHistory } from '~/lib/persistence';
 import { DEFAULT_AVATAR, profileStore } from '~/lib/stores/profile';
+import {
+  closeSidebar,
+  initSidebar,
+  openSidebar,
+  peekSidebar,
+  readSavedSidebarOpen,
+  sidebarOpenStore,
+  unpeekSidebar,
+} from '~/lib/stores/sidebar';
+import { toast } from '~/lib/toastify';
 import { classNames } from '~/utils/classNames';
 import { cubicEasingFn } from '~/utils/easings';
 
@@ -28,7 +38,9 @@ const menuVariants = {
   closed: {
     opacity: 0,
     visibility: 'hidden',
-    left: '-340px',
+
+    // -100vw hides both the 340px desktop panel and the full-width phone panel.
+    left: '-100vw',
     transition: {
       duration: 0.2,
       ease: cubicEasingFn,
@@ -74,7 +86,16 @@ export const Menu = () => {
   const { duplicateCurrentChat, exportChat } = useChatHistory({ loadHistory: false });
   const menuRef = useRef<HTMLDivElement>(null);
   const [list, setList] = useState<ChatHistoryItem[]>([]);
-  const [open, setOpen] = useState(false);
+
+  /*
+   * Sidebar visibility lives in a shared store (not useState) so the toggle
+   * icon in the header — a sibling component — can drive it. Touch devices
+   * start collapsed: on a phone the 340px panel would cover the whole chat.
+   */
+  const open = useStore(sidebarOpenStore);
+
+  // Explicit open/close (buttons): remembered. Hover peeks use peek/unpeekSidebar.
+  const setOpen = useCallback((next: boolean) => (next ? openSidebar() : closeSidebar()), []);
   const [dialogContent, setDialogContent] = useState<DialogContent>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDocumentationOpen, setIsDocumentationOpen] = useState(false);
@@ -278,6 +299,17 @@ export const Menu = () => {
     }
   }, [open, loadEntries]);
 
+  /*
+   * On touch devices the 340px panel would cover the entire chat, so start
+   * collapsed. Runs once after mount because matchMedia is unavailable during
+   * SSR; pointer-only devices keep the expanded default.
+   */
+  useEffect(() => {
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      initSidebar(window.matchMedia('(hover: none), (pointer: coarse)').matches);
+    }
+  }, []);
+
   // Exit selection mode when sidebar is closed
   useEffect(() => {
     if (!open && selectionMode) {
@@ -293,17 +325,39 @@ export const Menu = () => {
     const enterThreshold = 20;
     const exitThreshold = 20;
 
+    /*
+     * Touch devices MUST NOT get this hover behaviour. Firefox for Android
+     * synthesises mouse events after every tap (mousemove/mouseover) and
+     * reports pageX/clientX as 0, so a tap would open the sidebar and a phantom
+     * mousemove would immediately toggle it again. Chrome synthesises
+     * differently, which is why this only misbehaved on Firefox.
+     */
+    const hasHover =
+      typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+        ? window.matchMedia('(hover: hover) and (pointer: fine)').matches
+        : false;
+
+    if (!hasHover) {
+      return undefined;
+    }
+
     function onMouseMove(event: MouseEvent) {
       if (isSettingsOpen) {
         return;
       }
 
-      if (event.pageX < enterThreshold) {
-        setOpen(true);
+      if (event.pageX < enterThreshold && !sidebarOpenStore.get()) {
+        peekSidebar();
       }
 
-      if (menuRef.current && event.clientX > menuRef.current.getBoundingClientRect().right + exitThreshold) {
-        setOpen(false);
+      // A sidebar the user pinned open (header toggle) stays open; a hover peek closes.
+      if (
+        sidebarOpenStore.get() &&
+        readSavedSidebarOpen() !== true &&
+        menuRef.current &&
+        event.clientX > menuRef.current.getBoundingClientRect().right + exitThreshold
+      ) {
+        unpeekSidebar();
       }
     }
 
@@ -312,19 +366,28 @@ export const Menu = () => {
     return () => {
       window.removeEventListener('mousemove', onMouseMove);
     };
-  }, [isSettingsOpen]);
+  }, [isSettingsOpen, setOpen]);
 
   useEffect(() => {
     const handleOpenGitHubSettings = () => {
       setSettingsInitialTab('github');
       setIsSettingsOpen(true);
-      setOpen(false);
+      unpeekSidebar();
+    };
+
+    // Mobile bottom navigation's Settings tab.
+    const handleOpenSettings = (event: Event) => {
+      setSettingsInitialTab((event as CustomEvent<{ tab?: string }>).detail?.tab);
+      setIsSettingsOpen(true);
+      unpeekSidebar();
     };
 
     document.addEventListener('open-github-settings', handleOpenGitHubSettings);
+    window.addEventListener(OPEN_SETTINGS_EVENT, handleOpenSettings);
 
     return () => {
       document.removeEventListener('open-github-settings', handleOpenGitHubSettings);
+      window.removeEventListener(OPEN_SETTINGS_EVENT, handleOpenSettings);
     };
   }, []);
 
@@ -335,7 +398,7 @@ export const Menu = () => {
 
   const handleSettingsClick = () => {
     setIsSettingsOpen(true);
-    setOpen(false);
+    unpeekSidebar();
   };
 
   const handleSettingsClose = () => {
@@ -350,21 +413,41 @@ export const Menu = () => {
 
   return (
     <>
+      {/* Full screen on phones (Lovable's Projects tab), a 340px panel from 768px. */}
       <motion.div
         ref={menuRef}
         initial="closed"
         animate={open ? 'open' : 'closed'}
         variants={menuVariants}
-        style={{ width: '340px' }}
         className={classNames(
-          'flex selection-accent flex-col side-menu fixed top-0 h-full rounded-r-2xl',
+          'flex selection-accent flex-col side-menu fixed top-0 h-full w-screen md:w-[340px] md:rounded-r-2xl',
           'bg-bolt-elements-background-depth-1 border-r border-bolt-elements-borderColor',
           'shadow-sm text-sm',
           isSettingsOpen ? 'z-40' : 'z-sidebar',
         )}
       >
-        <div className="h-12 flex items-center justify-between px-4 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 rounded-tr-2xl">
-          <div className="text-bolt-elements-textPrimary font-medium"></div>
+        <div className="h-12 flex items-center justify-between px-4 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 md:rounded-tr-2xl">
+          {/*
+           * In-panel close control. Without it the sidebar could only be closed
+           * by a mouse leaving it (hover) — impossible on touch, where the
+           * panel would then trap the user with the chat hidden behind it.
+           */}
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
+            data-testid="sidebar-close"
+            className={classNames(
+              'flex items-center justify-center rounded-md p-1.5 -ml-1.5 transition-colors',
+              'text-bolt-elements-textSecondary',
+              'hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary',
+              'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500',
+              'active:bg-bolt-elements-background-depth-3',
+            )}
+          >
+            <div className="i-ph:caret-left text-lg" aria-hidden="true" />
+          </button>
           <div className="flex items-center gap-3">
             <HelpButton onClick={() => setIsDocumentationOpen(true)} />
             <span className="font-medium text-sm text-bolt-elements-textPrimary truncate">
@@ -547,8 +630,9 @@ export const Menu = () => {
               </Dialog>
             </DialogRoot>
           </div>
-          <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-800 px-4 py-3">
-            <div className="flex items-center gap-3">
+          {/* Phones: the bottom navigation already has Settings, and floats over this row. */}
+          <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-800 px-4 py-3 pb-[5.5rem] md:pb-3">
+            <div className="hidden md:flex items-center gap-3">
               <SettingsButton onClick={handleSettingsClick} />
             </div>
             <ThemeSwitch />
@@ -556,12 +640,12 @@ export const Menu = () => {
         </div>
       </motion.div>
 
-      {/* Persistent sidebar trigger — always visible when sidebar is closed */}
+      {/* Persistent sidebar trigger when closed — desktop only; phones use the bottom navigation. */}
       {!open && !isSettingsOpen && (
         <button
           onClick={() => setOpen(true)}
           className={classNames(
-            'fixed left-0 top-[72px] z-sidebar',
+            'hidden md:block fixed left-0 top-[72px] z-sidebar',
             'bg-bolt-elements-background-depth-1',
             'border border-l-0 border-bolt-elements-borderColor',
             'rounded-r-lg p-1.5 shadow-sm',

@@ -15,12 +15,14 @@ export function ToolAccessMenu() {
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
+        {/* Same look as the sibling toolbar controls (mode, model chip): no border, item tokens. */}
         <button
           type="button"
           title="Choose tool access mode"
           aria-label={`Tool access: ${selectedMode.label}`}
           className={classNames(
-            'inline-flex items-center gap-1 rounded-md border border-bolt-elements-borderColor bg-bolt-elements-background-depth-3 px-2 py-1 text-xs transition-colors',
+            'inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs transition-colors',
+            'bg-bolt-elements-item-backgroundDefault hover:bg-bolt-elements-item-backgroundActive',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-focus',
             mode === 'full-access'
               ? 'text-accent-500 hover:text-accent-500'
@@ -28,8 +30,9 @@ export function ToolAccessMenu() {
           )}
         >
           <div className={mode === 'full-access' ? 'i-ph:shield-warning' : 'i-ph:hand'} />
-          <span>{selectedMode.label}</span>
-          <div className="i-ph:caret-down" />
+          {/* Icon only below 640px: the composer toolbar must fit a 360px screen. */}
+          <span className="hidden sm:inline">{selectedMode.label}</span>
+          <div className="i-ph:caret-down hidden sm:block" />
         </button>
       </DropdownMenu.Trigger>
 

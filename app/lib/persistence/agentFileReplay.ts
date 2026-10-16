@@ -271,3 +271,49 @@ export function messagesContainStartAction(messages: AnyMessage[]): boolean {
     (message) => message?.role === 'assistant' && /<boltAction\b[^>]*type="start"/.test(textOf(message)),
   );
 }
+
+/** The dev-server command a run of the project is started with. */
+const START_COMMAND_RE = /^(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start)\b/;
+
+/**
+ * The last dev-server command an Agent-mode turn ran, if any.
+ *
+ * In Agent mode the model starts the project with a `project_run_command` tool call instead of
+ * a `<boltAction type="start">`. Tool calls are never re-executed on reopen (only artifacts
+ * are), so a project built that way came back with its files in place but its server dead: the
+ * terminal showed a bare `~/project` prompt and the preview stayed empty. `agentFileReplay`
+ * already replays the files for exactly this reason; the start command needs the same treatment.
+ *
+ * The LAST match wins — it is the command the user's project was actually running when the
+ * chat ended, and re-running an earlier one would start the wrong thing.
+ */
+export function lastAgentStartCommand(messages: AnyMessage[]): string | undefined {
+  let found: string | undefined;
+
+  for (const message of messages) {
+    if (message?.role !== 'assistant') {
+      continue;
+    }
+
+    for (const part of message.parts || []) {
+      if (toolNameOf(part) !== 'project_run_command') {
+        continue;
+      }
+
+      const output = successfulOutput(part);
+      const input = (part.input || {}) as Record<string, any>;
+
+      if (!output && !input) {
+        continue;
+      }
+
+      const command = typeof input.command === 'string' ? input.command : undefined;
+
+      if (command && START_COMMAND_RE.test(command.trim())) {
+        found = command.trim();
+      }
+    }
+  }
+
+  return found;
+}

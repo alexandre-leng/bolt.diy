@@ -280,3 +280,14 @@ body {
     }
   }
 }
+
+/*
+ * Bottom navigation (MobileNav.tsx). The bar is 48px tall + 6px padding each side +
+ * 10px of bottom offset = 74px, plus the safe-area inset. The landing screen reserves
+ * exactly this so no chip scrolls underneath the bar (measured: 21px were covered).
+ */
+:root {
+  --mobile-nav-bar-height: 3rem;
+  --mobile-nav-bar-padding: 0.375rem;
+  --mobile-nav-space: calc(3.5rem + 0.75rem + env(safe-area-inset-bottom));
+}

@@ -511,7 +511,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               </div>
             </StickToBottom>
             {!chatStarted && (
-              <div className="flex flex-col items-center gap-8 px-4 pb-28 md:pb-12 w-full">
+              <div className="flex flex-col items-center gap-8 px-4 pb-[var(--mobile-nav-space)] md:pb-12 w-full">
                 {ExamplePrompts((event, messageInput) => {
                   if (isStreaming) {
                     handleStop?.();

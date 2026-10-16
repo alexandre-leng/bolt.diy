@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { isServerAgentTool } from '~/lib/common/agentLoop';
 import {
   getMessageParts,
@@ -39,6 +39,32 @@ export function ToolApprovalTray({
       ),
     [messages],
   );
+
+  /*
+   * Safety net: in full-access mode the agent must never wait for a click. If a project tool
+   * still lands here (stale render, restored conversation), approve it automatically instead
+   * of showing the tray. `autoApproved` guards against re-approving the same call in a loop.
+   */
+  const autoApproved = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (!fullAccess) {
+      return;
+    }
+
+    for (const tool of pending) {
+      if (autoApproved.current.has(tool.id)) {
+        continue;
+      }
+
+      autoApproved.current.add(tool.id);
+      addToolOutput({
+        tool: tool.name,
+        toolCallId: tool.id,
+        output: TOOL_EXECUTION_APPROVAL.APPROVE,
+      });
+    }
+  }, [fullAccess, pending, addToolOutput]);
 
   const respond = (tool: { id: string; name: string; input: unknown }, approved: boolean) => {
     if (respondingIds.has(tool.id)) {

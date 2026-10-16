@@ -1,6 +1,6 @@
 import { useStore } from '@nanostores/react';
 import { useState } from 'react';
-import { DeployButton } from '~/components/deploy/DeployButton';
+import { PublishButton } from '~/components/deploy/PublishButton';
 import { ReportBugPanel } from '~/components/header/ReportBugPanel';
 import { workbenchStore } from '~/lib/stores/workbench';
 
@@ -18,8 +18,12 @@ export function HeaderActionButtons({ chatStarted: _chatStarted }: HeaderActionB
 
   return (
     <div className="flex items-center gap-1">
-      {/* Deploy Button */}
-      {shouldShowButtons && <DeployButton />}
+      {/*
+       * Self-hosted publishing: the Deploy menu only offers Netlify/Vercel/GitHub/GitLab,
+       * none of them connected here, so it is replaced by a button that builds the project
+       * on this server and serves it at /container/<slug>/ (a real public URL).
+       */}
+      {shouldShowButtons && <PublishButton />}
 
       {/* Project Actions */}
       {shouldShowButtons && (

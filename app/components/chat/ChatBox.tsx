@@ -8,6 +8,7 @@ import styles from './BaseChat.module.scss';
 import FilePreview from './FilePreview';
 import { McpTools } from './MCPTools';
 import { ScreenshotStateManager } from './ScreenshotStateManager';
+import { ScreenshotToCode } from './ScreenshotToCode';
 import { SendButton } from './SendButton.client';
 import { SupabaseConnection } from './SupabaseConnection';
 import { ToolAccessMenu } from './ToolAccessMenu';
@@ -76,6 +77,7 @@ interface ChatBoxProps {
 
 export const ChatBox: React.FC<ChatBoxProps> = (props) => {
   const [isMcpToolsOpen, setIsMcpToolsOpen] = React.useState(false);
+  const [isScreenshotOpen, setIsScreenshotOpen] = React.useState(false);
   const mcpToolsInitialized = useMCPStore((state) => state.isInitialized);
   const mcpSettings = useMCPStore((state) => state.settings);
   const setWebSearchEnabled = useMCPStore((state) => state.setWebSearchEnabled);
@@ -345,6 +347,7 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
               {() => (
                 <AttachmentMenu
                   onAttachFile={() => props.handleFileUpload()} // Opens image file picker (image/* only)
+                  onScreenshot={() => setIsScreenshotOpen(true)}
                   onOpenDesignDialog={() => {
                     /*
                      * Trigger the design dialog by programmatically clicking the hidden button
@@ -374,6 +377,25 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
               <SupabaseConnection />
             </div>
             <McpTools open={isMcpToolsOpen} onOpenChange={setIsMcpToolsOpen} />
+            {isScreenshotOpen && (
+              <div
+                role="dialog"
+                aria-label="From a screenshot"
+                className="absolute bottom-full left-0 mb-3 w-full max-w-xl rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-4 shadow-lg z-[1001]"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <strong>From a screenshot</strong>
+                  <button
+                    type="button"
+                    aria-label="Close screenshot generator"
+                    onClick={() => setIsScreenshotOpen(false)}
+                  >
+                    Close
+                  </button>
+                </div>
+                <ScreenshotToCode />
+              </div>
+            )}
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>
                 <button

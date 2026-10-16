@@ -104,6 +104,7 @@ export class BoltShell {
   #outputBuffer = '';
   #commandPreparationQueue: Promise<void> = Promise.resolve();
   #shellInputStream: WritableStreamDefaultWriter<string> | undefined;
+  #terminalInputDisposable: { dispose(): void } | undefined;
 
   constructor() {
     this.#readyPromise = new Promise((resolve) => {
@@ -168,7 +169,12 @@ export class BoltShell {
       }),
     );
 
-    terminal.onData((data) => {
+    /*
+     * A restored chat can reattach the same xterm instance. The old onData
+     * listener otherwise remains live and forwards every keystroke twice.
+     */
+    this.#terminalInputDisposable?.dispose();
+    this.#terminalInputDisposable = terminal.onData((data) => {
       if (isInteractive) {
         input.write(data);
       }

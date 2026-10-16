@@ -3,9 +3,11 @@ import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Panel, type PanelImperativeHandle } from 'react-resizable-panels';
 import { Terminal, type TerminalRef } from './Terminal';
 import { TerminalManager } from './TerminalManager';
+import { readTerminalLog } from './readTerminalLog';
 import { IconButton } from '~/components/ui/IconButton';
 import { themeStore } from '~/lib/stores/theme';
 import { workbenchStore } from '~/lib/stores/workbench';
+import { toast } from '~/lib/toastify';
 import { classNames } from '~/utils/classNames';
 import { createScopedLogger } from '~/utils/logger';
 
@@ -27,6 +29,24 @@ export const TerminalTabs = memo(() => {
   const [activeTerminal, setActiveTerminal] = useState(0);
   const [terminalCount, setTerminalCount] = useState(0);
   const [isMinimized, setIsMinimized] = useState(!showTerminal);
+
+  const copyTerminalLog = async () => {
+    const terminal = terminalRefs.current.get(activeTerminal)?.getTerminal();
+    const content = readTerminalLog(terminal);
+
+    if (!content) {
+      toast.info('Terminal has no output to copy.');
+
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(content);
+      toast.success('Terminal logs copied.');
+    } catch {
+      toast.error('Could not copy terminal logs. Check clipboard permission and try again.');
+    }
+  };
 
   const addTerminal = () => {
     if (terminalCount < MAX_TERMINALS) {
@@ -196,6 +216,16 @@ export const TerminalTabs = memo(() => {
               );
             })}
             {terminalCount < MAX_TERMINALS && <IconButton icon="i-ph:plus" size="md" onClick={addTerminal} />}
+            <button
+              type="button"
+              onClick={() => void copyTerminalLog()}
+              aria-label="Copy terminal logs"
+              title="Copy terminal logs"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-md bg-transparent px-2 text-xs font-medium text-bolt-elements-textPrimary hover:bg-bolt-elements-terminals-buttonBackground focus-visible:outline focus-visible:outline-2 focus-visible:outline-bolt-elements-focus"
+            >
+              <span className="i-ph:copy text-base" aria-hidden="true" />
+              <span className="hidden sm:inline">Copy logs</span>
+            </button>
             <IconButton
               icon="i-ph:arrow-clockwise"
               title="Reset Terminal"

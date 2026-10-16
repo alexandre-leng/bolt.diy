@@ -2,7 +2,12 @@ import { generateId, type UIMessage } from 'ai';
 import { atom } from 'nanostores';
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { useLoaderData, useNavigate, useParams, useSearchParams, type NavigateFunction } from 'react-router';
-import { createEncodedFileActions, messagesContainStartAction, replayAgentFileOps } from './agentFileReplay';
+import {
+  createEncodedFileActions,
+  lastAgentStartCommand,
+  messagesContainStartAction,
+  replayAgentFileOps,
+} from './agentFileReplay';
 import { getCachedMessages, getCachedSnapshot, invalidateChatCache } from './chatCache';
 import {
   getMessagesByIdRaw,
@@ -17,7 +22,7 @@ import {
 } from './db';
 import { pushChat } from './historySync';
 import { createMessage, getMessageAnnotations, hasMessageFlag, type AnyPart } from './messageMigration';
-import { AGENT_REPLAY_ARTIFACT_ID } from './restoreArtifacts';
+import { buildAgentReplayMessage } from './restoreArtifacts';
 import type { Snapshot } from './types';
 import type { FileMap } from '~/lib/stores/files';
 import { logStore } from '~/lib/stores/logs'; // Import logStore
@@ -57,19 +62,8 @@ function snapshotTextFiles(snapshot: Snapshot | undefined): Record<string, strin
  * project shows the starter template (see agentFileReplay.ts).
  */
 function createAgentReplayMessage(files: Record<string, string>, commandActions = ''): UIMessage | undefined {
-  if (Object.keys(files).length === 0 && !commandActions) {
-    return undefined;
-  }
-
-  return createMessage({
-    id: generateId(),
-    role: 'assistant',
-    text: `<boltArtifact id="${AGENT_REPLAY_ARTIFACT_ID}" title="Restored project files" type="bundled">
-${createEncodedFileActions(files)}
-${commandActions}
-</boltArtifact>`,
-    flags: ['no-store'],
-  }) as UIMessage;
+  return buildAgentReplayMessage(files, commandActions, createEncodedFileActions, createMessage, generateId) as
+    UIMessage | undefined;
 }
 
 export const db = persistenceEnabled ? await openDatabase() : undefined;
@@ -402,7 +396,22 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
                 replayFrom: startingIdx + 1,
               });
 
-              const agentReplayMessage = createAgentReplayMessage(agentReplay.files);
+              /*
+               * The agent also starts the project with a `project_run_command` tool call, which
+               * is not re-executed either: without replaying it the terminal came back to a bare
+               * `~/project` prompt and the preview stayed empty, even though every file was back.
+               * `projectCommands.startCommand` (from the snapshot's own commands) is used when
+               * there is one; the agent's own last command covers the chats whose snapshot has
+               * no start action at all.
+               */
+              const agentStartCommand = lastAgentStartCommand(storedMessages.messages.slice(0, endingIdx));
+
+              const startCommand = projectCommands.startCommand || agentStartCommand;
+
+              const agentReplayMessage = createAgentReplayMessage(
+                agentReplay.files,
+                startCommand ? `<boltAction type="start">${startCommand}</boltAction>` : '',
+              );
 
               if (agentReplayMessage) {
                 filteredMessages = [...filteredMessages, agentReplayMessage];
@@ -417,10 +426,10 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
               /*
                * The user's expectation when reopening a project is to SEE it, not
                * to read its source: put the workbench on the Preview tab. Done
-               * only when the snapshot carries a start command, so a chat with no
-               * runnable project is left on Code instead of showing an empty frame.
+               * only when a start command exists, so a chat with no runnable
+               * project is left on Code instead of showing an empty frame.
                */
-              if (projectCommands.startCommand) {
+              if (startCommand) {
                 workbenchStore.showPreviewAfterRestore();
               }
             } else if (startingIdx < 0) {

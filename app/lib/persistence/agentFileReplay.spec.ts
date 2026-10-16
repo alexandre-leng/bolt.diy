@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createEncodedFileActions,
+  lastAgentStartCommand,
   messagesContainStartAction,
   replayAgentFileOps,
   toAbsoluteProjectPath,
@@ -216,5 +217,60 @@ describe('encoded file actions round-trip through the message parser', () => {
     );
 
     expect(closed[0]).toBe('const a = "<b>";\n');
+  });
+});
+
+/*
+ * Measured on a real project chat: the project had been built in Agent mode, so its
+ * snapshot held 15 file actions and ZERO start/shell actions, and the only thing that
+ * ever started the dev server was a `project_run_command` tool call at the very end of
+ * the conversation. Tool calls are not re-executed on reopen, so that chat came back with
+ * every file present and the terminal sitting at a bare `~/project` prompt.
+ */
+describe('lastAgentStartCommand', () => {
+  const runCommand = (command: string, state = 'output-available') => ({
+    role: 'assistant',
+    parts: [
+      {
+        type: 'tool-project_run_command',
+        input: { command, purpose: 'run' },
+        state,
+        output: { output: '', status: 'running', command, purpose: 'run' },
+      },
+    ],
+  });
+
+  it('finds the dev-server command of an agent-built project', () => {
+    expect(lastAgentStartCommand([runCommand('npm run dev')])).toBe('npm run dev');
+  });
+
+  it('takes the LAST one, the command the project was running when the chat ended', () => {
+    const messages = [runCommand('npm run start'), runCommand('npm install'), runCommand('npm run dev')];
+
+    expect(lastAgentStartCommand(messages)).toBe('npm run dev');
+  });
+
+  it('ignores commands that do not start a dev server', () => {
+    const messages = [runCommand('npm install'), runCommand('npm run build'), runCommand('ls -la')];
+
+    expect(lastAgentStartCommand(messages)).toBeUndefined();
+  });
+
+  it('ignores user messages and non-run tools', () => {
+    const messages = [
+      { role: 'user', parts: [{ type: 'text', text: 'npm run dev' }] },
+      {
+        role: 'assistant',
+        parts: [{ type: 'tool-project_write_file', input: { path: 'a.ts' }, state: 'output-available' }],
+      },
+    ];
+
+    expect(lastAgentStartCommand(messages)).toBeUndefined();
+  });
+
+  it('accepts pnpm, yarn and bun equivalents', () => {
+    for (const cmd of ['pnpm dev', 'yarn dev', 'bun run start', 'npm start']) {
+      expect(lastAgentStartCommand([runCommand(cmd)])).toBe(cmd);
+    }
   });
 });

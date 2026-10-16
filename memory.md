@@ -37,6 +37,66 @@
 
 ---
 
+## 2026-10-16 — Suppression d'une conversation : trois défauts, dont un no-op silencieux
+
+- **Type** : fix
+- **Contexte** : « BOLT bug suppression des conversations ». Le symptôme réel n'était pas « la
+  suppression ne fait rien » mais « la conversation revient ». IndexedDB n'est qu'un cache ;
+  `bolt-history` (PostgreSQL) est la source de vérité, donc une suppression qui n'atteint pas le
+  serveur est annulée par la synchro suivante.
+- **Action** : trois correctifs indépendants, chacun suffisant à ressusciter un chat :
+  1. `Menu.client.tsx` `deleteChat` n'appelait que `deleteById(db, id)`. `deleteHistory` existait
+     dans `syncClient.ts` et n'était importé que par son propre spec. La purge serveur est
+     maintenant faite **avant** l'effacement local, suivie de `invalidateChatCache`.
+  2. `bolt_history.py` `do_DELETE` ne filtrait que sur `id`, jamais `url_id`. La clé locale et
+     l'`urlId` serveur diffèrent souvent (`id: "1"` vs `urlId: "2-1792162703891-0"`) : le DELETE
+     répondait **`200 {"ok":true,"removed":0}`**, un no-op silencieux déguisé en succès. Le
+     `WHERE` matche désormais `(id = :'chat_id' OR url_id = :'chat_id') AND user_id = :'owner'`.
+  3. Course entre le DELETE et la synchro qu'il déclenche (`deleteItem` → `deleteChat` puis
+     `loadEntries()`, qui migre avec une liste capturée avant l'effacement). Registre
+     `deletedIds` (`markDeleted`/`isDeleted`) dans `historySync.ts`, consulté par les **deux**
+     boucles de `migrateLocalHistoryToServer` (push et pull).
+- **Preuve** : suppression par `urlId` sur le service réel : `removed: 0` → **`removed: 1`** ;
+  chat absent de `GET /history`, absent après reload, `GET` direct → 404, id invalide → 400.
+  Isolation multi-comptes : un autre compte obtient `removed: 0` et le chat reste intact.
+  Tests : 862/862 verts en série. Régressions prouvées rouges (registre neutralisé → les 3
+  nouveaux tests échouent, les 3 autres restent verts ; ancien `importExportService` →
+  `expected [] to include '/api/history/chat-1'`). `tsc` 0, eslint 0. Correctif confirmé
+  présent dans le chunk servi.
+- **Conséquence** : supprimer une conversation la supprime réellement, sur tous les appareils,
+  et elle ne réapparaît plus après un rechargement.
+- **Commit** : ce commit
+- **Reste ouvert** : un onglet resté ouvert avant le déploiement peut encore repousser d'anciens
+  chats depuis son cache jusqu'à un rechargement ; un `GET /history` sans header
+  `X-Bolt-User-Id` répond `500` au lieu de `400/401` (défaut préexistant du multi-comptes).
+- **Piège** : l'`urlId` et l'`id` diffèrent, et `removed: 0` accompagné d'un HTTP 200 est le
+  signe exact du no-op. Ne jamais conclure « supprimé » sur `ok: true` seul.
+
+## 2026-10-16 — `workbench.spec.ts` : 10 tests étaient masqués par un timeout WebContainer
+
+- **Type** : fix
+- **Contexte** : la suite complète échouait sur deux tests, **sur HEAD pur** (vérifié en
+  extrayant `git archive HEAD` dans un conteneur séparé) — donc préexistants, pas des
+  régressions. `workbench.spec.ts` expirait à 5000 ms et `tests/setup-dom.spec.ts` exigeait que
+  ce même fichier soit exclu des deux projets.
+- **Action** : cause racine — `filesStore.reset()` faisait `await this.#webcontainer`, une
+  promesse module-level qui ne se résout qu'après un boot réussi. En test comme dans un
+  navigateur où le runtime est indisponible, elle ne se résout **jamais**, donc `resetWorkbench()`
+  bloquait indéfiniment alors que la carte de fichiers en mémoire était déjà correcte. L'attente
+  est désormais bornée (`Promise.race` à 500 ms) et le vidage du répertoire reste best-effort.
+  L'assertion obsolète de `setup-dom.spec.ts` est remplacée par une garde qui **vérifie que le
+  spec tourne** au lieu de disparaître silencieusement.
+- **Preuve** : `workbench.spec.ts` 10/10 verts, le test qui expirait passe en 505 ms ;
+  `setup-dom.spec.ts` 8/8. Suite complète verte. Le timeout existait sur HEAD pur, avant tout
+  changement de cette session.
+- **Conséquence** : 10 tests de plus réellement exécutés ; le piège d'une exclusion qui masque
+  de la couverture est maintenant surveillé par un test.
+- **Commit** : ce commit
+- **Reste ouvert** : `Markdown.spec.ts` reste exclu des deux projets (`import.meta.hot`) — sa
+  couverture n'est pas restaurée.
+- **Piège** : ne jamais « corriger » un test qui échoue en l'excluant. Ici l'exclusion proposée
+  aurait supprimé 10 tests réels ; la cause était un `await` non borné sur le WebContainer.
+
 ## 2026-10-16 — En-tête du panneau latéral : deux rectangles clairs supprimés
 
 - **Type** : fix

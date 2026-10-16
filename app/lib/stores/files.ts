@@ -611,7 +611,24 @@ export class FilesStore {
     this.#deletedPaths.clear();
     this.#persistDeletedPaths();
 
-    const container = await this.#webcontainer;
+    /*
+     * Never block on the container here.
+     *
+     * `#webcontainer` is a module-level promise that resolves only once WebContainer has
+     * booted. Where it cannot boot — a test environment, a browser where the runtime is
+     * unavailable — awaiting it hangs forever and takes `resetWorkbench()` (and the test
+     * covering it) down with it, while the in-memory file map above is already correct.
+     * Emptying the working directory is a best-effort cleanup, so race it against a short
+     * timeout and move on.
+     */
+    const container = await Promise.race([
+      this.#webcontainer,
+      new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 500)),
+    ]);
+
+    if (!container) {
+      return;
+    }
 
     try {
       for (const entry of await container.fs.readdir('.')) {

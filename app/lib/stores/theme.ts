@@ -1,5 +1,6 @@
 import { atom } from 'nanostores';
 import { logStore } from './logs';
+import { pushPreferences } from '~/lib/preferences';
 import { getThemeMode, THEMES, type Theme } from '~/types/theme';
 
 export type { Theme } from '~/types/theme';
@@ -72,4 +73,10 @@ export function setTheme(newTheme: Theme | 'dark') {
   }
 
   logStore.logSystem(`Theme changed to ${newTheme}`);
+
+  /*
+   * Save the choice to the account so it follows the user to their other devices. Fire and
+   * forget: a failed sync must not delay the theme the user just picked.
+   */
+  void pushPreferences({ theme: newTheme });
 }

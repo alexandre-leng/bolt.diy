@@ -98,7 +98,10 @@ export async function deleteHistory(id: string): Promise<SyncResult<null>> {
  * merge — mixing messages from two divergent copies produces a conversation neither device
  * ever had.
  */
-export function pickNewest<T extends { timestamp?: string }>(local?: T, remote?: T): 'local' | 'remote' | 'none' {
+export function pickNewest<T extends { timestamp?: string; messages?: unknown }>(
+  local?: T,
+  remote?: T,
+): 'local' | 'remote' | 'none' {
   if (!local && !remote) {
     return 'none';
   }

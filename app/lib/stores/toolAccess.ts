@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { pushPreferences } from '~/lib/preferences';
 
 export type ToolAccessMode = 'full-access' | 'ask-for-all';
 
@@ -33,5 +34,11 @@ export const useToolAccessStore = create<ToolAccessStore>((set) => ({
     }
 
     set({ mode });
+
+    /*
+     * Same reasoning as the theme: this choice shapes what the agent asks for, so it should not
+     * have to be made again on every device. Fire and forget.
+     */
+    void pushPreferences({ toolAccessMode: mode });
   },
 }));

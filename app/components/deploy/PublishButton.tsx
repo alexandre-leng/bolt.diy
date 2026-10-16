@@ -1,5 +1,6 @@
 import { useStore } from '@nanostores/react';
 import { useState } from 'react';
+import { chatId } from '~/lib/persistence';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
 
@@ -72,6 +73,34 @@ export function PublishButton() {
         setState({ status: 'error', message: result.error || `Échec (HTTP ${response.status})`, log: result.log });
 
         return;
+      }
+
+      /*
+       * Record the project against the signed-in account.
+       *
+       * Publishing built the site but told nobody: `/projects` stayed empty, so the
+       * project never appeared in the account's own list and could not be traced back to
+       * the conversation that produced it. The history service already exposes
+       * `PUT /api/projects/<slug>` for exactly this; call it AFTER a successful build so a
+       * failed publish never leaves a "published" row pointing at a URL that 404s.
+       *
+       * A failure here must not fail the publish: the site is live and usable, and the
+       * user cares about the URL far more than about the bookkeeping row.
+       */
+      if (result.slug) {
+        try {
+          const recorded = await fetch(`/api/projects/${encodeURIComponent(result.slug)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: projectName(), url: result.url, chatId: chatId.get() }),
+          });
+
+          if (!recorded.ok) {
+            console.warn('publish: the site is live but could not be recorded', recorded.status);
+          }
+        } catch (error) {
+          console.warn('publish: the site is live but could not be recorded', error);
+        }
       }
 
       setState({ status: 'done', url: result.url || '', slug: result.slug || '' });

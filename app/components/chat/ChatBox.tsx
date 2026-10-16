@@ -14,6 +14,8 @@ import { SupabaseConnection } from './SupabaseConnection';
 import { ToolAccessMenu } from './ToolAccessMenu';
 import { ModelSelector } from '~/components/chat/ModelSelector';
 import { SpeechRecognitionButton } from '~/components/chat/SpeechRecognition';
+import { Card } from '~/components/ui/Card';
+import { CloseButton } from '~/components/ui/CloseButton';
 import { ColorSchemeDialog } from '~/components/ui/ColorSchemeDialog';
 import { IconButton } from '~/components/ui/IconButton';
 import { ExpoQrModal } from '~/components/workbench/ExpoQrModal';
@@ -378,23 +380,21 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
             </div>
             <McpTools open={isMcpToolsOpen} onOpenChange={setIsMcpToolsOpen} />
             {isScreenshotOpen && (
-              <div
+              <Card
                 role="dialog"
                 aria-label="From a screenshot"
-                className="absolute bottom-full left-0 mb-3 w-full max-w-xl rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-4 shadow-lg z-[1001]"
+                className="absolute bottom-full left-0 mb-3 w-full max-w-xl !bg-bolt-elements-background-depth-2 p-4 shadow-lg z-[1001]"
               >
                 <div className="flex items-center justify-between mb-3">
-                  <strong>From a screenshot</strong>
-                  <button
-                    type="button"
+                  <h2 className="text-sm font-semibold text-bolt-elements-textPrimary">From a screenshot</h2>
+                  <CloseButton
                     aria-label="Close screenshot generator"
                     onClick={() => setIsScreenshotOpen(false)}
-                  >
-                    Close
-                  </button>
+                    size="sm"
+                  />
                 </div>
                 <ScreenshotToCode />
-              </div>
+              </Card>
             )}
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>

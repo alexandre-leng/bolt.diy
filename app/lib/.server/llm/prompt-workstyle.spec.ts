@@ -13,6 +13,31 @@ describe('withDevelopmentCommentaryWorkstyle', () => {
     expect(enhanced).toContain('Keep runtime load lightweight in WebContainer');
   });
 
+  it('tells the model to install dependencies before starting the dev server', () => {
+    /*
+     * The empty-preview bug: the model ran `npm run dev` before vite was installed, so the
+     * server exited immediately and the preview stayed blank. The ordering rule must survive
+     * future prompt edits, hence this assertion.
+     */
+    const prompt = withDevelopmentCommentaryWorkstyle('base');
+
+    expect(prompt).toContain('DEPENDENCY ORDER');
+    expect(prompt).toContain('run the install command FIRST');
+    expect(prompt).toContain('never start it after an install failed');
+    expect(prompt).toMatch(/No preview available/);
+  });
+
+  it('forbids inventing tool names that were never provided', () => {
+    /*
+     * Observed: the model called `project_create_direct`, which does not exist, and the
+     * resulting validation error derailed the build.
+     */
+    const prompt = withDevelopmentCommentaryWorkstyle('base');
+
+    expect(prompt).toContain('USE ONLY THE TOOLS YOU WERE GIVEN');
+    expect(prompt).toContain('Do not invent, guess, or adapt a name');
+  });
+
   it('should preserve existing workstyle and append MCP guidance only once', () => {
     const basePrompt = 'You are an AI assistant.\n\n<workstyle>\nExisting instructions\n</workstyle>';
     const enhanced = withDevelopmentCommentaryWorkstyle(basePrompt);

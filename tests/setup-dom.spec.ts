@@ -12,8 +12,17 @@ import { DOM_PROJECT, NODE_PROJECT, SHARED_EXCLUDE } from '../vitest.config';
  * explicit so the next edit cannot lose coverage without something failing.
  */
 
-/** Excluded by both projects, matching the previous behaviour exactly. */
-const LONG_EXCLUDED = ['app/components/chat/Markdown.spec.ts', 'app/lib/stores/workbench.spec.ts'];
+/**
+ * Excluded by both projects, matching the previous behaviour exactly.
+ *
+ * `Markdown.spec.ts` is the only one left here: it imports `import.meta.hot` in a way
+ * neither project can satisfy. `workbench.spec.ts` was excluded alongside it, but that
+ * hid 10 real tests — the timeout it hit came from `filesStore.reset()` awaiting a
+ * WebContainer that never boots in tests, not from the project split. That await is now
+ * time-boxed, so the spec runs in the `dom` project where it belongs and its coverage is
+ * asserted below instead of being silently dropped.
+ */
+const LONG_EXCLUDED = ['app/components/chat/Markdown.spec.ts'];
 
 describe('vitest project split', () => {
   it('defines a node and a dom project', () => {
@@ -30,6 +39,16 @@ describe('vitest project split', () => {
      */
     expect(DOM_PROJECT.include.length).toBeGreaterThan(0);
     expect(DOM_PROJECT.include.filter((pattern: string) => pattern.includes('*'))).toEqual([]);
+  });
+
+  it('still runs the workbench store spec instead of excluding its 10 tests', () => {
+    /*
+     * Regression guard: this file was once excluded from both projects, which removed
+     * its tests from the run without any failure being reported.
+     */
+    expect(DOM_PROJECT.include).toContain('app/lib/stores/workbench.spec.ts');
+    expect(NODE_PROJECT.exclude).toContain('app/lib/stores/workbench.spec.ts');
+    expect(DOM_PROJECT.exclude).not.toContain('app/lib/stores/workbench.spec.ts');
   });
 
   it('subtracts every dom test from the node project', () => {

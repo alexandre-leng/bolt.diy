@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createFilesContext, extractCurrentContext, extractPropertiesFromMessage, simplifyBoltActions } from './utils';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '~/utils/constants';
 
 const WORK_DIR = '/home/project';
 const MODEL_REGEX = /^\[Model: (.*?)\]\n\n/;
@@ -17,11 +18,17 @@ describe('extractPropertiesFromMessage', () => {
     expect(result).toEqual({ model: 'gpt-4o', provider: 'OpenRouter', content: 'build me a thing' });
   });
 
-  it('falls back to defaults when no markers are present', () => {
+  it('falls back to the configured defaults when no markers are present', () => {
     const result = extractPropertiesFromMessage(userMessage('just do the thing'));
 
-    expect(result.model).toBe('claude-3-5-sonnet-latest');
-    expect(result.provider).toBe('OpenRouter');
+    /*
+     * Asserted against DEFAULT_MODEL/DEFAULT_PROVIDER, not literal provider names: the
+     * deployment configures those (VITE_DEFAULT_MODEL / VITE_DEFAULT_PROVIDER), so pinning
+     * "claude-3-5-sonnet-latest"/"OpenRouter" here only asserted an old deployment's choice
+     * and broke as soon as the deployment was configured.
+     */
+    expect(result.model).toBe(DEFAULT_MODEL);
+    expect(result.provider).toBe(DEFAULT_PROVIDER.name);
     expect(result.content).toBe('just do the thing');
   });
 
@@ -98,7 +105,8 @@ describe('extractPropertiesFromMessage', () => {
   it('does not treat a mid-message model mention as metadata', () => {
     const result = extractPropertiesFromMessage(userMessage('compare this to [Model: gpt-4o] behaviour'));
 
-    expect(result.model).toBe('claude-3-5-sonnet-latest');
+    // No leading marker, so the configured default applies (see the test above).
+    expect(result.model).toBe(DEFAULT_MODEL);
     expect(result.content).toBe('compare this to [Model: gpt-4o] behaviour');
   });
 

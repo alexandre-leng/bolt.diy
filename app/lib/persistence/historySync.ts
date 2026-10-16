@@ -14,6 +14,9 @@ import { createScopedLogger } from '~/utils/logger';
  */
 const logger = createScopedLogger('HistorySync');
 
+/**
+ * True when the server could not be reached; the local cache was used as-is.
+ */
 export interface Reconciliation {
   /* Pulled from the server because the local copy was missing or older. */
   pulled: number;
@@ -23,6 +26,39 @@ export interface Reconciliation {
 
   /** True when the server could not be reached; the local cache was used as-is. */
   offline: boolean;
+}
+
+/*
+ * Ids deleted during this page's lifetime.
+ *
+ * Deletion is a local write and a server write that cannot be made atomic, and the sync
+ * runs on the history list load — the same moment the delete triggers a refresh. Without
+ * this registry the migration could re-push the chat from a cache read taken just before
+ * the delete, or pull it back from a server response that raced the DELETE, and the
+ * conversation the user just removed would reappear.
+ *
+ * Entries are kept for the session: a deleted id must never be resurrected by a later
+ * sync, and the set is tiny.
+ */
+const deletedIds = new Set<string>();
+
+/** Remember that a chat was deleted so no later sync can bring it back. */
+export function markDeleted(id: string, urlId?: string): void {
+  deletedIds.add(id);
+
+  if (urlId) {
+    deletedIds.add(urlId);
+  }
+}
+
+/** Test seam: forget every recorded deletion. */
+export function clearDeletedIds(): void {
+  deletedIds.clear();
+}
+
+/** Whether this id (or its server counterpart) has been deleted in this session. */
+export function isDeleted(id: string, urlId?: string): boolean {
+  return deletedIds.has(id) || (urlId ? deletedIds.has(urlId) : false);
 }
 
 /**
@@ -91,9 +127,17 @@ export async function migrateLocalHistoryToServer(database: IDBDatabase, localId
   const remoteById = new Map<string, ChatSummary>(remoteResult.data.map((chat) => [chat.id, chat]));
 
   for (const id of localIds) {
+    if (isDeleted(id)) {
+      continue;
+    }
+
     const local = await getCachedMessages(database, id).catch(() => undefined);
 
     if (!local) {
+      continue;
+    }
+
+    if (isDeleted(local.id, local.urlId)) {
       continue;
     }
 
@@ -125,6 +169,14 @@ export async function migrateLocalHistoryToServer(database: IDBDatabase, localId
     const remote = await getHistory(summary.id);
 
     if (!remote.ok || !remote.data) {
+      continue;
+    }
+
+    /*
+     * A chat deleted in this session must never be pulled back, even if the server
+     * response raced the DELETE and still lists it.
+     */
+    if (isDeleted(summary.id, remote.data.urlId ?? summary.urlId ?? undefined)) {
       continue;
     }
 

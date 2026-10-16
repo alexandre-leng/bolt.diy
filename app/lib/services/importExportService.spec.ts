@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ImportExportService } from './importExportService';
 
 /**
@@ -15,6 +15,17 @@ function stubDb(rows: unknown[]): IDBDatabase {
         (request.onsuccess as (() => void) | undefined)?.();
       });
       return request;
+    },
+
+    // deleteAllChats clears the local copy through deleteChat -> store.delete(id).
+    delete: (_id: string) => {
+      const deleteRequest: Record<string, unknown> = {};
+
+      queueMicrotask(() => {
+        (deleteRequest.onsuccess as (() => void) | undefined)?.();
+      });
+
+      return deleteRequest;
     },
   };
 
@@ -89,5 +100,62 @@ describe('ImportExportService.exportAllChats', () => {
     await expect(ImportExportService.exportAllChats(undefined as unknown as IDBDatabase)).rejects.toThrow(
       'Database not initialized',
     );
+  });
+});
+
+/*
+ * "Deleting a conversation doesn't work" was really "the conversation comes back a
+ * second later". The local store is only a cache and bolt-history is the source of
+ * truth, so wiping IndexedDB alone left the server row intact; the next sync saw an
+ * unknown chat and pulled it straight back in. These tests pin the server purge.
+ */
+describe('ImportExportService.deleteAllChats', () => {
+  const calls: Array<{ url: string; method?: string }> = [];
+
+  function mockFetch(): void {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        calls.push({ url, method: init?.method });
+        return { ok: true, status: 200, json: async () => ({ ok: true }) };
+      }),
+    );
+  }
+
+  beforeEach(() => {
+    calls.length = 0;
+    vi.unstubAllGlobals();
+    mockFetch();
+  });
+
+  it('deletes each chat on the server before clearing the local cache', async () => {
+    const db = stubDb([
+      { id: 'chat-1', urlId: '2-aaa-0', messages: [] },
+      { id: 'chat-2', urlId: '2-bbb-0', messages: [] },
+    ]);
+
+    await ImportExportService.deleteAllChats(db);
+
+    const deleted = calls.filter((call) => call.method === 'DELETE').map((call) => call.url);
+
+    expect(deleted).toContain('/api/history/chat-1');
+    expect(deleted).toContain('/api/history/chat-2');
+  });
+
+  it('does not throw when the server is unreachable', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('network down');
+      }),
+    );
+
+    await expect(ImportExportService.deleteAllChats(stubDb([{ id: 'chat-1', messages: [] }]))).resolves.toBeUndefined();
+  });
+
+  it('purges the server even for a chat with no urlId', async () => {
+    await ImportExportService.deleteAllChats(stubDb([{ id: 'chat-1', messages: [] }]));
+
+    expect(calls.filter((call) => call.method === 'DELETE').map((call) => call.url)).toContain('/api/history/chat-1');
   });
 });

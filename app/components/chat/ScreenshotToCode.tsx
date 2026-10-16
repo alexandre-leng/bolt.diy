@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import { Button } from '~/components/ui/Button';
+import { Input } from '~/components/ui/Input';
+import { Label } from '~/components/ui/Label';
 import { generateScreenshotCode, validateScreenshot } from '~/lib/screenshot/generate';
 import { importScreenshotHtml, validateImportableHtml } from '~/lib/screenshot/import';
 import { workbenchStore } from '~/lib/stores/workbench';
+import { classNames } from '~/utils/classNames';
 
 type Props = {
   generate?: typeof generateScreenshotCode;
@@ -127,26 +131,40 @@ export function ScreenshotToCode({
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-bolt-elements-borderColor p-3 text-sm text-bolt-elements-textPrimary">
-      <label htmlFor="screenshot-image">Screenshot image</label>
-      <input
+      <Label htmlFor="screenshot-image">Screenshot image</Label>
+      <Input
         id="screenshot-image"
         aria-label="Screenshot image"
         type="file"
         accept="image/png,image/jpeg,image/webp"
         onChange={(event) => select(event.target.files?.[0])}
         disabled={busy}
+        className="h-auto rounded-full py-2 file:mr-3 file:rounded-full file:border-0 file:bg-bolt-elements-background-depth-3 file:px-3 file:py-1 file:text-bolt-elements-textPrimary"
       />
-      {file && <span>{file.name}</span>}
-      <button type="button" disabled={!file || busy} onClick={() => void start()}>
+      {file && <span className="text-xs text-bolt-elements-textSecondary">{file.name}</span>}
+      <Button
+        type="button"
+        disabled={!file || busy}
+        onClick={() => void start()}
+        className="self-start bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text !rounded-full px-5"
+      >
         Generate HTML
-      </button>
+      </Button>
       {busy && (
-        <button type="button" onClick={() => controller.current?.abort()}>
+        <Button type="button" variant="outline" onClick={() => controller.current?.abort()} className="self-start">
           Cancel generation
-        </button>
+        </Button>
       )}
-      {status && <p role="status">{status}</p>}
-      {error && <p role="alert">{error}</p>}
+      {status && (
+        <p role="status" className="text-bolt-elements-textSecondary">
+          {status}
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="text-red-500">
+          {error}
+        </p>
+      )}
       {code && (
         <>
           <p>
@@ -165,11 +183,19 @@ export function ScreenshotToCode({
             aria-label="Generated HTML source"
             readOnly
             value={code}
-            className="w-full min-h-32 bg-transparent"
+            className={classNames(
+              'w-full min-h-32 rounded-md border border-bolt-elements-borderColor',
+              'bg-bolt-elements-background-depth-1 px-3 py-2 font-mono text-xs text-bolt-elements-textPrimary',
+            )}
           />
-          <button type="button" onClick={() => void importFile()} disabled={busy}>
+          <Button
+            type="button"
+            onClick={() => void importFile()}
+            disabled={busy}
+            className="self-start bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text !rounded-full px-5"
+          >
             Import HTML into Bolt
-          </button>
+          </Button>
         </>
       )}
     </div>

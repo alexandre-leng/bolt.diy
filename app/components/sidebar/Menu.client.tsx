@@ -20,8 +20,18 @@ import { DocumentationPanel } from '~/components/ui/DocumentationPanel';
 import { SettingsButton, HelpButton } from '~/components/ui/SettingsButton';
 import { ThemeSwitch } from '~/components/ui/ThemeSwitch';
 import { useSearchFilter } from '~/lib/hooks/useSearchFilter';
-import { db, deleteById, getAll, chatId, type ChatHistoryItem, useChatHistory } from '~/lib/persistence';
-import { migrateLocalHistoryToServer } from '~/lib/persistence/historySync';
+import {
+  db,
+  deleteById,
+  getAll,
+  getCachedMessages,
+  invalidateChatCache,
+  chatId,
+  type ChatHistoryItem,
+  useChatHistory,
+} from '~/lib/persistence';
+import { migrateLocalHistoryToServer, markDeleted } from '~/lib/persistence/historySync';
+import { deleteHistory } from '~/lib/persistence/syncClient';
 import {
   closeSidebar,
   initSidebar,
@@ -86,6 +96,29 @@ function CurrentDateTime() {
   );
 }
 
+/**
+ * Which cached chats the sidebar LIST may show.
+ *
+ * A chat without a urlId or a description is not presentable yet (the title is derived
+ * from the first message), so the list hides it.
+ */
+export function listableChats(items: ChatHistoryItem[]): ChatHistoryItem[] {
+  return items.filter((item) => item.urlId && item.description);
+}
+
+/**
+ * Which cached chats the MIGRATION must consider: all of them.
+ *
+ * This is deliberately NOT `listableChats`. A chat with no urlId is precisely the one that
+ * exists only in this browser and therefore the one the server still needs; filtering
+ * before migrating dropped exactly those records, so a local-only conversation was never
+ * uploaded however often the list refreshed. Kept as a named function so the distinction
+ * is visible and testable rather than implied by an inline filter.
+ */
+export function syncableChatIds(items: ChatHistoryItem[]): string[] {
+  return items.map((item) => item.id);
+}
+
 export const Menu = () => {
   const { duplicateCurrentChat, exportChat } = useChatHistory({ loadHistory: false });
   const menuRef = useRef<HTMLDivElement>(null);
@@ -137,22 +170,20 @@ export const Menu = () => {
     setSyncState('syncing');
 
     getAll(database)
-      .then((list) => list.filter((item) => item.urlId && item.description))
-      .then((localList) => {
-        setList(localList);
+      .then((all) => {
+        /*
+         * The list shows the presentable chats; the migration gets every cached id — see
+         * `syncableChatIds` for why those two sets must not be the same.
+         */
+        setList(listableChats(all));
 
         // setList returns void, so keep the list in scope rather than chaining it through.
-        return migrateLocalHistoryToServer(
-          database,
-          localList.map((item) => item.id),
-        ).then((result) => {
+        return migrateLocalHistoryToServer(database, syncableChatIds(all)).then((result) => {
           setSyncState(result.offline ? 'offline' : 'synced');
 
-          if (result.pulled > 0) {
-            // New chats arrived from the server: re-read the cache to show them.
-            void getAll(database)
-              .then((list) => list.filter((item) => item.urlId && item.description))
-              .then(setList);
+          if (result.pulled > 0 || result.pushed > 0) {
+            // Chats arrived from the server, or a local one got its urlId: re-read.
+            void getAll(database).then((list) => setList(listableChats(list)));
           }
 
           if (result.offline) {
@@ -172,6 +203,53 @@ export const Menu = () => {
         throw new Error('Database not available');
       }
 
+      /*
+       * Delete on the server FIRST, then locally.
+       *
+       * Order matters. This function used to only wipe IndexedDB, and the very next
+       * `loadEntries()` called `migrateLocalHistoryToServer`, which still saw the chat on
+       * the server, counted it as "pulled" and wrote it straight back into the local
+       * cache — the conversation reappeared a second after being deleted. The server is
+       * the source of truth across devices, so it has to be purged for the deletion to
+       * stick. Purging the server first also means a failure there aborts before the
+       * local copy is gone, so the user never ends up with a half-deleted chat.
+       */
+      let urlId: string | undefined;
+
+      try {
+        const cached = await getCachedMessages(db, id);
+        urlId = cached?.urlId;
+      } catch (cacheError) {
+        // A missing cache entry is not fatal: we still try the id itself below.
+        logger.debug('could not read the chat before deleting it', cacheError);
+      }
+
+      /*
+       * The local key and the server key are not always the same string, so clear both
+       * candidates rather than assuming one. A 404 on a key that was never there is a
+       * normal, harmless outcome.
+       */
+      const serverIds = [id, urlId].filter((value, index, all): value is string => {
+        return Boolean(value) && all.indexOf(value) === index;
+      });
+
+      for (const serverId of serverIds) {
+        const serverResult = await deleteHistory(serverId);
+
+        if (serverResult.ok) {
+          break;
+        }
+
+        logger.debug(`server delete failed for ${serverId}`, serverResult.error);
+      }
+
+      /*
+       * Record the deletion BEFORE the list refresh. `loadEntries` runs a sync that would
+       * otherwise pull the chat back from a server response that raced this DELETE, or
+       * re-push it from a cache read taken before the wipe below.
+       */
+      markDeleted(id, urlId);
+
       // Delete chat snapshot from localStorage
       try {
         const snapshotKey = `snapshot:${id}`;
@@ -181,9 +259,16 @@ export const Menu = () => {
         console.error(`Error deleting snapshot for chat ${id}:`, snapshotError);
       }
 
-      // Delete the chat from the database
+      // Delete the chat from the local database
       await deleteById(db, id);
       console.log('Successfully deleted chat:', id);
+
+      // Drop the memoised copy: a stale cache entry would re-seed the chat on reopen.
+      invalidateChatCache(id);
+
+      if (urlId) {
+        invalidateChatCache(urlId);
+      }
     },
     [db],
   );
@@ -342,10 +427,29 @@ export const Menu = () => {
   }, [filteredList]); // Depends only on filteredList
 
   useEffect(() => {
-    if (open) {
+    /*
+     * Load once on mount, not only when the panel opens.
+     *
+     * Waiting for `open` made the list appear empty on a fresh browser: the panel starts
+     * collapsed, so `loadEntries` never ran, and the conversations already stored on the server
+     * were never pulled in. Loading on mount also means the sync has started by the time the
+     * user opens the list, so it renders populated instead of flashing "No previous
+     * conversations".
+     */
+    loadEntries();
+  }, [loadEntries]);
+
+  /*
+   * `loadEntries` returns early while `db` is still undefined — the database opens
+   * asynchronously — so the mount-time call above usually does nothing, and nothing ever
+   * retried it: the sync simply never ran, so local conversations never reached the server
+   * and server conversations never appeared. Re-run when the database becomes available.
+   */
+  useEffect(() => {
+    if (db) {
       loadEntries();
     }
-  }, [open, loadEntries]);
+  }, [db, loadEntries]);
 
   /*
    * On touch devices the 340px panel would cover the entire chat, so start

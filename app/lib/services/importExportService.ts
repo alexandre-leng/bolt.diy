@@ -1,11 +1,46 @@
 import { type UIMessage } from 'ai';
 import Cookies from 'js-cookie';
 import { getAllChats, deleteChat } from '~/lib/persistence/chats';
+import { markDeleted } from '~/lib/persistence/historySync';
+import { deleteHistory } from '~/lib/persistence/syncClient';
 
 interface ExtendedMessage extends UIMessage {
   name?: string;
   function_call?: any;
   timestamp?: number;
+}
+
+/**
+ * Delete the server-side copies of the given chats.
+ *
+ * The local store is only a cache: bolt-history is the source of truth that lets one
+ * profile follow the user across devices. Wiping IndexedDB alone leaves the server rows
+ * intact, and the next sync treats them as chats this device has never seen and pulls
+ * them all back — "delete everything" then undoes itself after a reload.
+ *
+ * Both keys are attempted per chat (`id` and `urlId`) because the local key is not
+ * guaranteed to match the server one; a 404 on a key that was never there is expected.
+ * Failures are logged, never thrown: a wipe must still clear what it can locally.
+ */
+async function purgeServerHistory(chats: Array<{ id: string; urlId?: string }>): Promise<void> {
+  for (const chat of chats) {
+    const candidates = [chat.id, chat.urlId].filter(
+      (value, index, all): value is string => Boolean(value) && all.indexOf(value) === index,
+    );
+
+    for (const candidate of candidates) {
+      const result = await deleteHistory(candidate);
+
+      if (result.ok) {
+        break;
+      }
+
+      console.warn(`Could not delete chat ${candidate} on the server:`, result.error);
+    }
+
+    // Record it so the sync that follows a wipe cannot pull the chat back.
+    markDeleted(chat.id, chat.urlId);
+  }
 }
 
 /**
@@ -322,6 +357,9 @@ export class ImportExportService {
       // Get all chats and delete them
       const chats = await getAllChats(db);
 
+      // Purge the server mirror too, or the next sync pulls every chat back in.
+      await purgeServerHistory(chats);
+
       const deletePromises = chats.map((chat) => deleteChat(db, chat.id));
       await Promise.all(deletePromises);
     }
@@ -352,6 +390,10 @@ export class ImportExportService {
 
     // Get all chats and delete them one by one
     const chats = await getAllChats(db);
+
+    // Purge the server mirror first: without it the next sync restores every chat.
+    await purgeServerHistory(chats);
+
     const deletePromises = chats.map((chat) => deleteChat(db, chat.id));
     await Promise.all(deletePromises);
   }

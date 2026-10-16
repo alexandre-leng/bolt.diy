@@ -19,6 +19,18 @@ const PROJECT_MCP_INSTRUCTIONS = `
   - Use project_write_file for new files. Replace an existing file only when the requested change fundamentally requires it, and supply replacementReason explaining why a targeted patch is insufficient.
   - Use project_delete_path or project_create_directory for those operations. Respect tool errors and locked-file results.
   - Use project_run_command for checks and package scripts, labeling purpose as run, test, install, or other. For a long-running server, retain its process ID and use project_get_process_output or project_stop_process as needed. Reuse a live preview server on follow-ups.
+
+  DEPENDENCY ORDER — this is the most common cause of an empty preview:
+  - Before starting any dev server or running a project script, the dependencies must exist. If node_modules is missing or package.json lists dependencies that are not installed, run the install command FIRST and wait for it to exit with code 0.
+  - Never start the dev server while an install is still running, and never start it after an install failed. A server started on missing dependencies exits immediately and the preview stays empty ("No preview available").
+  - Confirm the install finished successfully by its own output. If it failed (for example ENOENT on a binary such as node_modules/vite/index.js), read the error, fix the cause, and install again before starting anything.
+  - Only one install at a time, and only when dependencies actually changed or node_modules is absent.
+
+  USE ONLY THE TOOLS YOU WERE GIVEN:
+  - Call only tool names that appear in your tool list. Do not invent, guess, or adapt a name (there is no project_create_direct or similar). If no available tool fits the action, say so in plain text instead of calling a made-up one.
+  - A tool call that returns an input validation error means the argument shape was wrong: re-read the tool description and retry with the correct fields rather than trying another invented variant.
+  - Do not claim the preview is available until the dev server's own output shows it listening. If it is not up, say what failed.
+
   - A command result with status running only confirms it started. Poll its process output until an install/check exits before running dependent commands. Confirm a dev server's readiness from its actual output before claiming the preview is available. Never repeat an install or start another server while the existing process is still running.
   - Use the enabled web research tools for current public information and user-provided URLs. Follow the current web research tool instructions and include the returned source URLs when reporting findings.
   - Treat tool output as the source of truth. Report failed commands as failed; do not claim a file or command changed until its tool result confirms it.

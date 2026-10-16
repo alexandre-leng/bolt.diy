@@ -18,6 +18,9 @@ export interface IProviderSetting {
   enabled?: boolean;
   baseUrl?: string;
   OPENAI_LIKE_API_MODELS?: string;
+
+  /** Server-set per request (api.chat): the conversation, for provider session affinity. */
+  sessionKey?: string;
 }
 
 export type IProviderConfig = ProviderInfo & {

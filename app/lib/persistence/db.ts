@@ -205,6 +205,18 @@ export async function deleteById(db: IDBDatabase, id: string): Promise<void> {
 }
 
 /**
+ * The id for a new chat: numeric and above every local id, but also above the clock.
+ *
+ * It used to be `highest local id + 1`, so two devices — or two accounts — that each had
+ * chats 1..8 both created chat "9", and the server stored them under the same key (the
+ * second save overwrote the first). A millisecond timestamp keeps ids numeric and
+ * increasing while making a cross-device collision practically impossible.
+ */
+export function nextChatId(highestLocalId: number, now: number = Date.now()): string {
+  return String(Math.max(highestLocalId + 1, now));
+}
+
+/**
  * Allocate the next numeric chat ID and persist the chat in one readwrite
  * transaction. IndexedDB serializes overlapping readwrite transactions, so a
  * concurrent creator observes the ID written by the previous transaction.
@@ -235,7 +247,7 @@ export async function createChatWithNextId(
         return;
       }
 
-      const id = String(highestId + 1);
+      const id = nextChatId(highestId);
       const baseUrlId = urlId || id;
 
       let finalUrlId = urlId;

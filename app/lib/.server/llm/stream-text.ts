@@ -125,6 +125,13 @@ export async function streamText(props: {
    * two consumers race for the same stream.
    */
   onChunk?: (options: { chunk: unknown }) => void;
+
+  /*
+   * Called when the requested model is unknown to its provider and another one answers.
+   * The swap used to be a server log line only: the user read the answer as coming from the
+   * model they picked.
+   */
+  onModelFallback?: (info: { requested: string; used: string; provider: string }) => void;
 }) {
   const {
     messages,
@@ -141,6 +148,7 @@ export async function streamText(props: {
     agentMode,
     designScheme,
     onChunk,
+    onModelFallback,
   } = props;
 
   let currentModel = props.model ?? DEFAULT_MODEL;
@@ -149,8 +157,19 @@ export async function streamText(props: {
   let processedMessages = messages.map((message) => {
     const newMessage = { ...message } as Record<string, any>;
 
+    /*
+     * The `[Model: …]` / `[Provider: …]` markers are routing metadata for this server.
+     * They were read here and then sent to the model anyway, in every user message of the
+     * history: the model saw (and sometimes answered about) them on each turn.
+     */
+    let sourceParts = message.parts;
+
     if (message.role === 'user') {
-      const { model, provider } = extractPropertiesFromMessage(message);
+      const { model, provider, parts: strippedParts } = extractPropertiesFromMessage(message);
+
+      if (Array.isArray(strippedParts)) {
+        sourceParts = strippedParts as typeof message.parts;
+      }
 
       if (!props.model) {
         currentModel = model;
@@ -169,8 +188,8 @@ export async function streamText(props: {
      * `data-*` parts are preserved rather than flattened away, because bolt
      * reads annotations back off them.
      */
-    const sanitizedParts = Array.isArray(message.parts)
-      ? message.parts.map((part) =>
+    const sanitizedParts = Array.isArray(sourceParts)
+      ? sourceParts.map((part) =>
           part?.type === 'text' && typeof part.text === 'string' ? { ...part, text: sanitizeText(part.text) } : part,
         )
       : [];
@@ -184,7 +203,9 @@ export async function streamText(props: {
     } else {
       const rebuilt = createMessage({
         role: message.role,
-        text: sanitizeText(getMessageText(message)),
+        text: sanitizeText(
+          message.role === 'user' ? extractPropertiesFromMessage(message).content : getMessageText(message),
+        ),
       });
 
       newMessage.parts = rebuilt.parts;
@@ -228,6 +249,7 @@ export async function streamText(props: {
         `MODEL [${currentModel}] not found in provider [${provider.name}]. Falling back to first model. ${modelsList[0].name}`,
       );
       modelDetails = modelsList[0];
+      onModelFallback?.({ requested: currentModel, used: modelDetails.name, provider: provider.name });
     }
   }
 

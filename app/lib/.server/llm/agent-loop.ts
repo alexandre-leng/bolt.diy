@@ -169,9 +169,16 @@ export function createAgentLoopTools<TaskToolName extends string = never>(
       }
 
       if (!progress.plan) {
+        /*
+         * `required` with agent_plan as the only active tool, not a named tool choice. The
+         * two mean the same here, but not every model honours the named form: on the
+         * OpenCode gateway minimax-m3 answered the named choice with 1 146 characters of text
+         * and no call (ToolChoiceViolation, which is not retried: the turn failed) while it
+         * called agent_plan under `required` — measured live, same prompt, same tool.
+         */
         return {
           ...instructions,
-          toolChoice: { type: 'tool' as const, toolName: 'agent_plan' as const },
+          toolChoice: 'required' as const,
           activeTools: ['agent_plan' as const],
         };
       }

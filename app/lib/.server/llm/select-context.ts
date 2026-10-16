@@ -180,61 +180,71 @@ export async function selectContext(props: {
     reasoning: 'none',
   });
 
-  const response = resp.text;
-  const updateContextBuffer = response.match(/<updateContextBuffer>([\s\S]*?)<\/updateContextBuffer>/);
-
-  if (!updateContextBuffer) {
-    throw new Error('Invalid response. Please follow the response format');
-  }
-
-  const includeFiles =
-    updateContextBuffer[1]
-      .match(/<includeFile path="(.*?)"/gm)
-      ?.map((x) => x.replace('<includeFile path="', '').replace('"', '')) || [];
-  const excludeFiles =
-    updateContextBuffer[1]
-      .match(/<excludeFile path="(.*?)"/gm)
-      ?.map((x) => x.replace('<excludeFile path="', '').replace('"', '')) || [];
-
-  const filteredFiles: FileMap = {};
-  excludeFiles.forEach((path) => {
-    delete contextFiles[path];
-  });
-  includeFiles.forEach((path) => {
-    let fullPath = path;
-
-    if (!path.startsWith('/home/project/')) {
-      fullPath = `/home/project/${path}`;
-    }
-
-    if (!filePaths.includes(fullPath)) {
-      logger.error(`File ${path} is not in the list of files above.`);
-      return;
-
-      // throw new Error(`File ${path} is not in the list of files above.`);
-    }
-
-    if (currrentFiles.includes(path)) {
-      return;
-    }
-
-    filteredFiles[path] = files[fullPath];
-  });
-
   if (onFinish) {
     onFinish(resp);
   }
 
-  const totalFiles = Object.keys(filteredFiles).length;
-  logger.info(`Total files: ${totalFiles}`);
+  const selected = applyContextBufferUpdate({
+    responseText: resp.text,
+    files,
+    filePaths,
+    currentContext: contextFiles,
+  });
+  logger.info(`Total files: ${Object.keys(selected).length}`);
 
-  if (totalFiles == 0) {
-    throw new Error(`Bolt failed to select files`);
+  return selected;
+}
+
+/**
+ * Apply the model's `<updateContextBuffer>` answer to the files already in context.
+ *
+ * Two defects lived here. Selecting zero NEW files threw "Bolt failed to select files" and
+ * failed the whole chat turn — yet the prompt itself tells the model that an empty tag is
+ * the right answer when nothing changes, and a follow-up question about files already loaded
+ * hits exactly that. And the files kept in the buffer were dropped from the result: only the
+ * newly included ones reached the model. A malformed answer now keeps the current context
+ * instead of throwing.
+ */
+export function applyContextBufferUpdate(args: {
+  responseText: string;
+  files: FileMap;
+  filePaths: string[];
+  currentContext: FileMap;
+}): FileMap {
+  const { responseText, files, filePaths, currentContext } = args;
+  const result: FileMap = { ...currentContext };
+  const update = responseText.match(/<updateContextBuffer>([\s\S]*?)<\/updateContextBuffer>/);
+
+  if (!update) {
+    logger.warn('context selection answer has no <updateContextBuffer>; keeping the current context');
+
+    return result;
   }
 
-  return filteredFiles;
+  const paths = (tag: string) =>
+    [...update[1].matchAll(new RegExp(`<${tag} path="(.*?)"`, 'g'))].map((match) => match[1]);
 
-  // generateText({
+  for (const path of paths('excludeFile')) {
+    delete result[path];
+    delete result[path.replace(/^\/home\/project\//, '')];
+  }
+
+  for (const path of paths('includeFile')) {
+    const fullPath = path.startsWith('/home/project/') ? path : `/home/project/${path}`;
+
+    if (!filePaths.includes(fullPath)) {
+      logger.error(`File ${path} is not in the list of files above.`);
+      continue;
+    }
+
+    const relativePath = fullPath.replace('/home/project/', '');
+
+    if (!result[relativePath]) {
+      result[relativePath] = files[fullPath];
+    }
+  }
+
+  return result;
 }
 
 export function getFilePaths(files: FileMap) {

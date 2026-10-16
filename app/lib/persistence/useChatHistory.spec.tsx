@@ -357,6 +357,39 @@ describe('useChatHistory chat switching', () => {
     expect(window.location.pathname).toBe('/chat/3');
   });
 
+  it('snapshots a long agent turn while it runs, anchored on the user message that started it', async () => {
+    const useChatHistory = await importHook();
+    routeId = undefined;
+
+    const { result } = renderHook(() => useChatHistory());
+    await waitFor(() => expect(result.current.ready).toBe(true));
+
+    const turn = (text: string) =>
+      [
+        { id: 'ask', role: 'user', content: 'build it', parts: [{ type: 'text', text: 'build it' }] },
+        { id: 'work', role: 'assistant', content: text, parts: [{ type: 'text', text }] },
+      ] as any;
+
+    await act(async () => {
+      await result.current.storeMessageHistory(turn('writing files'), true);
+    });
+
+    /*
+     * Before: no snapshot at all until the turn ended — a tab closed mid-turn lost every
+     * file not written by a replayable tool call.
+     */
+    expect(setSnapshot).toHaveBeenCalledTimes(1);
+    expect(setSnapshot).toHaveBeenCalledWith({}, '3', expect.objectContaining({ chatIndex: 'ask' }));
+    expect(waitForExecutionQueue).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.storeMessageHistory(turn('writing more files'), true);
+    });
+
+    // Throttled: a burst of streaming saves does not rewrite the snapshot each time.
+    expect(setSnapshot).toHaveBeenCalledTimes(1);
+  });
+
   it('preserves an incoming generation when the home query changes before its route handoff', async () => {
     const useChatHistory = await importHook();
     routeId = undefined;

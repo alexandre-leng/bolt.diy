@@ -67,6 +67,7 @@ const DOM_TESTS = [
   'app/lib/persistence/chatCache.spec.ts',
   'app/lib/services/importExportService.spec.ts',
   'app/lib/stores/workbench.spec.ts',
+  'app/lib/stores/files.watcher.spec.ts',
 
   /*
    * tests/ — every suite here is UI-facing.

@@ -32,7 +32,7 @@ vi.mock('./chatCache', () => ({
   }),
 }));
 
-import { migrateLocalHistoryToServer, markDeleted, clearDeletedIds } from './historySync';
+import { migrateLocalHistoryToServer, markDeleted, clearDeletedIds, pushChat } from './historySync';
 import { deleteHistory } from './syncClient';
 
 type FetchArgs = [url: string, init?: RequestInit];
@@ -246,5 +246,141 @@ describe('migration uploads a local-only chat', () => {
     const result = await migrateLocalHistoryToServer({} as IDBDatabase, ['empty-stub']);
 
     expect(result.pushed).toBe(0);
+  });
+});
+
+/*
+ * C2 — a chat continued on another device. The server copy is newer, the local one is
+ * cached: the migration only ever pushed, so this device kept the old conversation.
+ */
+describe('a chat continued on another device', () => {
+  beforeEach(() => {
+    store.clear();
+    clearDeletedIds();
+    vi.unstubAllGlobals();
+  });
+
+  function stubServer(remote: { timestamp: string; messages: unknown[] }) {
+    const puts: string[] = [];
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (...args: FetchArgs) => {
+        const [url, init] = args;
+        const path = String(url).replace('/api/history', '');
+
+        if (init?.method === 'PUT') {
+          puts.push(path);
+          return { ok: true, status: 200, json: async () => ({ ok: true }) };
+        }
+
+        if (path === '' || path === '/') {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ ok: true, chats: [{ id: 'chat-1', urlId: '2-aaa-0', timestamp: remote.timestamp }] }),
+          };
+        }
+
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, chat: { id: 'chat-1', urlId: '2-aaa-0', ...remote } }),
+        };
+      }),
+    );
+
+    return { puts };
+  }
+
+  it('pulls the newer server copy over the cached one', async () => {
+    store.set('chat-1', {
+      id: 'chat-1',
+      urlId: '2-aaa-0',
+      timestamp: '2026-01-01T00:00:00Z',
+      messages: [{ role: 'user' }],
+    });
+
+    const { puts } = stubServer({
+      timestamp: '2026-02-01T00:00:00Z',
+      messages: [{ role: 'user' }, { role: 'assistant' }, { role: 'user' }],
+    });
+
+    const result = await migrateLocalHistoryToServer({} as IDBDatabase, ['chat-1']);
+
+    expect(result.pulled).toBe(1);
+    expect((store.get('chat-1')?.messages as unknown[]).length).toBe(3);
+    expect(puts).toEqual([]);
+  });
+
+  it('never replaces a populated local chat with an empty newer copy', async () => {
+    store.set('chat-1', {
+      id: 'chat-1',
+      urlId: '2-aaa-0',
+      timestamp: '2026-01-01T00:00:00Z',
+      messages: [{ role: 'user' }],
+    });
+    stubServer({ timestamp: '2026-02-01T00:00:00Z', messages: [] });
+
+    const result = await migrateLocalHistoryToServer({} as IDBDatabase, ['chat-1']);
+
+    expect(result.pulled).toBe(0);
+    expect((store.get('chat-1')?.messages as unknown[]).length).toBe(1);
+  });
+});
+
+/*
+ * C3 — two saves close together. Each fired its own PUT; when the older one landed last the
+ * server kept the older conversation.
+ */
+describe('pushChat ordering', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('lands the latest state last, even when the earlier request is slower', async () => {
+    let serverCopy = '';
+    let calls = 0;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body));
+        const delay = calls++ === 0 ? 40 : 0;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        serverCopy = body.description;
+
+        return { ok: true, status: 200, json: async () => ({ ok: true }) };
+      }),
+    );
+
+    const chat = { id: 'race-1', urlId: 'r', timestamp: '2026-01-01T00:00:00Z', messages: [{ role: 'user' }] };
+    const first = pushChat({ ...chat, description: 'v1' } as never);
+    const second = pushChat({ ...chat, description: 'v2' } as never);
+
+    await Promise.all([first, second]);
+
+    expect(serverCopy).toBe('v2');
+  });
+
+  it('sends only the newest of several queued saves', async () => {
+    const sent: string[] = [];
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        sent.push(JSON.parse(String(init?.body)).description);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        return { ok: true, status: 200, json: async () => ({ ok: true }) };
+      }),
+    );
+
+    const chat = { id: 'race-2', urlId: 'r2', timestamp: '2026-01-01T00:00:00Z', messages: [{ role: 'user' }] };
+    const results = await Promise.all(['a', 'b', 'c', 'd'].map((d) => pushChat({ ...chat, description: d } as never)));
+
+    expect(sent[sent.length - 1]).toBe('d');
+    expect(sent.length).toBeLessThan(4);
+    expect(results).toEqual([true, true, true, true]);
   });
 });

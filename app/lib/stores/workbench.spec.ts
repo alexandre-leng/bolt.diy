@@ -93,6 +93,37 @@ describe('WorkbenchStore.addToExecutionQueue', () => {
   });
 });
 
+describe('WorkbenchStore.waitForExecutionQueue', () => {
+  it('waits for a project mutation enqueued while it was already waiting', async () => {
+    const order: string[] = [];
+
+    let releaseFirst!: () => void;
+    let releaseSecond!: () => void;
+
+    void store.queueProjectMutation(async () => {
+      await new Promise<void>((resolve) => (releaseFirst = resolve));
+      order.push('first');
+    });
+
+    const waited = store.waitForExecutionQueue().then(() => order.push('waited'));
+
+    // An agent write lands while the snapshot is waiting on the queue.
+    void store.queueProjectMutation(async () => {
+      await new Promise<void>((resolve) => (releaseSecond = resolve));
+      order.push('second');
+    });
+
+    await Promise.resolve();
+    releaseFirst();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    releaseSecond();
+    await waited;
+
+    // Before the fix `waited` resolved right after `first`, ahead of the second write.
+    expect(order).toEqual(['first', 'second', 'waited']);
+  });
+});
+
 describe('WorkbenchStore.selectWorkbenchView', () => {
   it('should update currentView and record userSelectedView when userInitiated is true', () => {
     expect(store.currentView.get()).toBe('code');

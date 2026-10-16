@@ -18,6 +18,7 @@ import {
 import { pushChat } from './historySync';
 import { createMessage, getMessageAnnotations, hasMessageFlag, type AnyPart } from './messageMigration';
 import { AGENT_REPLAY_ARTIFACT_ID } from './restoreArtifacts';
+import { snapshotFileMapEntries } from './snapshotFiles';
 import type { Snapshot } from './types';
 import type { FileMap } from '~/lib/stores/files';
 import { logStore } from '~/lib/stores/logs'; // Import logStore
@@ -26,6 +27,9 @@ import { toast } from '~/lib/toastify';
 import { webcontainer } from '~/lib/webcontainer';
 import type { ContextAnnotation } from '~/types/context';
 import { detectProjectCommands, createCommandActionsString } from '~/utils/projectCommands';
+
+/** How often a long Agent turn refreshes its in-progress snapshot. */
+const STREAMING_SNAPSHOT_INTERVAL_MS = 20_000;
 
 export interface ChatHistoryItem {
   id: string;
@@ -615,6 +619,39 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
     [db],
   );
 
+  /*
+   * A snapshot during a long Agent turn, anchored on the user message that started it.
+   *
+   * Snapshots were only taken once a turn ended. Closing the tab mid-turn left the newest
+   * snapshot one turn behind: the agent's tool writes come back through the message replay,
+   * but files produced any other way (a scaffolding command, a build, a binary asset) were
+   * gone. Anchoring on the user message keeps the restore correct: the in-progress assistant
+   * message stays after the snapshot, so its actions and tool writes are replayed over these
+   * files. Throttled, and never awaited on the execution queue (it is busy by definition).
+   */
+  const lastStreamingSnapshotRef = useRef(0);
+
+  const takeStreamingSnapshot = useCallback(
+    async (chatRecordId: string, messages: UIMessage[]) => {
+      const turnStart = messages.length - 2;
+
+      if (
+        turnStart < 0 ||
+        messages[turnStart].role !== 'user' ||
+        messages[turnStart + 1].role !== 'assistant' ||
+        Date.now() - lastStreamingSnapshotRef.current < STREAMING_SNAPSHOT_INTERVAL_MS
+      ) {
+        return;
+      }
+
+      lastStreamingSnapshotRef.current = Date.now();
+
+      // Best effort: the end-of-turn snapshot is still the authoritative one.
+      await takeSnapshot(chatRecordId, messages[turnStart].id, workbenchStore.files.get()).catch(() => undefined);
+    },
+    [takeSnapshot],
+  );
+
   const restoreSnapshot = useCallback(async (snapshot?: Snapshot, isCurrentLoad: () => boolean = () => true) => {
     await serializeFilesystemTransition(async () => {
       // const snapshotStr = localStorage.getItem(`snapshot:${id}`); // Remove localStorage usage
@@ -671,7 +708,16 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
         }
       }
 
-      // workbenchStore.files.setKey(snapshot?.files)
+      /*
+       * Register what was just written. The map otherwise waited for the watcher, and in that
+       * window an agent write to a restored file failed with "exists on disk but is not
+       * tracked by the workbench".
+       */
+      for (const [filePath, dirent] of Object.entries(snapshotFileMapEntries(validSnapshot.files, container.workdir))) {
+        if (!workbenchStore.files.get()[filePath]) {
+          workbenchStore.files.setKey(filePath, dirent);
+        }
+      }
     });
   }, []);
 
@@ -862,6 +908,8 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
           if (_urlId) {
             invalidateChatCache(_urlId);
           }
+        } else {
+          await takeStreamingSnapshot(finalChatId, messages);
         }
 
         if (!isStreaming && pendingChatNavigationRef.current?.id === finalChatId) {

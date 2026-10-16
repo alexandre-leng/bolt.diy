@@ -807,8 +807,14 @@ export class FilesStore {
         case 'remove_dir': {
           this.files.setKey(sanitizedPath, undefined);
 
-          for (const [direntPath] of Object.entries(this.files)) {
-            if (direntPath.startsWith(sanitizedPath)) {
+          /*
+           * `Object.entries(this.files)` walked the nanostore OBJECT, not its value, so the
+           * children of a removed folder were never cleared and stayed in the file tree,
+           * the snapshot and the publish payload. The `/` also keeps `src/lib` from
+           * matching a sibling such as `src/library`.
+           */
+          for (const direntPath of Object.keys(this.files.get())) {
+            if (direntPath.startsWith(`${sanitizedPath}/`)) {
               this.files.setKey(direntPath, undefined);
             }
           }
@@ -833,6 +839,13 @@ export class FilesStore {
 
           if (!isBinary) {
             content = this.#decodeFileContent(buffer);
+          } else if (buffer && buffer.byteLength <= MAX_TRACKED_BINARY_BYTES) {
+            /*
+             * Same convention as createFile(): a binary file's content is its base64. The
+             * watcher stored '' instead, so every image the project produced was empty in
+             * the snapshot (restored as a 0-byte file) and in the published site.
+             */
+            content = encodeBinaryContent(buffer);
           }
 
           this.files.setKey(sanitizedPath, { type: 'file', content, isBinary });
@@ -1028,6 +1041,19 @@ export class FilesStore {
       logger.error('Failed to persist deleted paths to localStorage', error);
     }
   }
+}
+
+/** Larger binaries stay untracked (content '') rather than bloating every snapshot. */
+const MAX_TRACKED_BINARY_BYTES = 5 * 1024 * 1024;
+
+export function encodeBinaryContent(buffer: Uint8Array): string {
+  let binary = '';
+
+  for (let i = 0; i < buffer.length; i += 0x8000) {
+    binary += String.fromCharCode(...buffer.subarray(i, i + 0x8000));
+  }
+
+  return btoa(binary);
 }
 
 function isBinaryFile(buffer: Uint8Array | undefined) {

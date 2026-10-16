@@ -29,6 +29,7 @@ import { createAgentLoopTools } from '~/lib/.server/llm/agent-loop';
 import { createAgentStreamRecovery } from '~/lib/.server/llm/agent-stream';
 import { MAX_RESPONSE_SEGMENTS, MAX_TOKENS, type FileMap } from '~/lib/.server/llm/constants';
 import { shouldOptimizeRequestContext } from '~/lib/.server/llm/context-optimization';
+import { shouldContinueSegment } from '~/lib/.server/llm/continuation';
 import { createSummary } from '~/lib/.server/llm/create-summary';
 import { getWebResearchInstructions } from '~/lib/.server/llm/prompt-web-tools';
 import { getFilePaths, selectContext } from '~/lib/.server/llm/select-context';
@@ -95,6 +96,21 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
   const providerSettings: Record<string, IProviderSetting> = getProviderSettingsFromCookie(cookieHeader);
 
   /*
+   * One provider session per conversation (OpenCode Go pins a backend and a prompt cache to
+   * it). The first message id is stable for the whole chat. Set here, never taken from the
+   * cookie.
+   */
+  const conversationKey = typeof messages[0]?.id === 'string' ? messages[0].id.slice(0, 128) : undefined;
+
+  for (const name of Object.keys(providerSettings)) {
+    delete providerSettings[name]?.sessionKey;
+  }
+
+  if (conversationKey) {
+    providerSettings.OpenCodeGo = { ...providerSettings.OpenCodeGo, sessionKey: conversationKey };
+  }
+
+  /*
    * SwitchableStream is no longer used: its .switches counter was the only
    * thing read and it never advanced, which left the MAX_RESPONSE_SEGMENTS guard
    * dead. Continuation segments are now counted explicitly below.
@@ -137,6 +153,27 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
     const uiStream = createChatUIMessageStream(messages, {
       async execute({ writer }) {
+        let fallbackReported = false;
+
+        /** Tell the user, once per turn, that another model than theirs is answering. */
+        const reportModelFallback = (info: { requested: string; used: string; provider: string }) => {
+          if (fallbackReported) {
+            return;
+          }
+
+          fallbackReported = true;
+          writer.write({
+            type: 'data-progress',
+            data: {
+              type: 'progress',
+              label: 'model',
+              status: 'complete',
+              order: progressCounter++,
+              message: `Modèle « ${info.requested} » indisponible chez ${info.provider} : réponse de « ${info.used} »`,
+            } satisfies ProgressAnnotation,
+          });
+        };
+
         const filePaths = getFilePaths(files || {});
 
         let filteredFiles: FileMap | undefined = undefined;
@@ -230,24 +267,35 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
           // Select context files
           console.log(`Messages count: ${processedMessages.length}`);
-          filteredFiles = await selectContext({
-            messages: [...processedMessages],
-            env: context.cloudflare?.env,
-            apiKeys,
-            files: files ?? {},
-            providerSettings,
-            promptId,
-            contextOptimization,
-            summary,
-            onFinish(resp) {
-              if (resp.usage) {
-                logger.debug('selectContext token usage', JSON.stringify(resp.usage));
-                cumulativeUsage.completionTokens += (resp.usage as any)?.outputTokens || 0;
-                cumulativeUsage.promptTokens += (resp.usage as any)?.inputTokens || 0;
-                cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
-              }
-            },
-          });
+
+          try {
+            filteredFiles = await selectContext({
+              messages: [...processedMessages],
+              env: context.cloudflare?.env,
+              apiKeys,
+              files: files ?? {},
+              providerSettings,
+              promptId,
+              contextOptimization,
+              summary,
+              onFinish(resp) {
+                if (resp.usage) {
+                  logger.debug('selectContext token usage', JSON.stringify(resp.usage));
+                  cumulativeUsage.completionTokens += (resp.usage as any)?.outputTokens || 0;
+                  cumulativeUsage.promptTokens += (resp.usage as any)?.inputTokens || 0;
+                  cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
+                }
+              },
+            });
+          } catch (error) {
+            /*
+             * Choosing which files to show the model is an optimisation. When that extra
+             * model call fails (rate limit, malformed answer, network), the turn used to
+             * fail with it; it now goes on without a selected code context.
+             */
+            logger.warn('context selection failed; continuing without selected files', error);
+            filteredFiles = {};
+          }
 
           if (filteredFiles) {
             logger.debug(`files in context : ${JSON.stringify(Object.keys(filteredFiles))}`);
@@ -459,7 +507,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               return;
             }
 
-            if (finishReason !== 'length') {
+            if (!shouldContinueSegment({ finishReason, agentLoopActive: agentProgress.status !== 'inactive' })) {
               writer.write({
                 type: 'data-usage',
                 data: {
@@ -526,6 +574,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                * spurious recovery attempt.
                */
               onChunk: observeChunk,
+              onModelFallback: reportModelFallback,
             });
 
             writer.merge(
@@ -574,6 +623,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           summary,
           messageSliceId,
           onChunk: observeChunk,
+          onModelFallback: reportModelFallback,
         });
 
         writer.merge(

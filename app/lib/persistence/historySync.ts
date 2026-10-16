@@ -152,12 +152,20 @@ export async function migrateLocalHistoryToServer(database: IDBDatabase, localId
       continue;
     }
 
-    if (pickNewest(local, remote) === 'local') {
-      const pushed = await putHistory(local);
+    const newest = pickNewest(local, remote);
 
-      if (pushed.ok) {
+    if (newest === 'local') {
+      if (await pushChat(local)) {
         result.pushed += 1;
       }
+    } else if (newest === 'remote' && (await pullNewerCopy(database, id, local))) {
+      /*
+       * The summary says the server copy is newer — the conversation went on from another
+       * device. This branch did not exist: a chat already cached here was only ever
+       * pushed, never pulled, and nothing else calls reconcileChat, so the desktop kept
+       * showing the conversation as it was before the phone continued it.
+       */
+      result.pulled += 1;
     }
   }
 
@@ -204,9 +212,81 @@ export async function migrateLocalHistoryToServer(database: IDBDatabase, localId
   return result;
 }
 
-/** Push one conversation to the server after it changed locally. */
-export async function pushChat(chat: ChatHistoryItem): Promise<boolean> {
-  const result = await putHistory(chat);
+/** Fetch the full server copy and cache it when it really is the newer one. */
+async function pullNewerCopy(database: IDBDatabase, id: string, local: ChatHistoryItem): Promise<boolean> {
+  const remote = await getHistory(id);
 
-  return result.ok;
+  // The summary carries no messages: decide again on the full copy (an empty one never wins).
+  if (!remote.ok || !remote.data || pickNewest(local, remote.data) !== 'remote') {
+    return false;
+  }
+
+  if (isDeleted(remote.data.id, remote.data.urlId ?? undefined)) {
+    return false;
+  }
+
+  try {
+    await setMessages(
+      database,
+      remote.data.id,
+      remote.data.messages,
+      remote.data.urlId ?? local.urlId ?? id,
+      remote.data.description,
+      remote.data.timestamp,
+      remote.data.metadata,
+    );
+  } catch (error) {
+    logger.debug('could not cache the newer server copy', error);
+
+    return false;
+  }
+
+  return true;
+}
+
+/*
+ * One push at a time per chat, and only the latest state.
+ *
+ * Every save fired its own PUT. Two saves close together raced on the network, and when the
+ * older one landed last the server kept the older conversation — the next device to open it
+ * lost the last turn. Pushes for a chat now run in order, and a save that arrives while one
+ * is in flight replaces any not-yet-sent state instead of queuing behind it.
+ */
+const pushChains = new Map<string, Promise<boolean>>();
+const pendingPush = new Map<string, ChatHistoryItem>();
+
+/** Push one conversation to the server after it changed locally. */
+export function pushChat(chat: ChatHistoryItem): Promise<boolean> {
+  const key = chat.id;
+  pendingPush.set(key, chat);
+
+  const previous = pushChains.get(key) ?? Promise.resolve(true);
+
+  const run: Promise<boolean> = previous.then(async (previousResult) => {
+    const latest = pendingPush.get(key);
+
+    if (!latest) {
+      // A newer call already sent this state (or a newer one); report how that went.
+      return previousResult;
+    }
+
+    pendingPush.delete(key);
+
+    try {
+      return (await putHistory(latest)).ok;
+    } catch (error) {
+      logger.debug('push failed', error);
+
+      return false;
+    }
+  });
+
+  pushChains.set(key, run);
+  void run.finally(() => {
+    if (pushChains.get(key) === run) {
+      pushChains.delete(key);
+    }
+  });
+
+  return run;
 }

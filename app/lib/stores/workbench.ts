@@ -137,13 +137,24 @@ export class WorkbenchStore {
 
   async #waitForAllActions() {
     while (true) {
-      await this.#globalExecutionQueue;
+      /*
+       * Captured before awaiting: a project mutation enqueued while we wait replaces
+       * `#globalExecutionQueue`, and the promise we awaited no longer covers it. Returning
+       * then let a snapshot be taken while an agent write was still running, so the saved
+       * project silently missed it.
+       */
+      const queue = this.#globalExecutionQueue;
+      await queue;
       this.#flushPendingStreamActions();
 
       const inFlightActions = [...this.#inFlightActionTasks];
 
       if (inFlightActions.length > 0) {
         await Promise.allSettled(inFlightActions);
+        continue;
+      }
+
+      if (this.#globalExecutionQueue !== queue) {
         continue;
       }
 

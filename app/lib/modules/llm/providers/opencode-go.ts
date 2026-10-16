@@ -1,3 +1,4 @@
+import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import type { LanguageModel } from 'ai';
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
@@ -26,12 +27,63 @@ const OPENCODE_GO_USER_AGENT = 'bolt-diy/1.0';
  * Build the routing scope sent as `x-opencode-session`.
  * Opaque + non-secret: no key material, no personal data, no random UUID
  * (a fresh value per call would defeat the affinity it exists to provide).
- * Derived from the model so it stays stable across every turn of a chat.
+ *
+ * It was derived from the model alone, so every account and every conversation shared one
+ * session — the opposite of the "stable per conversation" the gateway asks for: unrelated
+ * chats competed for one backend pin and one prompt cache. `conversationKey` (the chat's
+ * first message id, set per request by api.chat) is hashed in, so each chat gets its own
+ * stable scope. Accepted by the gateway: verified live with a suffixed scope (200 + tool call).
  */
-function sessionScope(model: string): string {
+export function sessionScope(model: string, conversationKey?: string): string {
   const slug = (model || 'default').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
 
-  return `bolt-diy-${slug}`;
+  return conversationKey ? `bolt-diy-${slug}-c-${fnv1a(conversationKey)}` : `bolt-diy-${slug}`;
+}
+
+/** 32-bit FNV-1a, hex. A routing label, not a secret: it only has to be stable and short. */
+function fnv1a(value: string): string {
+  let hash = 0x811c9dc5;
+
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+/*
+ * Models the gateway serves only with thinking ON. Forcing `thinking: disabled` on them is a
+ * 400 ("GLM-5.3 is a thinking-only model; disabling thinking ... is not supported") — every
+ * turn failed. Verified live against the gateway, model by model.
+ */
+const THINKING_ONLY_MODELS = new Set(['glm-5.3']);
+
+/** Models whose upstream refused the `thinking` field at runtime (see the fetch wrapper). */
+const THINKING_REJECTED = new Set<string>();
+
+/**
+ * Which wire protocol the gateway speaks for a model.
+ *
+ * Everything went through `/chat/completions`, where the GPT, Grok and Claude models answer
+ * 400 "Model does not support this protocol" — three models offered in the picker that could
+ * never answer. Verified live: GPT and Grok answer on `/responses`, Claude on `/messages`.
+ */
+export function opencodeGoProtocol(model: string): 'chat' | 'responses' | 'messages' {
+  if (/^claude-/i.test(model)) {
+    return 'messages';
+  }
+
+  if (/^(gpt-|grok-)/i.test(model)) {
+    return 'responses';
+  }
+
+  return 'chat';
+}
+
+/** Whether a chat-completions request for this model should carry `thinking: disabled`. */
+export function shouldDisableThinking(model: string): boolean {
+  return !THINKING_ONLY_MODELS.has(model);
 }
 
 export default class OpenCodeGoProvider extends BaseProvider {
@@ -205,18 +257,32 @@ export default class OpenCodeGoProvider extends BaseProvider {
       throw new Error(`Missing configuration for ${this.name} provider`);
     }
 
-    const scope = sessionScope(model);
+    const scope = sessionScope(model, providerSettings?.[this.name]?.sessionKey);
+
+    const headers = {
+      'x-opencode-session': scope,
+      'User-Agent': OPENCODE_GO_USER_AGENT,
+    };
+
+    const protocol = opencodeGoProtocol(model);
+
+    if (protocol === 'messages') {
+      return createAnthropic({ baseURL: baseUrl, apiKey, headers })(model);
+    }
+
+    if (protocol === 'responses') {
+      return createOpenAI({ baseURL: baseUrl, apiKey, headers }).responses(model);
+    }
+
+    const disableThinking = shouldDisableThinking(model);
 
     const openai = createOpenAI({
       baseURL: baseUrl,
       apiKey,
-      headers: {
-        'x-opencode-session': scope,
-        'User-Agent': OPENCODE_GO_USER_AGENT,
-      },
+      headers,
 
       /*
-       * Turn thinking OFF for every call.
+       * Turn thinking OFF (except for thinking-only models, see THINKING_ONLY_MODELS).
        *
        * bolt.diy's agent loop always sends `tool_choice: 'required'` and a tight
        * token cap. With thinking left on (the gateway's default), deepseek-v4.1-flash
@@ -232,8 +298,10 @@ export default class OpenCodeGoProvider extends BaseProvider {
        * thinking is enabled ("tool_choice 'required' is incompatible with thinking
        * enabled"), so this keeps every model usable with tool calls.
        */
-      fetch: (input: RequestInfo | URL, init?: RequestInit) => {
-        if (init?.body && typeof init.body === 'string') {
+      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+        const original = init;
+
+        if (disableThinking && !THINKING_REJECTED.has(model) && init?.body && typeof init.body === 'string') {
           try {
             const body = JSON.parse(init.body);
 
@@ -246,7 +314,29 @@ export default class OpenCodeGoProvider extends BaseProvider {
           }
         }
 
-        return fetch(input, init);
+        const response = await fetch(input, init);
+
+        /*
+         * The gateway routes one model to different upstreams, and they disagree: the same
+         * glm-5.3-flash accepted `thinking` on one probe and answered 400 `unknown field
+         * "thinking"` on the next; glm-5.3 refuses to disable it. When the field we added is
+         * what was refused, send the caller's request unchanged — and stop adding it for
+         * that model in this process.
+         */
+        if (init !== original && response.status === 400) {
+          const detail = await response
+            .clone()
+            .text()
+            .catch(() => '');
+
+          if (/thinking/i.test(detail)) {
+            THINKING_REJECTED.add(model);
+
+            return fetch(input, original);
+          }
+        }
+
+        return response;
       },
     });
 

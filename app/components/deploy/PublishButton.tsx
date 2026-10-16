@@ -66,8 +66,23 @@ export function PublishButton() {
       const map = workbenchStore.files.get();
       const files: Record<string, string> = {};
 
+      /*
+       * Binary entries hold base64 (images, fonts). Sent inside `files` they were written as
+       * text, so every published image was a file of base64 characters. They travel apart
+       * and the publish service decodes them; an untracked binary (content '') is skipped.
+       */
+      const binaryFiles: Record<string, string> = {};
+
       for (const [path, dirent] of Object.entries(map)) {
-        if (dirent?.type === 'file' && typeof dirent.content === 'string') {
+        if (dirent?.type !== 'file' || typeof dirent.content !== 'string') {
+          continue;
+        }
+
+        if (dirent.isBinary) {
+          if (dirent.content) {
+            binaryFiles[path] = dirent.content;
+          }
+        } else {
           files[path] = dirent.content;
         }
       }
@@ -81,7 +96,7 @@ export function PublishButton() {
       const response = await fetch('/api/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: projectName(), files }),
+        body: JSON.stringify({ name: projectName(), files, binaryFiles }),
       });
 
       const result = (await response.json()) as {

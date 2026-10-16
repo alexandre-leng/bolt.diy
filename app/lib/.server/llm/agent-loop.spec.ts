@@ -51,8 +51,10 @@ const executeOptions = { toolCallId: 'complete', messages: [], context: {} };
 describe('agent plan and completion tools', () => {
   it('requires the plan tool first and enforces preview criteria for starter builds', async () => {
     const loop = createAgentLoopTools([user], true, true);
+
+    // `required` + one active tool: a named tool choice was answered with text by some models.
     expect(loop.prepareStep({ steps: [] })).toEqual({
-      toolChoice: { type: 'tool', toolName: 'agent_plan' },
+      toolChoice: 'required',
       activeTools: ['agent_plan'],
     });
     expect(await loop.tools.agent_plan.execute!({ ...plan, requiresPreview: false }, executeOptions)).toMatchObject({

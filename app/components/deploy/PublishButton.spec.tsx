@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PublishButton } from './PublishButton';
 import { workbenchStore } from '~/lib/stores/workbench';
@@ -53,5 +53,47 @@ describe('PublishButton during a restore', () => {
 
     expect(screen.getByTestId('publish-button')).toBeEnabled();
     expect(screen.getByTestId('publish-button')).toHaveTextContent('Publier');
+  });
+
+  it('is disabled while the agent-file replay artifact is open too', () => {
+    setArtifacts({
+      'restored-agent-files': { id: 'restored-agent-files', title: 'Restored project files', closed: false },
+    });
+
+    render(<PublishButton />);
+
+    expect(screen.getByTestId('publish-button')).toBeDisabled();
+  });
+});
+
+describe('PublishButton payload', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    workbenchStore.files.set({});
+    setArtifacts({});
+  });
+
+  it('sends binary files apart, as base64, and text files as text', async () => {
+    setArtifacts({ 'project-x': { id: 'project-x', title: 'Mon site', closed: true } });
+    workbenchStore.files.set({
+      '/home/project/index.html': { type: 'file', content: '<img src="logo.png">', isBinary: false },
+      '/home/project/public/logo.png': { type: 'file', content: 'iVBORw0KGgo=', isBinary: true },
+      '/home/project/public/huge.mp4': { type: 'file', content: '', isBinary: true },
+    } as never);
+
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify({ ok: false, error: 'stop' }), { status: 500 }));
+
+    render(<PublishButton />);
+    fireEvent.click(screen.getByTestId('publish-button'));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(body.files).toEqual({ '/home/project/index.html': '<img src="logo.png">' });
+
+    // Before: the PNG's base64 text was sent in `files` and written as a text file.
+    expect(body.binaryFiles).toEqual({ '/home/project/public/logo.png': 'iVBORw0KGgo=' });
   });
 });

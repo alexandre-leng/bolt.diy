@@ -1080,9 +1080,7 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
             alignItems: 'center',
           }}
         >
-          {activePreview && currentCoepMode() === 'require-corp' && (
-            <FirefoxAndroidPreviewNotice onOpenInNewTab={openInNewTab} />
-          )}
+          {activePreview && currentCoepMode() === 'require-corp' && <FirefoxAndroidPreviewNotice />}
           {activePreview ? (
             <>
               {isPreviewPaused ? (

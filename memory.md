@@ -37,6 +37,35 @@
 
 ---
 
+## 2026-10-16 — En-tête : une seule géométrie de contrôle, plus de rectangle clair parasite
+
+- **Type** : fix
+- **Contexte** : demande utilisateur « améliore ces boutons dans bolt ça va niveau design », avec
+  une capture de la barre du haut. La capture suggérait un bouton plein gris et un carré vide :
+  la vision s'est trompée (mesure DOM : tous les contrôles en `rgba(0,0,0,0)`), mais la mesure a
+  révélé deux vrais défauts et une incohérence générale.
+- **Action** : le bouton de renommage (`ChatDescription.client.tsx`) était un `<button>` nu
+  (`className="ml-2 i-ph:pencil-fill"`) — sans `type`, sans `aria-label`, et donc avec le fond
+  gris clair par défaut du navigateur (`rgb(248,248,242)` mesuré) qui peignait un rectangle clair
+  dans l'en-tête sombre. Le logo (`<a href="/">`) ne portait **aucun** nom accessible (`hasLabel`
+  faux, texte vide) alors que c'est le seul retour vers l'accueil. Nouvelle classe partagée
+  `.header-icon-control` dans `index.scss` (cible 36×36, rayon plein, surface explicitement
+  transparente, un seul palier de survol, anneau de focus, `touch-action`), utilisée par le
+  retour, le toggle de barre latérale, « nouveau projet » et le crayon.
+- **Preuve** : après déploiement, dans les deux thèmes — tailles des contrôles-icône `['36x36']`,
+  rayons `['9999px']`, fonds opaques `0`, contrôles sans nom accessible `0`, aucun débordement.
+  Avant : tailles 32/36/icône nue, rayons 9999px/6px/0px, un fond opaque, deux sans nom.
+  134/134 tests sur `app/components/header/`, `layout-stability` et `app/lib/persistence/` ;
+  tsc 0 ; lint propre sur les fichiers touchés.
+- **Conséquence** : la barre a une unité visuelle, le crayon ne peint plus de rectangle clair,
+  et le logo est annoncé « bolt.diy home » par un lecteur d'écran.
+- **Commit** : `ef5ca39`
+- **Reste ouvert** : les grands écarts au centre (623 px / 539 px) varient avec la longueur du
+  titre, qui occupe l'espace flexible — comportement voulu, pas un défaut. Les erreurs de lint
+  restantes (`ChatBox.tsx`, `ScreenshotToCode.tsx`) appartiennent à un autre agent.
+- **Piège** : `docker compose up --force-recreate` a échoué sur un conflit de nom de conteneur ;
+  `docker rm -f bolt-diy` puis `docker compose up -d` a fonctionné.
+
 ## 2026-10-16 — Création de la mémoire partagée et des règles agents (memory.md + AGENTS.md)
 
 - **Type** : docs

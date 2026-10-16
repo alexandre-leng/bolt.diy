@@ -52,21 +52,21 @@ export class WorkbenchStore {
    */
   #skippedFileActions = new WeakSet<BoltAction>();
 
-  artifacts: Artifacts = import.meta.hot?.data.artifacts ?? map({});
+  artifacts: Artifacts = import.meta.hot?.data?.artifacts ?? map({});
 
   // Initially closed in the compact layout: the chat stays on screen (Lovable mobile).
-  showWorkbench: WritableAtom<boolean> = import.meta.hot?.data.showWorkbench ?? atom(!isCompactLayout());
-  projectGeneration: WritableAtom<number> = import.meta.hot?.data.projectGeneration ?? atom(0);
-  currentView: WritableAtom<WorkbenchViewType> = import.meta.hot?.data.currentView ?? atom('code');
+  showWorkbench: WritableAtom<boolean> = import.meta.hot?.data?.showWorkbench ?? atom(!isCompactLayout());
+  projectGeneration: WritableAtom<number> = import.meta.hot?.data?.projectGeneration ?? atom(0);
+  currentView: WritableAtom<WorkbenchViewType> = import.meta.hot?.data?.currentView ?? atom('code');
   userSelectedView: WritableAtom<WorkbenchViewType | undefined> =
-    import.meta.hot?.data.userSelectedView ?? atom<WorkbenchViewType | undefined>(undefined);
-  unsavedFiles: WritableAtom<Set<string>> = import.meta.hot?.data.unsavedFiles ?? atom(new Set<string>());
+    import.meta.hot?.data?.userSelectedView ?? atom<WorkbenchViewType | undefined>(undefined);
+  unsavedFiles: WritableAtom<Set<string>> = import.meta.hot?.data?.unsavedFiles ?? atom(new Set<string>());
   actionAlert: WritableAtom<ActionAlert | undefined> =
-    import.meta.hot?.data.actionAlert ?? atom<ActionAlert | undefined>(undefined);
+    import.meta.hot?.data?.actionAlert ?? atom<ActionAlert | undefined>(undefined);
   supabaseAlert: WritableAtom<SupabaseAlert | undefined> =
-    import.meta.hot?.data.supabaseAlert ?? atom<SupabaseAlert | undefined>(undefined);
+    import.meta.hot?.data?.supabaseAlert ?? atom<SupabaseAlert | undefined>(undefined);
   deployAlert: WritableAtom<DeployAlert | undefined> =
-    import.meta.hot?.data.deployAlert ?? atom<DeployAlert | undefined>(undefined);
+    import.meta.hot?.data?.deployAlert ?? atom<DeployAlert | undefined>(undefined);
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
   #globalExecutionQueue = Promise.resolve();
@@ -78,7 +78,7 @@ export class WorkbenchStore {
     { data: ActionCallbackData; generation: number; timer: ReturnType<typeof setTimeout> }
   >();
   constructor() {
-    if (import.meta.hot) {
+    if (import.meta.hot?.data) {
       import.meta.hot.data.artifacts = this.artifacts;
       import.meta.hot.data.unsavedFiles = this.unsavedFiles;
       import.meta.hot.data.showWorkbench = this.showWorkbench;

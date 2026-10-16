@@ -7,11 +7,11 @@ interface WebContainerContext {
   loaded: boolean;
 }
 
-export const webcontainerContext: WebContainerContext = import.meta.hot?.data.webcontainerContext ?? {
+export const webcontainerContext: WebContainerContext = import.meta.hot?.data?.webcontainerContext ?? {
   loaded: false,
 };
 
-if (import.meta.hot) {
+if (import.meta.hot?.data) {
   import.meta.hot.data.webcontainerContext = webcontainerContext;
 }
 
@@ -105,7 +105,7 @@ if (!import.meta.env.SSR) {
       });
 
   const bootPromise: Promise<WebContainer> =
-    (import.meta.hot?.data.webcontainerBoot as Promise<WebContainer> | undefined) ?? bootWebContainer();
+    (import.meta.hot?.data?.webcontainerBoot as Promise<WebContainer> | undefined) ?? bootWebContainer();
 
   /*
    * DO NOT retry a failed boot.
@@ -133,7 +133,7 @@ if (!import.meta.env.SSR) {
 
   webcontainer = webcontainerRetriable as Promise<WebContainer>;
 
-  if (import.meta.hot) {
+  if (import.meta.hot?.data) {
     // Keep the BOOT PROMISE (not the thenable) for HMR state reuse.
     import.meta.hot.data.webcontainerBoot = bootPromise.catch(() => undefined);
   }

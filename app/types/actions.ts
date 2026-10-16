@@ -9,6 +9,9 @@ export interface BaseAction {
 export interface FileAction extends BaseAction {
   type: 'file';
   filePath: string;
+
+  /** Set only by Bolt-generated artifacts: the content is the exact file, base64 (UTF-8). */
+  encoding?: 'base64';
 }
 
 export interface ShellAction extends BaseAction {

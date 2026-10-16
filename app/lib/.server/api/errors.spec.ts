@@ -60,6 +60,29 @@ describe('toSafeStreamErrorMessage', () => {
     );
   });
 
+  it('classifies a capitalized network failure as a network error, not a provider error', () => {
+    /*
+     * `Network connection lost` from Firefox/Android: the message check was case-sensitive,
+     * so the user was told to check their provider settings instead of their connection.
+     */
+    const responseMessage = toSafeStreamErrorMessage(new Error('Network connection lost'));
+
+    expect(responseMessage).toContain('Network error');
+    expect(responseMessage).toContain('internet connection');
+    expect(responseMessage).not.toContain('provider settings');
+  });
+
+  it('reports a throttled token counter as a rate limit, not a too-long conversation', () => {
+    /*
+     * A tokens-per-minute 429 contains both `token` and `limit`, and reached the
+     * "conversation is too long" branch first, sending the user to resize their context.
+     */
+    const error = Object.assign(new Error('Rate limit: 60 tokens per minute'), { statusCode: 429 });
+
+    expect(toSafeStreamErrorMessage(error)).toContain('API rate limit exceeded');
+    expect(toSafeStreamErrorMessage(error)).not.toContain('conversation is too long');
+  });
+
   it('returns a generic message instead of an unknown provider diagnostic', () => {
     const diagnostic = 'Request https://provider.example/?api_key=secret-value failed';
     const responseMessage = toSafeStreamErrorMessage(new Error(diagnostic));

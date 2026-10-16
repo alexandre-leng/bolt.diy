@@ -327,11 +327,22 @@ export async function createProjectMcpBridge() {
           }
         });
 
-        if (changed) {
-          fileRevisionsReadByModel.delete(target.relative);
-        }
+        /*
+         * The model just authored this exact content, so it knows the file: hand back the new
+         * revision and remember it. Forgetting it forced a re-read before every follow-up
+         * patch ("Read the file first…"), a loop visible in real agent transcripts.
+         */
+        const revision = await getFileRevision(content);
+        fileRevisionsReadByModel.set(target.relative, revision);
 
-        return success({ path: target.relative, written: true, created, changed, generation: bridgeProjectGeneration });
+        return success({
+          path: target.relative,
+          written: true,
+          created,
+          changed,
+          revision,
+          generation: bridgeProjectGeneration,
+        });
       } catch (error) {
         return failure(error);
       }
@@ -405,10 +416,23 @@ export async function createProjectMcpBridge() {
             assertNotAborted(extra.signal);
             assertProjectCurrent();
             await workbenchStore.saveFileContent(target.absolute, updated);
-            fileRevisionsReadByModel.delete(target.relative);
           }
 
-          return success({ path: target.relative, patched: true, changed, generation: bridgeProjectGeneration });
+          /*
+           * Chained patches on one file are the normal case. Returning the post-patch revision
+           * (and tracking it) lets the next patch apply without a re-read; dropping it made the
+           * second patch fail with "Patch conflict" or "Read the file first".
+           */
+          const revision = await getFileRevision(updated);
+          fileRevisionsReadByModel.set(target.relative, revision);
+
+          return success({
+            path: target.relative,
+            patched: true,
+            changed,
+            revision,
+            generation: bridgeProjectGeneration,
+          });
         });
       } catch (error) {
         return failure(error);

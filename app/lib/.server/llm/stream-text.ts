@@ -46,6 +46,31 @@ export interface StreamingOptions extends DerivedStreamOptions {
 
 const logger = createScopedLogger('stream-text');
 
+/** Loggable view of stream options: scalars kept, prompts/objects/functions reduced to their kind. */
+export function summarizeOptionsForLog(options: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(options).map(([key, value]) => {
+      if (value === null || typeof value === 'number' || typeof value === 'boolean') {
+        return [key, value];
+      }
+
+      if (typeof value === 'string') {
+        return [key, value.length <= 64 && key !== 'system' && key !== 'prompt' ? value : `<string ${value.length}>`];
+      }
+
+      if (typeof value === 'function') {
+        return [key, '<function>'];
+      }
+
+      if (Array.isArray(value)) {
+        return [key, `<array ${value.length}>`];
+      }
+
+      return [key, value === undefined ? '<undefined>' : `<object ${Object.keys(value as object).length} keys>`];
+    }),
+  );
+}
+
 function getCompletionTokenLimit(modelDetails: any): number {
   // 1. If model specifies completion tokens, use that
   if (modelDetails.maxCompletionTokens && modelDetails.maxCompletionTokens > 0) {
@@ -342,14 +367,18 @@ export async function streamText(props: {
         )
       : options || {};
 
-  // DEBUG: Log filtered options
+  /*
+   * Keys and scalar settings only. The options carry the whole system prompt (agent
+   * instructions, project state) and callbacks: dumping them wrote the full prompt into the
+   * container log on every turn, several KB of user project context per request.
+   */
   logger.info(
     `DEBUG STREAM: Options filtering for model "${modelDetails.name}":`,
     JSON.stringify(
       {
         isReasoning,
-        originalOptions: options || {},
-        filteredOptions,
+        originalOptions: summarizeOptionsForLog(options || {}),
+        filteredOptions: summarizeOptionsForLog(filteredOptions),
         originalOptionsKeys: options ? Object.keys(options) : [],
         filteredOptionsKeys: Object.keys(filteredOptions),
         removedParams: options ? Object.keys(options).filter((key) => !(key in filteredOptions)) : [],
@@ -418,8 +447,10 @@ export async function streamText(props: {
         hasTemperature: 'temperature' in streamParams,
         hasMaxOutputTokens: 'maxOutputTokens' in streamParams,
         paramKeys: Object.keys(streamParams).filter((key) => !['model', 'messages', 'system'].includes(key)),
-        streamParams: Object.fromEntries(
-          Object.entries(streamParams).filter(([key]) => !['model', 'messages', 'system'].includes(key)),
+        streamParams: summarizeOptionsForLog(
+          Object.fromEntries(
+            Object.entries(streamParams).filter(([key]) => !['model', 'messages', 'system'].includes(key)),
+          ),
         ),
       },
       null,

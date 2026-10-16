@@ -37,6 +37,32 @@
 
 ---
 
+## 2026-10-16 — En-tête du panneau latéral : deux rectangles clairs supprimés
+
+- **Type** : fix
+- **Contexte** : Alex a fourni le HTML de la barre du panneau latéral (nom + avatar). La mesure a
+  montré que **deux** contrôles peignaient `rgb(239,239,239)` (surface par défaut du navigateur)
+  sur la barre `rgb(52,55,70)`, **dans les deux thèmes** : le bouton de fermeture et le
+  déclencheur du menu de compte. Les deux se voyaient comme deux rectangles clairs.
+- **Action** : les deux contrôles passent sur `.header-icon-control` (même géométrie 36×36
+  arrondie que la barre de l'application). `SettingsButton`/`HelpButton` portaient un
+  `text-[#666]` codé en dur qui ignore le thème (~2,5:1 sur ce fond) : remplacé par l'encre
+  secondaire du thème. `AccountMenu` reçoit une surface transparente explicite. Le bouton de
+  mode sélection et « Start new chat » abandonnent `purple-*`/`gray-*` pour les tokens accent et
+  `bolt-elements-*`. `IconButton` reçoit `type="button"` (il n'en avait pas).
+- **Preuve** : après déploiement, deux thèmes — fonds opaques `0` (avant 2), tailles
+  `['36x36','122x40']` (avant 30×30 / 28×28 / 122×40), rayons `['9999px']` (avant 6px), contrôles
+  sans nom accessible `0`, occurrences de `#666` `0` (avant 2). tsc 0, tests des composants
+  concernés verts.
+- **Conséquence** : les deux barres (application et panneau) partagent enfin la même géométrie de
+  contrôle, et plus aucun n'imprime de rectangle clair sur fond sombre.
+- **Commit** : `749e843`
+- **Reste ouvert** : les couleurs codées en dur restantes dans le corps du panneau (pastilles de
+  conversation, filtres) n'ont pas été revues — hors du périmètre demandé.
+- **Piège** : `Menu.client.tsx` contenait du travail **non committé d'un autre agent** (suppression
+  serveur d'abord). Le staging partiel (`git apply --cached` sur les seuls hunks de l'en-tête) a
+  permis de ne pas l'embarquer : le diff stagé est passé de 98 à 28 lignes.
+
 ## 2026-10-16 — En-tête : une seule géométrie de contrôle, plus de rectangle clair parasite
 
 - **Type** : fix

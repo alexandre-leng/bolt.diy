@@ -22,9 +22,23 @@ type PublishState =
   | { status: 'done'; url: string; slug: string }
   | { status: 'error'; message: string; log?: string };
 
+/*
+ * The project's name, taken from the artifact that DESCRIBES the project.
+ *
+ * `restored-project-setup` is Bolt's own synthetic artifact for reopening a chat;
+ * it is not the user's project, and it is inserted first, so reading
+ * `Object.values(artifacts)[0]` named every republished site "Restored Project &
+ * Setup". Skip it (and any other non-project artifact) before falling back.
+ */
+const NON_PROJECT_ARTIFACT_IDS = new Set(['restored-project-setup']);
+
 function projectName(): string {
-  const first = workbenchStore.artifacts.get();
-  const fromArtifact = Object.values(first)[0]?.title;
+  const artifacts = workbenchStore.artifacts.get();
+
+  const fromArtifact = Object.entries(artifacts).find(
+    ([id, artifact]) => !NON_PROJECT_ARTIFACT_IDS.has(id) && artifact?.title,
+  )?.[1]?.title;
+
   const fromStorage = typeof localStorage === 'undefined' ? '' : localStorage.getItem('bolt_project_name') || '';
 
   return fromArtifact || fromStorage || 'mon-site';
@@ -33,7 +47,18 @@ function projectName(): string {
 export function PublishButton() {
   const [state, setState] = useState<PublishState>({ status: 'idle' });
   const artifacts = useStore(workbenchStore.artifacts);
-  const hasFiles = Object.keys(artifacts).length > 0;
+
+  /*
+   * A restore replays the snapshot through the file store, so for a moment the
+   * workbench holds only the template's default files. Publishing in that window
+   * built and published THAT — an empty "Start prompting to see magic happen"
+   * page — under the real project's name. Report it instead.
+   */
+  const restoring = Object.values(artifacts).some(
+    (artifact) => artifact?.id === 'restored-project-setup' && !artifact?.closed,
+  );
+
+  const hasFiles = Object.keys(artifacts).length > 0 && !restoring;
 
   const publish = async () => {
     setState({ status: 'publishing' });
@@ -116,6 +141,7 @@ export function PublishButton() {
         data-testid="publish-button"
         onClick={publish}
         disabled={!hasFiles || state.status === 'publishing'}
+        title={restoring ? 'Restauration du projet en cours…' : undefined}
         className={classNames(
           'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium',
           'bolt-primary-button hover:opacity-90',
@@ -124,10 +150,16 @@ export function PublishButton() {
         )}
       >
         <span
-          className={state.status === 'publishing' ? 'i-ph:circle-notch animate-spin' : 'i-ph:globe-hemisphere-west'}
+          className={
+            restoring
+              ? 'i-ph:circle-notch animate-spin'
+              : state.status === 'publishing'
+                ? 'i-ph:circle-notch animate-spin'
+                : 'i-ph:globe-hemisphere-west'
+          }
           aria-hidden="true"
         />
-        {state.status === 'publishing' ? 'Publication…' : 'Publier'}
+        {restoring ? 'Restauration…' : state.status === 'publishing' ? 'Publication…' : 'Publier'}
       </button>
 
       {state.status === 'done' && (

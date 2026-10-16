@@ -80,6 +80,44 @@ async function initializedShell(onInput: (data: string, output: ReadableStreamDe
 }
 
 describe('BoltShell command handoff', () => {
+  it('does not double a command when the same terminal is attached again on chat restore', async () => {
+    const shell = new BoltShell();
+    const writer = vi.fn();
+
+    const createProcess = () =>
+      ({
+        input: new WritableStream<string>({ write: writer }),
+        output: new ReadableStream<string>({
+          start(controller) {
+            controller.enqueue('\x1b]654;interactive\x07');
+          },
+        }),
+      }) as unknown as WebContainerProcess;
+
+    const container = { spawn: vi.fn(async () => createProcess()) } as unknown as WebContainer;
+    const listeners: Array<(data: string) => void> = [];
+
+    const terminal = {
+      cols: 80,
+      rows: 15,
+      write: vi.fn(),
+      onData: vi.fn((handler: (data: string) => void) => {
+        listeners.push(handler);
+
+        return { dispose: () => listeners.splice(listeners.indexOf(handler), 1) };
+      }),
+      input: (data: string) => listeners.forEach((handler) => handler(data)),
+    } as unknown as ITerminal;
+
+    await shell.init(container, terminal);
+    await shell.init(container, terminal);
+    expect(listeners).toHaveLength(1);
+
+    terminal.input('cd "/home/project" && npm run dev\n');
+    await vi.waitFor(() => expect(writer).toHaveBeenCalledTimes(1));
+    expect(writer.mock.calls.map(([data]) => data).join('')).toBe('cd "/home/project" && npm run dev\n');
+  });
+
   it('stops a running dev server before installing dependencies when exit and prompt arrive together', async () => {
     let serverRunning = false;
 

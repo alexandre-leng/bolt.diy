@@ -39,10 +39,13 @@ const DOM_TESTS = [
   'app/components/chat/Artifact.spec.tsx',
   'app/components/chat/ImportZipButton.spec.tsx',
   'app/components/workbench/WorkbenchReopenButton.spec.tsx',
+  'app/components/workbench/FirefoxAndroidPreviewNotice.spec.tsx',
   'app/components/onboarding/FirstRunOnboarding.spec.tsx',
   'app/components/chat/APIKeyManager.spec.tsx',
   'app/lib/stores/sidebar.spec.ts',
   'app/components/mobile/MobileNav.spec.tsx',
+  'app/components/sidebar/AccountMenu.spec.tsx',
+  'app/components/header/ProjectBackButton.spec.tsx',
   'app/components/chat/ConnectToolsPill.spec.tsx',
   'app/components/chat/LLMApiAlert.spec.tsx',
   'app/lib/hooks/useMessageParser.spec.ts',
@@ -50,6 +53,9 @@ const DOM_TESTS = [
 
   // Browser storage / globals
   'app/lib/api/cookies.spec.ts',
+  'app/lib/auth/session.spec.ts',
+  'app/lib/stores/toolAccess.spec.ts',
+  'app/lib/persistence/syncClient.spec.ts',
   'app/lib/persistence/chatCache.spec.ts',
   'app/lib/services/importExportService.spec.ts',
   'app/lib/stores/workbench.spec.ts',

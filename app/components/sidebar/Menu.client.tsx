@@ -1,6 +1,7 @@
 import { useStore } from '@nanostores/react';
 import { motion, type Variants } from 'framer-motion';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { AccountMenu } from './AccountMenu';
 import { HistoryItem } from './HistoryItem';
 import { binDates } from './date-binning';
 import { OPEN_SETTINGS_EVENT } from '~/components/mobile/MobileNav';
@@ -20,7 +21,7 @@ import { SettingsButton, HelpButton } from '~/components/ui/SettingsButton';
 import { ThemeSwitch } from '~/components/ui/ThemeSwitch';
 import { useSearchFilter } from '~/lib/hooks/useSearchFilter';
 import { db, deleteById, getAll, chatId, type ChatHistoryItem, useChatHistory } from '~/lib/persistence';
-import { DEFAULT_AVATAR, profileStore } from '~/lib/stores/profile';
+import { migrateLocalHistoryToServer } from '~/lib/persistence/historySync';
 import {
   closeSidebar,
   initSidebar,
@@ -33,6 +34,9 @@ import {
 import { toast } from '~/lib/toastify';
 import { classNames } from '~/utils/classNames';
 import { cubicEasingFn } from '~/utils/easings';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('HistoryMenu');
 
 const menuVariants = {
   closed: {
@@ -88,6 +92,12 @@ export const Menu = () => {
   const [list, setList] = useState<ChatHistoryItem[]>([]);
 
   /*
+   * Sync state for the discreet indicator beside "Your Chats". Stays 'unknown' until the
+   * first attempt resolves, so it never claims "synced" before anything was tried.
+   */
+  const [syncState, setSyncState] = useState<'unknown' | 'syncing' | 'synced' | 'offline'>('unknown');
+
+  /*
    * Sidebar visibility lives in a shared store (not useState) so the toggle
    * icon in the header — a sibling component — can drive it. Touch devices
    * start collapsed: on a phone the 340px panel would cover the whole chat.
@@ -100,7 +110,6 @@ export const Menu = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDocumentationOpen, setIsDocumentationOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<string | undefined>(undefined);
-  const profile = useStore(profileStore);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
 
@@ -110,12 +119,51 @@ export const Menu = () => {
   });
 
   const loadEntries = useCallback(() => {
-    if (db) {
-      getAll(db)
-        .then((list) => list.filter((item) => item.urlId && item.description))
-        .then(setList)
-        .catch((error) => toast.error(error.message));
+    /*
+     * Captured in a local: the narrowing from this guard does not survive into the
+     * `.then()` callbacks below, so TypeScript would still see `IDBDatabase | undefined`.
+     */
+    const database = db;
+
+    if (!database) {
+      return;
     }
+
+    /*
+     * Local cache first so the list renders immediately, then reconcile with bolt-history:
+     * a conversation started on another device exists only on the server. Failures are
+     * silent by design — an unreachable server must not empty a list the user can see.
+     */
+    setSyncState('syncing');
+
+    getAll(database)
+      .then((list) => list.filter((item) => item.urlId && item.description))
+      .then((localList) => {
+        setList(localList);
+
+        // setList returns void, so keep the list in scope rather than chaining it through.
+        return migrateLocalHistoryToServer(
+          database,
+          localList.map((item) => item.id),
+        ).then((result) => {
+          setSyncState(result.offline ? 'offline' : 'synced');
+
+          if (result.pulled > 0) {
+            // New chats arrived from the server: re-read the cache to show them.
+            void getAll(database)
+              .then((list) => list.filter((item) => item.urlId && item.description))
+              .then(setList);
+          }
+
+          if (result.offline) {
+            logger.debug('history sync offline; showing the local cache only');
+          }
+        });
+      })
+      .catch((error) => {
+        setSyncState('offline');
+        toast.error(error.message);
+      });
   }, []);
 
   const deleteChat = useCallback(
@@ -450,18 +498,7 @@ export const Menu = () => {
           </button>
           <div className="flex items-center gap-3">
             <HelpButton onClick={() => setIsDocumentationOpen(true)} />
-            <span className="font-medium text-sm text-bolt-elements-textPrimary truncate">
-              {profile?.username || 'Guest User'}
-            </span>
-            <div className="flex items-center justify-center w-[32px] h-[32px] overflow-hidden bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary rounded-full shrink-0">
-              <img
-                src={profile?.avatar || DEFAULT_AVATAR}
-                alt={profile?.username || 'User'}
-                className="w-full h-full object-cover"
-                loading="eager"
-                decoding="sync"
-              />
-            </div>
+            <AccountMenu />
           </div>
         </div>
         <CurrentDateTime />
@@ -502,7 +539,31 @@ export const Menu = () => {
             </div>
           </div>
           <div className="flex items-center justify-between text-sm px-4 py-2">
-            <div className="font-medium text-gray-600 dark:text-gray-400">Your Chats</div>
+            <div className="flex items-center gap-2">
+              <div className="font-medium text-gray-600 dark:text-gray-400">Your Chats</div>
+              {/*
+               * Discreet sync state. Only speaks up when something is wrong: a permanent
+               * "synced" badge would be noise on every visit.
+               */}
+              {syncState === 'offline' && (
+                <span
+                  data-testid="history-sync-offline"
+                  title="Historique local uniquement — le serveur est injoignable"
+                  className="flex items-center gap-1 rounded-full border border-amber-500/40 px-2 py-0.5 text-[11px] text-amber-600 dark:text-amber-400"
+                >
+                  <span className="i-ph:cloud-slash text-xs" aria-hidden="true" />
+                  Hors ligne
+                </span>
+              )}
+              {syncState === 'syncing' && (
+                <span
+                  data-testid="history-sync-syncing"
+                  title="Synchronisation en cours"
+                  className="i-ph:cloud-arrow-up animate-pulse text-sm text-bolt-elements-textTertiary"
+                  aria-hidden="true"
+                />
+              )}
+            </div>
             {selectionMode && (
               <div className="flex items-center gap-2">
                 <Button variant="ghost" size="sm" onClick={selectAll}>

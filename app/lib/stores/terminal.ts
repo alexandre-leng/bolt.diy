@@ -11,12 +11,12 @@ export class TerminalStore {
   #pendingBoltOutput = '';
   #boltOutputReady = false;
 
-  showTerminal: WritableAtom<boolean> = import.meta.hot?.data.showTerminal ?? atom(true);
+  showTerminal: WritableAtom<boolean> = import.meta.hot?.data?.showTerminal ?? atom(true);
 
   constructor(webcontainerPromise: Promise<WebContainer>) {
     this.#webcontainer = webcontainerPromise;
 
-    if (import.meta.hot) {
+    if (import.meta.hot?.data) {
       import.meta.hot.data.showTerminal = this.showTerminal;
     }
   }

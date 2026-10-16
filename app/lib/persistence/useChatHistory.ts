@@ -17,6 +17,7 @@ import {
 } from './db';
 import { pushChat } from './historySync';
 import { createMessage, getMessageAnnotations, hasMessageFlag, type AnyPart } from './messageMigration';
+import { AGENT_REPLAY_ARTIFACT_ID } from './restoreArtifacts';
 import type { Snapshot } from './types';
 import type { FileMap } from '~/lib/stores/files';
 import { logStore } from '~/lib/stores/logs'; // Import logStore
@@ -63,7 +64,7 @@ function createAgentReplayMessage(files: Record<string, string>, commandActions 
   return createMessage({
     id: generateId(),
     role: 'assistant',
-    text: `<boltArtifact id="restored-agent-files" title="Restored project files" type="bundled">
+    text: `<boltArtifact id="${AGENT_REPLAY_ARTIFACT_ID}" title="Restored project files" type="bundled">
 ${createEncodedFileActions(files)}
 ${commandActions}
 </boltArtifact>`,

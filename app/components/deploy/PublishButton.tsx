@@ -1,6 +1,7 @@
 import { useStore } from '@nanostores/react';
 import { useState } from 'react';
 import { chatId } from '~/lib/persistence';
+import { isRestoreArtifact, RESTORE_ARTIFACT_IDS } from '~/lib/persistence/restoreArtifacts';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
 
@@ -25,12 +26,11 @@ type PublishState =
 /*
  * The project's name, taken from the artifact that DESCRIBES the project.
  *
- * `restored-project-setup` is Bolt's own synthetic artifact for reopening a chat;
- * it is not the user's project, and it is inserted first, so reading
- * `Object.values(artifacts)[0]` named every republished site "Restored Project &
- * Setup". Skip it (and any other non-project artifact) before falling back.
+ * Bolt's own synthetic restore artifacts are inserted first, so reading
+ * `Object.values(artifacts)[0]` named a republished site after the restore ("Restored
+ * Project & Setup", then "Restored project files"). Skip them before falling back.
  */
-const NON_PROJECT_ARTIFACT_IDS = new Set(['restored-project-setup']);
+const NON_PROJECT_ARTIFACT_IDS = new Set<string>(RESTORE_ARTIFACT_IDS);
 
 function projectName(): string {
   const artifacts = workbenchStore.artifacts.get();
@@ -54,9 +54,7 @@ export function PublishButton() {
    * built and published THAT — an empty "Start prompting to see magic happen"
    * page — under the real project's name. Report it instead.
    */
-  const restoring = Object.values(artifacts).some(
-    (artifact) => artifact?.id === 'restored-project-setup' && !artifact?.closed,
-  );
+  const restoring = Object.values(artifacts).some((artifact) => isRestoreArtifact(artifact?.id) && !artifact?.closed);
 
   const hasFiles = Object.keys(artifacts).length > 0 && !restoring;
 

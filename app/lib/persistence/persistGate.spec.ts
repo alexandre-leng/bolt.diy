@@ -29,8 +29,10 @@ describe('messagesChangedSinceLoad', () => {
     const loaded = [{ id: 'a' }];
     const extended = [{ id: 'a', parts: ['x'] }];
 
-    // The old condition was `messages.length > initialMessages.length`: false here, so the
-    // save never ran even though the message on screen was no longer the one that was loaded.
+    /*
+     * The old condition was `messages.length > initialMessages.length`: false here, so the
+     * save never ran even though the message on screen was no longer the one that was loaded.
+     */
     expect(extended.length > loaded.length).toBe(false);
     expect(messagesChangedSinceLoad(extended, loaded)).toBe(true);
   });

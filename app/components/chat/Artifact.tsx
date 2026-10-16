@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { computed, map } from 'nanostores';
 import { memo, useEffect, useRef, useState } from 'react';
 import { createHighlighter, type Highlighter } from 'shiki';
+import { isRestoreArtifact } from '~/lib/persistence/restoreArtifacts';
 import type { ActionState } from '~/lib/runtime/action-runner';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
@@ -87,7 +88,7 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
         ? 'complete'
         : 'running';
 
-  const restored = artifact.id === 'restored-project-setup';
+  const restored = isRestoreArtifact(artifact.id);
 
   // Render terminal states for empty, failed, and cancelled setup artifacts.
   const setupTitles = {

@@ -2,6 +2,7 @@ import { generateId, type UIMessage } from 'ai';
 import { atom } from 'nanostores';
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { useLoaderData, useNavigate, useParams, useSearchParams, type NavigateFunction } from 'react-router';
+import { createEncodedFileActions, messagesContainStartAction, replayAgentFileOps } from './agentFileReplay';
 import { getCachedMessages, getCachedSnapshot, invalidateChatCache } from './chatCache';
 import {
   getMessagesByIdRaw,
@@ -35,6 +36,40 @@ export interface ChatHistoryItem {
 }
 
 const persistenceEnabled = !import.meta.env.VITE_DISABLE_PERSISTENCE;
+
+/** Text files of a snapshot, by absolute path. Binary entries are written by restoreSnapshot only. */
+function snapshotTextFiles(snapshot: Snapshot | undefined): Record<string, string> {
+  const files: Record<string, string> = {};
+
+  for (const [path, value] of Object.entries(snapshot?.files || {})) {
+    if (value?.type === 'file' && !value.isBinary) {
+      files[path] = value.content;
+    }
+  }
+
+  return files;
+}
+
+/**
+ * A never-stored assistant message that writes back the files Agent-mode tool calls
+ * produced. Tool calls are not re-executed on restore, so without it a reopened agent
+ * project shows the starter template (see agentFileReplay.ts).
+ */
+function createAgentReplayMessage(files: Record<string, string>, commandActions = ''): UIMessage | undefined {
+  if (Object.keys(files).length === 0 && !commandActions) {
+    return undefined;
+  }
+
+  return createMessage({
+    id: generateId(),
+    role: 'assistant',
+    text: `<boltArtifact id="restored-agent-files" title="Restored project files" type="bundled">
+${createEncodedFileActions(files)}
+${commandActions}
+</boltArtifact>`,
+    flags: ['no-store'],
+  }) as UIMessage;
+}
 
 export const db = persistenceEnabled ? await openDatabase() : undefined;
 
@@ -234,6 +269,12 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
                 .map(([key, value]) => (value?.type === 'file' ? { content: value.content, path: key } : null))
                 .filter((x): x is { content: string; path: string } => !!x);
 
+              /*
+               * Every message is re-parsed below, so the starter's artifacts run again
+               * over the snapshot; agent tool writes do not. Replay them last.
+               */
+              const agentReplay = replayAgentFileOps(storedMessages.messages.slice(0, endingIdx));
+
               if (restoredFiles.length > 0) {
                 const projectCommands = await detectProjectCommands(restoredFiles);
 
@@ -241,24 +282,16 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
                   return;
                 }
 
-                if (projectCommands.setupCommand || projectCommands.startCommand) {
-                  const commandActions = createCommandActionsString(projectCommands);
+                const commandActions =
+                  projectCommands.setupCommand || projectCommands.startCommand
+                    ? createCommandActionsString(projectCommands)
+                    : '';
 
-                  /*
-                   * Appended as a synthetic setup message so the parser emits the
-                   * actions; it is never stored ('no-store').
-                   */
-                  setupMessage = {
-                    ...(createMessage({
-                      id: generateId(),
-                      role: 'assistant',
-                      text: `<boltArtifact id="restored-project-setup" title="Restored Project &amp; Setup" type="bundled">
-                  ${commandActions}
-                  </boltArtifact>`,
-                      flags: ['no-store'],
-                    }) as UIMessage),
-                  } as UIMessage;
-                }
+                /*
+                 * Appended as a synthetic setup message so the parser emits the
+                 * actions; it is never stored ('no-store').
+                 */
+                setupMessage = createAgentReplayMessage(agentReplay.files, commandActions);
 
                 if (projectCommands.startCommand) {
                   workbenchStore.showPreviewAfterRestore();
@@ -295,19 +328,7 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
 
               const restoredAssistantText = `Bolt Restored your chat from a snapshot. You can revert this message to load the full chat history.
                   <boltArtifact id="restored-project-setup" title="Restored Project & Setup" type="bundled">
-                  ${Object.entries(snapshot?.files || {})
-                    .map(([key, value]) => {
-                      if (value?.type === 'file') {
-                        return `
-                      <boltAction type="file" filePath="${key}">
-${value.content}
-                      </boltAction>
-                      `;
-                      } else {
-                        return ``;
-                      }
-                    })
-                    .join('\n')}
+                  ${createEncodedFileActions(snapshotTextFiles(snapshot))}
                   ${commandActionsString}
                   </boltArtifact>
                   `;
@@ -370,6 +391,22 @@ ${value.content}
 
                 ...filteredMessages,
               ];
+
+              /*
+               * Agent turns after the snapshot edited files through tool calls, which are
+               * not re-executed: write their final content back after everything else.
+               */
+              const agentReplay = replayAgentFileOps(storedMessages.messages.slice(0, endingIdx), {
+                base: snapshotTextFiles(validSnapshot),
+                replayFrom: startingIdx + 1,
+              });
+
+              const agentReplayMessage = createAgentReplayMessage(agentReplay.files);
+
+              if (agentReplayMessage) {
+                filteredMessages = [...filteredMessages, agentReplayMessage];
+              }
+
               await restoreSnapshot(validSnapshot, isCurrentLoad);
 
               if (!isCurrentLoad()) {
@@ -384,6 +421,43 @@ ${value.content}
                */
               if (projectCommands.startCommand) {
                 workbenchStore.showPreviewAfterRestore();
+              }
+            } else if (startingIdx < 0) {
+              /*
+               * No usable snapshot: always the case on a device that did not build the
+               * project, because snapshots live in this browser's IndexedDB only. The
+               * artifacts re-run, but the agent's tool writes and its `npm run dev` do not,
+               * so the preview stayed on the starter template (or showed nothing at all).
+               */
+              const replayed = storedMessages.messages.slice(0, endingIdx);
+              const agentReplay = replayAgentFileOps(replayed);
+
+              if (agentReplay.hasAgentWrites) {
+                let commandActions = '';
+                let startsProject = messagesContainStartAction(replayed);
+
+                if (!startsProject) {
+                  const projectCommands = await detectProjectCommands(
+                    Object.entries(agentReplay.state).map(([path, content]) => ({ path, content })),
+                  );
+
+                  if (!isCurrentLoad()) {
+                    return;
+                  }
+
+                  commandActions = createCommandActionsString(projectCommands);
+                  startsProject = Boolean(projectCommands.startCommand);
+                }
+
+                const agentReplayMessage = createAgentReplayMessage(agentReplay.files, commandActions);
+
+                if (agentReplayMessage) {
+                  filteredMessages = [...filteredMessages, agentReplayMessage];
+                }
+
+                if (startsProject) {
+                  workbenchStore.showPreviewAfterRestore();
+                }
               }
             }
 

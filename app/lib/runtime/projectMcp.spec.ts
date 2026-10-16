@@ -360,6 +360,73 @@ describe('targeted project file edits', () => {
     );
   });
 
+  it('chains patches on one file without a re-read, using the revision each patch returns', async () => {
+    await prepare();
+
+    let onDisk = original;
+    readFile.mockImplementation(async () => new TextEncoder().encode(onDisk));
+    saveFileContent.mockImplementation(async (_path: string, next: string) => {
+      onDisk = next;
+    });
+
+    await bridge!.callTool('project_read_file', { path: 'src/App.tsx' });
+
+    const first = await bridge!.callTool('project_patch_file', {
+      path: 'src/App.tsx',
+      oldText: 'button: blue',
+      newText: 'button: green',
+    });
+    expect(first.isError).not.toBe(true);
+    expect((first.structuredContent as { revision?: string }).revision).toMatch(/^[a-f0-9]{64}$/);
+
+    const second = await bridge!.callTool('project_patch_file', {
+      path: 'src/App.tsx',
+      oldText: 'const styles',
+      newText: 'export const styles',
+    });
+    expect(second.isError).not.toBe(true);
+
+    const third = await bridge!.callTool('project_patch_file', {
+      path: 'src/App.tsx',
+      expectedRevision: (second.structuredContent as { revision: string }).revision,
+      oldText: 'button: green',
+      newText: 'button: red',
+    });
+    expect(third.isError).not.toBe(true);
+    expect(onDisk).toBe('export const styles = {\nbutton: red\n};\n');
+
+    readFile.mockReset();
+    saveFileContent.mockReset();
+  });
+
+  it('a file the model just wrote can be patched without reading it first', async () => {
+    await prepare();
+
+    let onDisk = original;
+    readFile.mockImplementation(async () => new TextEncoder().encode(onDisk));
+    saveFileContent.mockImplementation(async (_path: string, next: string) => {
+      onDisk = next;
+    });
+
+    const written = await bridge!.callTool('project_write_file', {
+      path: 'src/App.tsx',
+      content: 'const FAQ = [1];\n',
+      replacementReason: 'Generated from scratch',
+    });
+    expect((written.structuredContent as { revision?: string }).revision).toMatch(/^[a-f0-9]{64}$/);
+
+    const patched = await bridge!.callTool('project_patch_file', {
+      path: 'src/App.tsx',
+      oldText: 'const FAQ',
+      newText: 'const FAQ_ITEMS',
+    });
+    expect(patched.isError).not.toBe(true);
+    expect(onDisk).toBe('const FAQ_ITEMS = [1];\n');
+
+    readFile.mockReset();
+    saveFileContent.mockReset();
+  });
+
   it('rejects a stale revision and a patch without any concurrency check', async () => {
     await prepare();
 

@@ -1,5 +1,6 @@
 import type { ActionType, BoltAction, BoltActionData, FileAction, ShellAction, SupabaseAction } from '~/types/actions';
 import type { BoltArtifactData } from '~/types/artifact';
+import { decodeBase64Utf8 } from '~/utils/base64Utf8';
 import { createScopedLogger } from '~/utils/logger';
 import { unreachable } from '~/utils/unreachable';
 
@@ -150,7 +151,15 @@ export class StreamingMessageParser {
 
             let content = currentAction.content.trim();
 
-            if ('type' in currentAction && currentAction.type === 'file') {
+            if ('type' in currentAction && currentAction.type === 'file' && currentAction.encoding === 'base64') {
+              /*
+               * Written by Bolt itself (snapshot restore, agent-file replay): the payload
+               * is the exact file, so none of the model-output cleanups may touch it.
+               * Those cleanups turned every `&lt;` into `<` and stripped whole-file code
+               * fences, silently corrupting restored files.
+               */
+              content = decodeBase64Utf8(content);
+            } else if ('type' in currentAction && currentAction.type === 'file') {
               /*
                * Remove markdown code block syntax if present and file is not markdown.
                * `filePath` is optional — see the note in the streaming branch below.
@@ -184,7 +193,7 @@ export class StreamingMessageParser {
 
             i = closeIndex + ARTIFACT_ACTION_TAG_CLOSE.length;
           } else {
-            if ('type' in currentAction && currentAction.type === 'file') {
+            if ('type' in currentAction && currentAction.type === 'file' && currentAction.encoding !== 'base64') {
               let content = input.slice(i);
 
               /*
@@ -391,6 +400,10 @@ export class StreamingMessageParser {
       }
 
       (actionAttributes as FileAction).filePath = filePath;
+
+      if (this.#extractAttribute(actionTag, 'encoding') === 'base64') {
+        (actionAttributes as FileAction).encoding = 'base64';
+      }
     } else if (!['shell', 'start'].includes(actionType)) {
       logger.warn(`Unknown action type '${actionType}'`);
     }

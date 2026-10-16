@@ -52,7 +52,7 @@ export const projectToolDefinitions: Record<ProjectToolName, { description: stri
   },
   project_patch_file: {
     description:
-      'Replace one exact unique oldText in a file. Read the file first; its latest revision is checked automatically when expectedRevision is omitted. Include expectedRevision when available. Do not copy the whole file. On a conflict, read again before retrying. Preserve actual line breaks in newText. Invalid JS/TS syntax is rejected before saving.',
+      'Replace one exact unique oldText in a file. Read the file first; its latest revision is checked automatically when expectedRevision is omitted. Each successful write or patch returns the new revision, so a follow-up patch of the same file needs no re-read. Include expectedRevision when available. Do not copy the whole file. On a conflict, read again before retrying. Preserve actual line breaks in newText. Invalid JS/TS syntax is rejected before saving.',
     inputSchema: objectSchema(
       {
         path: { type: 'string', minLength: 1 },

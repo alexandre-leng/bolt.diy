@@ -167,7 +167,12 @@ export async function selectContext(props: {
 
         `,
     model: provider.getModelInstance({
-      model: currentModel,
+      /*
+       * modelDetails, not the requested name: when the model is unknown this already
+       * fell back to the first available one, and sending the unknown name produced a
+       * "model not found" 4xx from the provider instead of the intended fallback.
+       */
+      model: modelDetails.name,
       serverEnv,
       apiKeys,
       providerSettings,

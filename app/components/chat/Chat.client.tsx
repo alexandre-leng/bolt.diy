@@ -14,6 +14,7 @@ import { STARTER_BUILD_FLAG } from '~/lib/common/starterBuild';
 import { useMessageParser, usePromptEnhancer, useShortcuts } from '~/lib/hooks';
 import { useSettings } from '~/lib/hooks/useSettings';
 import { description, useChatHistory } from '~/lib/persistence';
+import { dropFailedTurn } from '~/lib/persistence/failedTurn';
 import {
   createMessage,
   getMessageParts,
@@ -24,6 +25,7 @@ import {
   isToolCallPart,
   type AnyPart,
 } from '~/lib/persistence/messageMigration';
+import { messagesChangedSinceLoad } from '~/lib/persistence/persistGate';
 import { chatId } from '~/lib/persistence/useChatHistory';
 import { executeTextUtility, getPluginToolName, isSupportedAdapter } from '~/lib/plugins/adapters';
 import { pluginDatabase } from '~/lib/plugins/database';
@@ -98,7 +100,7 @@ const processSampledMessages = createSampler(
     const { messages, initialMessages, isLoading, isPreparingProject, parseMessages, storeMessageHistory } = options;
     parseMessages(messages, isLoading);
 
-    if (messages.length > initialMessages.length) {
+    if (messagesChangedSinceLoad(messages, initialMessages)) {
       storeMessageHistory(messages, isLoading || isPreparingProject).catch((error) => toast.error(error.message));
     }
   },
@@ -1053,7 +1055,7 @@ export const ChatImpl = memo(
       }
 
       if (error != null) {
-        setMessages(messages.slice(0, -1));
+        setMessages(dropFailedTurn(messages));
       }
 
       const modifiedFiles = workbenchStore.getModifiedFiles();

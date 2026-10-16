@@ -177,15 +177,19 @@ export function toSafeStreamErrorMessage(error: unknown): string {
     return 'Custom error: Invalid or missing API key. Please check your API key configuration.';
   }
 
-  if (providerMessage.includes('token') && providerMessage.includes('limit')) {
-    return 'Custom error: Token limit exceeded. The conversation is too long for the selected model. Try using a model with larger context window or start a new conversation.';
-  }
-
+  /*
+   * 429 first: a "tokens per minute" limit also contains both `token` and `limit`, and
+   * answering "the conversation is too long" for a throttled request sent users the wrong fix.
+   */
   if (statusCode === 429 || normalizedMessage.includes('rate limit') || providerMessage.includes('429')) {
     return 'Custom error: API rate limit exceeded, or the provider rejected the request for account reasons. Check your provider account and try again.';
   }
 
-  if (providerMessage.includes('network') || providerMessage.includes('timeout')) {
+  if (providerMessage.includes('token') && providerMessage.includes('limit')) {
+    return 'Custom error: Token limit exceeded. The conversation is too long for the selected model. Try using a model with larger context window or start a new conversation.';
+  }
+
+  if (normalizedMessage.includes('network') || normalizedMessage.includes('timeout')) {
     return 'Custom error: Network error. Please check your internet connection and try again.';
   }
 

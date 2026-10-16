@@ -134,6 +134,38 @@ describe('pickNewest', () => {
     expect(pickNewest(undefined, undefined)).toBe('none');
   });
 
+  /*
+   * The bug these cover: a blank record with a fresh timestamp (test fixture, half-written
+   * push) used to win on date alone and wipe a real conversation on every device.
+   */
+  it('never lets an empty remote erase a populated local copy', () => {
+    const local = { timestamp: '2026-06-01T00:00:00Z', messages: [{ role: 'user' }] };
+    const remote = { timestamp: '2026-09-01T00:00:00Z', messages: [] };
+
+    expect(pickNewest(local, remote)).toBe('local');
+  });
+
+  it('never lets an empty local erase a populated remote copy', () => {
+    const local = { timestamp: '2026-09-01T00:00:00Z', messages: [] };
+    const remote = { timestamp: '2026-06-01T00:00:00Z', messages: [{ role: 'user' }] };
+
+    expect(pickNewest(local, remote)).toBe('remote');
+  });
+
+  it('still orders by timestamp when both copies carry messages', () => {
+    const local = { timestamp: '2026-06-01T00:00:00Z', messages: [{ role: 'user' }] };
+    const remote = { timestamp: '2026-09-01T00:00:00Z', messages: [{ role: 'user' }] };
+
+    expect(pickNewest(local, remote)).toBe('remote');
+  });
+
+  it('falls back to timestamps when the summary shape carries no messages array', () => {
+    const local = { timestamp: '2026-06-01T00:00:00Z' };
+    const remote = { timestamp: '2026-09-01T00:00:00Z' };
+
+    expect(pickNewest(local, remote)).toBe('remote');
+  });
+
   it('treats an unparseable timestamp as oldest rather than newest', () => {
     // A corrupt timestamp must never win over a valid one and wipe newer history.
     expect(pickNewest({ timestamp: 'not-a-date' }, { timestamp: '2026-01-01T00:00:00Z' })).toBe('remote');

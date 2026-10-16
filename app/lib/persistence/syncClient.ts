@@ -111,8 +111,35 @@ export function pickNewest<T extends { timestamp?: string }>(local?: T, remote?:
     return 'remote';
   }
 
+  const localCount = countMessages(local);
+  const remoteCount = countMessages(remote);
+
+  /*
+   * An empty copy must never overwrite a populated one, whatever the clocks say.
+   *
+   * A blank record with a fresh timestamp — a test fixture, a half-written push, a
+   * conversation whose messages failed to upload — otherwise replaces the real
+   * conversation on every device, and the project loses its files (the preview then
+   * has nothing to render). Ordering by timestamp alone cannot express this: the
+   * empty copy legitimately looks "newer".
+   */
+  if (remoteCount === 0 && localCount > 0) {
+    return 'local';
+  }
+
+  if (localCount === 0 && remoteCount > 0) {
+    return 'remote';
+  }
+
   const localTime = Date.parse(local.timestamp ?? '') || 0;
   const remoteTime = Date.parse(remote.timestamp ?? '') || 0;
 
   return remoteTime > localTime ? 'remote' : 'local';
+}
+
+/** Message count of a chat-like object, tolerating the summary shape (no `messages`). */
+function countMessages(chat: object): number {
+  const value = (chat as { messages?: unknown }).messages;
+
+  return Array.isArray(value) ? value.length : -1;
 }

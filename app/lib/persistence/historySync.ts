@@ -39,6 +39,14 @@ export async function reconcileChat(database: IDBDatabase, id: string): Promise<
     return local;
   }
 
+  /*
+   * A brand-new id with an empty server record would otherwise seed the cache with a
+   * blank conversation and start the push-pull loop that spreads it.
+   */
+  if (remoteResult.data.messages.length === 0 && !local) {
+    return undefined;
+  }
+
   const winner = pickNewest(local, remoteResult.data);
 
   if (winner === 'remote') {
@@ -91,6 +99,15 @@ export async function migrateLocalHistoryToServer(database: IDBDatabase, localId
 
     const remote = remoteById.get(id);
 
+    /*
+     * Never push an empty conversation. A cached record with no messages is a stub —
+     * an interrupted creation, a deleted project, a test fixture — and pushing it gives
+     * the server a blank copy that then spreads to every other device (see pickNewest).
+     */
+    if (local.messages.length === 0) {
+      continue;
+    }
+
     if (pickNewest(local, remote) === 'local') {
       const pushed = await putHistory(local);
 
@@ -108,6 +125,14 @@ export async function migrateLocalHistoryToServer(database: IDBDatabase, localId
     const remote = await getHistory(summary.id);
 
     if (!remote.ok || !remote.data) {
+      continue;
+    }
+
+    /*
+     * Skip empty server records instead of caching them: caching one makes it look local,
+     * so the next pass pushes it back and the blank copy never disappears.
+     */
+    if (remote.data.messages.length === 0) {
       continue;
     }
 

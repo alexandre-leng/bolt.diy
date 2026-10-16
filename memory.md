@@ -37,6 +37,97 @@
 
 ---
 
+## 2026-10-16 (soir) — Un projet construit en mode Agent revenait au template après réouverture
+
+- **Type** : fix (correctif principal de la session)
+- **Contexte** : « le preview affiche la page d'accueil du template alors que Publier envoie le
+  bon site ». Mesure : conversation « Pagia » (9 messages) — les outils `project_write_file` ont
+  bien écrit App/Builder/ContactsHub/Pricing/FAQ/Footer ; le snapshot IndexedDB, lui, date d'avant
+  ces tours.
+- **Action** : quatre défauts indépendants, chacun suffisant à reproduire le symptôme.
+  1. **Rien ne rejouait les écritures de l'agent.** Seuls les `<boltAction>` sont rejoués à
+     l'ouverture ; en mode Agent le modèle écrit par des appels d'outils, jamais rejoués.
+     `app/lib/persistence/agentFileReplay.ts` replie `project_write_file` / `project_patch_file` /
+     `project_delete_path` sur toute la conversation et réémet le résultat en artefact non stocké.
+     Un patch dont la base est inconnue n'est **jamais** deviné : le fichier est laissé seul.
+  2. **La restauration abîmait les fichiers** : le contenu était inséré brut dans
+     `<boltAction>`, donc `cleanEscapedTags` transformait `&lt;` en `<`, les blocs de code
+     entourant un fichier entier étaient retirés, un `\n` ajouté, et les binaires écrits en
+     texte. Bolt génère désormais des actions `encoding="base64"` (`app/utils/base64Utf8.ts`) et
+     le parseur les écrit octet pour octet.
+  3. **« Continue » après une coupure supprimait le tour de l'agent**, y compris ses écritures
+     déjà exécutées (`dropFailedTurn` garde les appels d'outils aboutis).
+  4. **La sauvegarde s'arrêtait** si le dernier message s'allongeait sans nouveau message
+     (`messagesChangedSinceLoad` remplace `messages.length > initialMessages.length`).
+- **Preuve** : 26 tests ajoutés ; régressions **rouges** prouvées sur l'ancien code : parser
+  base64 (1), `projectMcp` révision (2), publish secrets (3), history 401/newline (5),
+  `errors.ts` classification (2), replay sur la vraie conversation « Pagia » (App + 6 fichiers
+  reconstruits, `unresolved: []`). Suite complète **912/912**, `tsc` 0, eslint 0, image
+  reconstruite et déployée.
+- **Conséquence** : rouvrir un projet de l'agent affiche le projet, même dans un navigateur qui
+  n'a jamais construit ce chat (le serveur ne stocke toujours pas les snapshots).
+- **Commit** : `b44c862` (+ `d8b82e6` fusion, `d548ee4` alignement).
+- **Reste ouvert** : les snapshots de projet restent en IndexedDB (décision serveur non tranchée)
+  ; les binaires du watcher sont toujours stockés `content: ''` ; `waitForExecutionQueue` ne
+  ré-attend pas les mutations arrivées pendant l'attente.
+- **Piège** : l'artefact synthétique `restored-agent-files` a collisionné avec la correction de
+  publication de l'autre branche, qui détectait « l'artefact de restauration » par la chaîne
+  `restored-project-setup` — sans la liste commune (`restoreArtifacts.ts`), le site publié aurait
+  été nommé « Restored project files » et le garde anti-publication pendant la restauration n'aurait
+  pas joué. Tout nouvel artefact synthétique doit y être ajouté (verrouillé par un test).
+
+## 2026-10-16 (soir) — Services Python : 401, newline, broken pipe, HEAD, secrets publiés
+
+- **Type** : fix (services `bolt-history`, `bolt-accounts`, `bolt-publish`, `bolt-private-preview`)
+- **Contexte** : audit de sécurité + lecture des journaux (tracebacks `BrokenPipeError`,
+  `PUT /history/1` 500, `HEAD /login` 501).
+- **Action** :
+  1. `bolt_history.py` : sans `X-Bolt-User-Id`, `''::uuid` explosait en **500** — `_require_owner`
+     répond désormais **401** (GET liste, GET chat, PUT, DELETE) ; une description avec retour à la
+     ligne cassait le script psql (`\set` lu ligne à ligne) — nettoyée, plus une garde qui lève une
+     erreur lisible ; `_send` ignore `BrokenPipeError`/`ConnectionResetError`.
+  2. `bolt_publish.py` : la publication copiait **tout** le projet, `.env`, `.git/config` et clés
+     comprises, dans un dossier servi publiquement — `scrub_public()` appliqué à la copie statique,
+     au dossier `dist/` après `vite build` et au fallback (dotfiles sauf `.well-known`, `*.key`,
+     `*.pem`, `id_rsa*`).
+  3. `private_preview.py` : le filtre `.env` comparé **tel quel** (`.ENV` passait) → insensible à
+     la casse + matériaux de clé.
+  4. `accounts` : open redirect post-connexion (`/\evil.com` accepté par `startswith("/") and not
+     startswith("//")`, et les navigateurs normalisent `\` en `/`) → `safe_redirect_target` ;
+     `do_HEAD = do_GET` (`HEAD /login` répondait **501 en production**, constaté par `curl -I`).
+  5. nginx : `location ~ ^/container/[^?]*/\. { return 403; }` — les sites publiés **avant** le
+     correctif gardaient leurs dotfiles.
+- **Preuve** : 38/38 history (5 rouges avant), 38/38 publish+preview (3 rouges avant), 6/6
+  accounts (le test documente que l'ancienne garde acceptait le cas), 11/11 secret_crypto.
+  Live après redémarrage : `HEAD /login` **200** (était 501), `/container/<slug>/.probe-secret`
+  **403** avec le fichier normal à **200**. Sauvegardes dans
+  `/root/.hermes/cache/scratch/svc-backup-1914/`.
+- **Reste ouvert** : `bolt-private-preview` et `bolt-publish` tournent toujours en **root** sans
+  plafond mémoire (décision à valider) ; deux comptes de test **admin** dorment dans la base de
+  prod ; SSH reste en auth par mot de passe (aucune clé présente : ne rien couper sans clé).
+- **Piège** : `curl http://<ip-publique>:<port>/` **depuis la machine elle-même** prouve
+  l'absence de rien — le trafic ne quitte jamais la machine. `iptables -P INPUT DROP` +
+  `ufw` (22/80/443 seulement) étaient la preuve réelle, pas la sonde.
+
+## 2026-10-16 (soir) — Pipeline LLM : log du prompt complet, repli de modèle ignoré, erreurs mal classées
+
+- **Type** : fix
+- **Action** :
+  1. `stream-text.ts` loguait les options **entières** (prompt système, credos Supabase, schémas
+     d'outils) deux fois par appel — environ **1 860 lignes de journal par requête**. Passé par
+     `summarizeOptionsForLog` : scalaires gardés, le reste réduit à `<string 8712>` / `<object 7 keys>`.
+  2. `create-summary.ts` / `select-context.ts` calculaient un repli de modèle puis envoyaient
+     quand même le **nom inconnu** au fournisseur → 4xx « model not found » ; ils utilisent
+     `modelDetails.name`.
+  3. `errors.ts` : `Network connection lost` (casse) tombait dans le message générique
+     « vérifiez vos réglages fournisseur » ; un 429 « tokens per minute » tombait dans « la
+     conversation est trop longue ». Le 429 est testé avant « token limit », et le classement
+     réseau utilise `normalizedMessage`.
+- **Preuve** : `errors.spec` 12/12, 2 rouges sur l'ancien code ; `stream-text.log.spec` 2/2.
+- **Reste ouvert** : les marqueurs `[Model: …]` / `[Provider: …]` partent toujours au modèle ;
+  `toolChoice` nommé pour `agent_plan` reste la cause probable des `AI_ToolChoiceViolationError`
+  ; `x-opencode-session` reste identique pour tous les comptes.
+
 ## 2026-10-16 — Une conversation existait mais son URL répondait 404 (`GET /api/history/<urlId>`)
 
 - **Type** : fix

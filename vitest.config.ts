@@ -38,6 +38,8 @@ const DOM_TESTS = [
   'app/routes.spec.tsx',
   'app/components/chat/Artifact.spec.tsx',
   'app/components/chat/ScreenshotToCode.spec.tsx',
+  'app/components/chat/ScreenshotToCode.design.spec.tsx',
+  'app/components/ui/CloseButton.aria.spec.tsx',
   'app/components/chat/AttachmentMenu.screenshot.spec.tsx',
   'app/components/chat/ImportZipButton.spec.tsx',
   'app/components/workbench/WorkbenchReopenButton.spec.tsx',
@@ -47,6 +49,7 @@ const DOM_TESTS = [
   'app/lib/stores/sidebar.spec.ts',
   'app/components/mobile/MobileNav.spec.tsx',
   'app/components/sidebar/AccountMenu.spec.tsx',
+  'app/components/sidebar/Menu.client.spec.ts',
   'app/components/header/ProjectBackButton.spec.tsx',
   'app/components/chat/ConnectToolsPill.spec.tsx',
   'app/components/chat/LLMApiAlert.spec.tsx',
@@ -57,7 +60,9 @@ const DOM_TESTS = [
   'app/lib/api/cookies.spec.ts',
   'app/lib/auth/session.spec.ts',
   'app/lib/stores/toolAccess.spec.ts',
+  'app/lib/preferences.spec.ts',
   'app/lib/persistence/syncClient.spec.ts',
+  'app/lib/persistence/historySync.spec.ts',
   'app/lib/persistence/chatCache.spec.ts',
   'app/lib/services/importExportService.spec.ts',
   'app/lib/stores/workbench.spec.ts',
@@ -102,7 +107,6 @@ const EXCLUDE = [
   '**/tests/preview/**', // Exclude preview tests that require Playwright
   '**/tests/e2e/**', // Exclude e2e tests that require Playwright
   'app/components/chat/Markdown.spec.ts', // Exclude - imports cause issues with import.meta.hot
-  'app/lib/stores/workbench.spec.ts', // Exclude - imports cause issues with import.meta.hot
 ];
 
 const SHARED = {

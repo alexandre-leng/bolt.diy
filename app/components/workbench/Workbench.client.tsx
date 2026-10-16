@@ -329,15 +329,35 @@ export const Workbench = memo(
       workbenchStore.selectWorkbenchView(view, { userInitiated: true });
     };
 
-    // Only auto-switch to preview when it first becomes available AND user hasn't explicitly chosen a view
+    /*
+     * Auto-switch to Preview when it first becomes available AND the user hasn't
+     * explicitly chosen a view.
+     *
+     * A reopened chat is the case that used to be missed: the restore happens
+     * during the same commit that mounts this component, so `previousHasPreviewRef`
+     * is ALREADY `true` on the first run and no transition is ever observed — the
+     * user lands on the Code tab with the dev server running behind it.
+     *
+     * `hasPreview` alone is therefore not enough to mean "the user has seen it":
+     * what matters is whether the workbench has already shown a preview for this
+     * chat. Track that separately, and re-arm it whenever the chat changes.
+     */
+    const openChatId = useStore(workbenchStore.previewRestoreToken);
+    const [showPreviewFor, setShowPreviewFor] = useState<number>(0);
+
     useEffect(() => {
-      const previewJustBecameAvailable = hasPreview && !previousHasPreviewRef.current;
+      const previewBecameAvailable = hasPreview && !previousHasPreviewRef.current;
       previousHasPreviewRef.current = hasPreview;
 
-      if (previewJustBecameAvailable && !userSelectedView) {
-        workbenchStore.currentView.set('preview');
+      if (!hasPreview || userSelectedView) {
+        return;
       }
-    }, [hasPreview, userSelectedView]);
+
+      if (previewBecameAvailable || showPreviewFor !== openChatId) {
+        workbenchStore.currentView.set('preview');
+        setShowPreviewFor(openChatId);
+      }
+    }, [hasPreview, userSelectedView, openChatId, showPreviewFor]);
 
     /*
      * If the user explicitly chose a non-preview view but the system switched to preview,

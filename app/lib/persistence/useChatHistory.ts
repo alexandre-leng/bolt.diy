@@ -14,6 +14,7 @@ import {
   setSnapshot,
   type IChatMetadata,
 } from './db';
+import { pushChat } from './historySync';
 import { createMessage, getMessageAnnotations, hasMessageFlag, type AnyPart } from './messageMigration';
 import type { Snapshot } from './types';
 import type { FileMap } from '~/lib/stores/files';
@@ -208,6 +209,7 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
 
             let filteredMessages = storedMessages.messages.slice(startingIdx + 1, endingIdx);
             let archivedMessages: UIMessage[] = [];
+            let setupMessage: UIMessage | undefined;
 
             if (startingIdx >= 0) {
               archivedMessages = storedMessages.messages.slice(0, startingIdx + 1);
@@ -221,7 +223,53 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
                 return;
               }
 
+              /*
+               * This branch restores the files but keeps the original messages, so
+               * the artifact that carries the install/start actions is NOT part of
+               * the rendered conversation. Nothing would start the dev server and
+               * the preview stayed empty — the file restore alone looked complete.
+               * Detect the project's commands and run them explicitly.
+               */
+              const restoredFiles = Object.entries(validSnapshot?.files || {})
+                .map(([key, value]) => (value?.type === 'file' ? { content: value.content, path: key } : null))
+                .filter((x): x is { content: string; path: string } => !!x);
+
+              if (restoredFiles.length > 0) {
+                const projectCommands = await detectProjectCommands(restoredFiles);
+
+                if (!isCurrentLoad()) {
+                  return;
+                }
+
+                if (projectCommands.setupCommand || projectCommands.startCommand) {
+                  const commandActions = createCommandActionsString(projectCommands);
+
+                  /*
+                   * Appended as a synthetic setup message so the parser emits the
+                   * actions; it is never stored ('no-store').
+                   */
+                  setupMessage = {
+                    ...(createMessage({
+                      id: generateId(),
+                      role: 'assistant',
+                      text: `<boltArtifact id="restored-project-setup" title="Restored Project &amp; Setup" type="bundled">
+                  ${commandActions}
+                  </boltArtifact>`,
+                      flags: ['no-store'],
+                    }) as UIMessage),
+                  } as UIMessage;
+                }
+
+                if (projectCommands.startCommand) {
+                  workbenchStore.showPreviewAfterRestore();
+                }
+              }
+
               filteredMessages = storedMessages.messages.slice(0, endingIdx);
+
+              if (setupMessage) {
+                filteredMessages = [...filteredMessages, setupMessage];
+              }
             } else if (startingIdx > 0) {
               const files = Object.entries(validSnapshot?.files || {})
                 .map(([key, value]) => {
@@ -326,6 +374,16 @@ ${value.content}
 
               if (!isCurrentLoad()) {
                 return;
+              }
+
+              /*
+               * The user's expectation when reopening a project is to SEE it, not
+               * to read its source: put the workbench on the Preview tab. Done
+               * only when the snapshot carries a start command, so a chat with no
+               * runnable project is left on Code instead of showing an empty frame.
+               */
+              if (projectCommands.startCommand) {
+                workbenchStore.showPreviewAfterRestore();
               }
             }
 
@@ -664,17 +722,38 @@ ${value.content}
           return;
         }
 
+        const persistedMessages = [...archivedMessages, ...messages];
+
         if (!createdChat || !ownsChatCreation) {
           await setMessages(
             db,
             finalChatId,
-            [...archivedMessages, ...messages],
+            persistedMessages,
             _urlId,
             description.get(),
             undefined,
             chatMetadata.get(),
           );
         }
+
+        /*
+         * Mirror the conversation to the server. This is the single point where a chat is
+         * committed, so it is the only place that needs the push. Without it the conversations
+         * lived only in IndexedDB — i.e. in one browser — so the server table stayed empty and
+         * opening the project anywhere else showed nothing.
+         *
+         * Not awaited: a failed push must not fail the save. IndexedDB already holds the data
+         * and the next sync retries; the user must never lose a conversation because the
+         * network hiccuped.
+         */
+        void pushChat({
+          id: finalChatId,
+          urlId: _urlId,
+          description: description.get(),
+          messages: persistedMessages,
+          timestamp: new Date().toISOString(),
+          metadata: chatMetadata.get(),
+        } as Parameters<typeof pushChat>[0]);
 
         /*
          * The IndexedDB write may finish after a route change; invalidate its

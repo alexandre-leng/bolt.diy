@@ -120,6 +120,40 @@ describe('WorkbenchStore.selectWorkbenchView', () => {
   });
 });
 
+describe('WorkbenchStore.showPreviewAfterRestore', () => {
+  /*
+   * Reopening a saved project must land on the Preview tab. `resetWorkbench`
+   * leaves every reopen on Code, and the workbench's auto-switch only fires on a
+   * `hasPreview false -> true` transition that a restore never produces (the
+   * snapshot is restored during the same commit), so without this the user sees
+   * the source of a project whose dev server is running behind it.
+   */
+  it('shows the workbench on the preview tab', () => {
+    store.showWorkbench.set(false);
+    store.currentView.set('code');
+
+    store.showPreviewAfterRestore();
+
+    expect(store.currentView.get()).toBe('preview');
+    expect(store.showWorkbench.get()).toBe(true);
+  });
+
+  it('bumps the restore token so the workbench can tell a reopen from a generation', () => {
+    const before = store.previewRestoreToken.get();
+
+    store.showPreviewAfterRestore();
+
+    expect(store.previewRestoreToken.get()).toBe(before + 1);
+  });
+
+  it('does not mark the choice as user-initiated, so a later click wins', () => {
+    store.selectWorkbenchView('code', { userInitiated: true });
+    store.showPreviewAfterRestore();
+
+    expect(store.userSelectedView.get()).toBe('code');
+  });
+});
+
 describe('WorkbenchStore visibility', () => {
   it('opens the workbench by default', () => {
     expect(store.showWorkbench.get()).toBe(true);

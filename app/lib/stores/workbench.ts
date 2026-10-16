@@ -57,6 +57,13 @@ export class WorkbenchStore {
   // Initially closed in the compact layout: the chat stays on screen (Lovable mobile).
   showWorkbench: WritableAtom<boolean> = import.meta.hot?.data?.showWorkbench ?? atom(!isCompactLayout());
   projectGeneration: WritableAtom<number> = import.meta.hot?.data?.projectGeneration ?? atom(0);
+
+  /**
+   * Bumped when a chat is reopened from a snapshot. The workbench watches it to
+   * put a restored project on the Preview tab even though no `false -> true`
+   * preview transition is observable on that render (see `showPreviewAfterRestore`).
+   */
+  previewRestoreToken: WritableAtom<number> = atom(0);
   currentView: WritableAtom<WorkbenchViewType> = import.meta.hot?.data?.currentView ?? atom('code');
   userSelectedView: WritableAtom<WorkbenchViewType | undefined> =
     import.meta.hot?.data?.userSelectedView ?? atom<WorkbenchViewType | undefined>(undefined);
@@ -321,6 +328,37 @@ export class WorkbenchStore {
         }
       }
     }
+  }
+
+  /**
+   * Reopening a saved project must show it running, not its source.
+   *
+   * `resetWorkbench` puts every reopen on the Code tab (`currentView: 'code'`)
+   * and clears `userSelectedView`. The workbench's own auto-switch to Preview
+   * only fires on the *transition* `hasPreview false -> true`, and a restore
+   * registers the preview URL while that effect is still initialising (the
+   * previous value is captured from the pre-restore render), so the transition
+   * is missed and the user lands on Code with an empty preview.
+   *
+   * Called once the restored project's start action has produced a port, so it
+   * only switches when there is genuinely something to show. It is marked as a
+   * system choice, not `userInitiated`, so the user's own later tab click wins.
+   */
+  showPreviewAfterRestore() {
+    // Signal the workbench that this render is a reopen, not a fresh generation.
+    this.previewRestoreToken.set(this.previewRestoreToken.get() + 1);
+
+    if (isCompactLayout()) {
+      // Phones/tablets: keep the chat visible; the header button opens the workbench.
+      return;
+    }
+
+    this.showWorkbench.set(true);
+    this.currentView.set('preview');
+  }
+
+  setWorkbenchView(view: WorkbenchViewType) {
+    this.currentView.set(view);
   }
 
   setShowWorkbench(show: boolean) {

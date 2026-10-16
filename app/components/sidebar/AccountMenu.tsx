@@ -69,9 +69,15 @@ export function AccountMenu() {
         aria-expanded={open}
         aria-label={`Compte de ${label}`}
         data-testid="account-menu-trigger"
+
+        /*
+         * The surface was implicit, so the browser painted its default light-grey button
+         * background on the panel's dark header in BOTH themes. Be explicit about it.
+         */
         className={classNames(
-          'flex items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors',
-          'hover:bg-bolt-elements-background-depth-3',
+          'flex items-center gap-2 rounded-full bg-transparent px-1.5 py-1 text-left transition-colors',
+          'hover:bg-black/[0.06] dark:hover:bg-white/10',
+          'active:bg-black/[0.1] dark:active:bg-white/20',
           'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500',
         )}
       >

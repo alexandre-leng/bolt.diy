@@ -4,6 +4,13 @@ interface SettingsButtonProps {
   onClick: () => void;
 }
 
+/*
+ * Both buttons used a hard-coded `text-[#666]`, which ignores the theme entirely: on the
+ * panel's dark header (measured rgb(52,55,70)) that grey sits at ~2.5:1 and reads as a
+ * smudge. Use the theme's own secondary ink instead, so light and dark both work.
+ */
+const ICON_BUTTON_CLASS = 'header-icon-control text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary';
+
 export const SettingsButton = memo(({ onClick }: SettingsButtonProps) => {
   return (
     <IconButton
@@ -12,7 +19,7 @@ export const SettingsButton = memo(({ onClick }: SettingsButtonProps) => {
       size="xl"
       title="Preferences"
       data-testid="settings-button"
-      className="text-[#666] hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-item-backgroundActive/10 transition-colors"
+      className={ICON_BUTTON_CLASS}
     />
   );
 });
@@ -29,7 +36,7 @@ export const HelpButton = memo(({ onClick }: HelpButtonProps) => {
       size="xl"
       title="Help & Documentation"
       data-testid="help-button"
-      className="text-[#666] hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-item-backgroundActive/10 transition-colors"
+      className={ICON_BUTTON_CLASS}
     />
   );
 });

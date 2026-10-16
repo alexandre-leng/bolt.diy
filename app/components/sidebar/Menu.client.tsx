@@ -474,7 +474,14 @@ export const Menu = () => {
           isSettingsOpen ? 'z-40' : 'z-sidebar',
         )}
       >
-        <div className="h-12 flex items-center justify-between px-4 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 md:rounded-tr-2xl">
+        {/*
+         * Panel header. Both controls used to paint the browser's default light-grey button
+         * surface (measured rgb(239,239,239)) on top of this rgb(52,55,70) bar, in BOTH
+         * themes — two light rectangles that read as broken. `header-icon-control` sets an
+         * explicit transparent surface and one shared 36px round geometry, the same control
+         * used by the app header, so the two bars finally match.
+         */}
+        <div className="h-12 flex items-center justify-between px-3 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 md:rounded-tr-2xl">
           {/*
            * In-panel close control. Without it the sidebar could only be closed
            * by a mouse leaving it (hover) — impossible on touch, where the
@@ -486,17 +493,11 @@ export const Menu = () => {
             aria-label="Collapse sidebar"
             title="Collapse sidebar"
             data-testid="sidebar-close"
-            className={classNames(
-              'flex items-center justify-center rounded-md p-1.5 -ml-1.5 transition-colors',
-              'text-bolt-elements-textSecondary',
-              'hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary',
-              'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500',
-              'active:bg-bolt-elements-background-depth-3',
-            )}
+            className="header-icon-control text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary"
           >
-            <div className="i-ph:caret-left text-lg" aria-hidden="true" />
+            <span className="i-ph:caret-left text-lg" aria-hidden="true" />
           </button>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1">
             <HelpButton onClick={() => setIsDocumentationOpen(true)} />
             <AccountMenu />
           </div>
@@ -507,18 +508,19 @@ export const Menu = () => {
             <div className="flex gap-2">
               <a
                 href="/"
-                className="flex-1 flex gap-2 items-center bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-500/20 rounded-lg px-4 py-2 transition-colors"
+                className="flex-1 flex gap-2 items-center bg-accent-500/10 text-accent-600 hover:bg-accent-500/20 dark:bg-accent-500/15 dark:text-accent-400 rounded-lg px-4 py-2 transition-colors"
               >
                 <span className="inline-block i-ph:plus-circle h-4 w-4" />
                 <span className="text-sm font-medium">Start new chat</span>
               </a>
               <button
+                type="button"
                 onClick={toggleSelectionMode}
                 className={classNames(
                   'flex gap-1 items-center rounded-lg px-3 py-2 transition-colors',
                   selectionMode
-                    ? 'bg-purple-600 dark:bg-purple-500 text-white border border-purple-700 dark:border-purple-600'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700',
+                    ? 'bg-accent-500 text-white'
+                    : 'bg-transparent border border-bolt-elements-borderColor text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary',
                 )}
                 aria-label={selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
               >

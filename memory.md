@@ -37,6 +37,39 @@
 
 ---
 
+## 2026-10-16 — Une conversation existait mais son URL répondait 404 (`GET /api/history/<urlId>`)
+
+- **Type** : fix
+- **Contexte** : « le preview ne fonctionne pas » sur `/chat/2-1792165586520-0`. Le preview était
+  hors de cause (WebContainer en 200, `crossOriginIsolated` = true, zéro erreur JS). Le vrai
+  symptôme était qu'une conversation rechargée depuis son adresse semblait vide, parce que le
+  serveur répondait 404 alors que la conversation existait.
+- **Cause** : un chat porte **deux** identifiants. `id` est la clé courte du serveur (`4`) ;
+  `urlId` est ce que le client met dans l'URL (`2-1792165586520-0`). Les deux sont stockés en
+  base, mais `GET /api/history/<x>` ne cherchait que `WHERE id = x`. Le navigateur envoyant
+  l'`urlId`, chaque rechargement de conversation tombait sur `chat not found`. Le `DELETE`
+  avait déjà été corrigé en `id OR url_id` lors d'une tâche précédente : **seul le GET avait
+  été oublié**, ce qui rend le défaut asymétrique et discret (l'écriture marche, la relecture non).
+- **Action** : dans `/opt/bolt/history/bolt_history.py`, la lecture passe à
+  `WHERE (id = :'chat_id' OR url_id = :'chat_id')`, toujours bornée par `user_id`. Ajout d'un
+  commentaire expliquant pourquoi deux identifiants coexistent, pour qu'un futur agent ne
+  « simplifie » pas la requête en la ramenant à `id`.
+- **Preuve** : avant, `7` conversations répondaient `200` par `id` et `404` par `urlId`. Après
+  redémarrage, les `7` répondent `200` par les deux, et l'ouverture réelle de
+  `/chat/2-1792166952546-0` affiche le contenu de la conversation (`700` caractères de texte
+  visible, messages présents).
+- **Piège découvert** : nginx refusait d'écrire ses tampons de requête —
+  `[crit] open() "/var/lib/nginx/body/0000000808" failed (13: Permission denied)`. Les workers
+  tournent sous deux uid (root et www-data) alors que la conf déclare `user www-data`. Corrigé
+  par `chown -R www-data:www-data /var/lib/nginx/body` (dossier en `700`). Un `PUT /api/history`
+  qui échoue ainsi **perd silencieusement une sauvegarde de conversation** : le symptôme visible
+  n'est pas une erreur mais des messages qui disparaissent. Vérifié avec un corps de `366 Ko` :
+  plus aucune ligne `Permission denied`.
+- **Reste ouvert** : `Cross-Origin-Opener-Policy` absent de la conf nginx (COEP est bien envoyé
+  sur les 200, mais `add_header` ne s'applique pas aux `return 302`, donc `/login` part sans
+  en-têtes cross-origin).
+- **Commit** : (à compléter)
+
 ## 2026-10-16 — Suppression d'une conversation : trois défauts, dont un no-op silencieux
 
 - **Type** : fix

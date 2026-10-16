@@ -44,6 +44,7 @@ const DOM_TESTS = [
   'app/components/chat/APIKeyManager.spec.tsx',
   'app/lib/stores/sidebar.spec.ts',
   'app/components/mobile/MobileNav.spec.tsx',
+  'app/components/sidebar/AccountMenu.spec.tsx',
   'app/components/header/ProjectBackButton.spec.tsx',
   'app/components/chat/ConnectToolsPill.spec.tsx',
   'app/components/chat/LLMApiAlert.spec.tsx',
@@ -52,6 +53,7 @@ const DOM_TESTS = [
 
   // Browser storage / globals
   'app/lib/api/cookies.spec.ts',
+  'app/lib/auth/session.spec.ts',
   'app/lib/stores/toolAccess.spec.ts',
   'app/lib/persistence/syncClient.spec.ts',
   'app/lib/persistence/chatCache.spec.ts',

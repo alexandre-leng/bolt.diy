@@ -12,6 +12,7 @@ type ConnectorMenuItem = {
 
 interface AttachmentMenuProps {
   onAttachFile: () => void;
+  onScreenshot: () => void;
   connectors: ConnectorMenuItem[];
   onConnectorEnabledChange: (connector: ConnectorId, enabled: boolean) => void;
   onEnhancePrompt: () => void;
@@ -26,6 +27,7 @@ interface AttachmentMenuProps {
 
 export function AttachmentMenu({
   onAttachFile,
+  onScreenshot,
   connectors,
   onConnectorEnabledChange,
   onEnhancePrompt,
@@ -84,6 +86,13 @@ export function AttachmentMenu({
           >
             <div className="i-ph:paperclip text-lg"></div>
             <span>Attach File</span>
+          </DropdownMenu.Item>
+          <DropdownMenu.Item
+            className="flex items-center gap-2 px-3 py-2 rounded-md text-sm cursor-pointer text-bolt-elements-textPrimary data-[highlighted]:bg-bolt-elements-background-depth-3 outline-none"
+            onSelect={onScreenshot}
+          >
+            <div className="i-ph:image text-lg" />
+            <span>From a screenshot</span>
           </DropdownMenu.Item>
 
           <DropdownMenu.Item

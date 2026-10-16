@@ -46,17 +46,27 @@ export function ChatDescription() {
         </form>
       ) : (
         <>
-          {currentDescription}
+          <span className="truncate">{currentDescription}</span>
           <TooltipProvider>
             <WithTooltip tooltip="Rename chat">
+              {/*
+               * Was a bare `<button className="ml-2 i-ph:pencil-fill">`: no aria-label, no
+               * type, and therefore the browser's default light-grey button surface painted
+               * a stray rectangle through the dark header (measured: background
+               * rgb(248,248,242)). Real semantics + an explicit transparent surface.
+               */}
               <button
                 type="button"
-                className="ml-2 i-ph:pencil-fill scale-110 hover:text-bolt-elements-item-contentAccent"
+                aria-label="Rename chat"
+                data-testid="rename-chat"
+                className="header-icon-control ml-1"
                 onClick={(event) => {
                   event.preventDefault();
                   toggleEditMode();
                 }}
-              />
+              >
+                <span className="i-ph:pencil-simple text-base" aria-hidden="true" />
+              </button>
             </WithTooltip>
           </TooltipProvider>
         </>

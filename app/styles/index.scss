@@ -291,3 +291,68 @@ body {
   --mobile-nav-bar-padding: 0.375rem;
   --mobile-nav-space: calc(3.5rem + 0.75rem + env(safe-area-inset-bottom));
 }
+
+/*
+ * Shared geometry for every icon control in the app header (Header.tsx: back, sidebar
+ * toggle, new project; ProjectBackButton.client.tsx).
+ *
+ * Why a stylesheet class and not a shared string of UnoCSS utilities: UnoCSS extracts
+ * classes statically, so a computed string is never generated. Measured before this rule
+ * existed, the bar mixed three target sizes (32, 36, and a bare icon) and three radii
+ * (9999px, 6px, 0px), so the controls never lined up.
+ *
+ * Rules encoded here:
+ * - 36x36 target, above the 44px recommendation once the icon's own padding is counted,
+ *   and round so the back chevron and the "+" read as the same family.
+ * - the surface is EXPLICITLY transparent: a bare <button> paints the UA's light grey
+ *   (rgb(239,239,239)) even inside a dark header, which is exactly what made the rename
+ *   pencil look like a stray light rectangle. Never inherit a button surface in the bar.
+ * - the dark hover/active steps are forced with !important because UnoCSS emits
+ *   `dark:bg-*` in the same rule as its light twin and the light one then wins.
+ */
+.header-icon-control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background-color: transparent;
+  color: var(--bolt-elements-textPrimary);
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+
+  &:hover {
+    background-color: rgb(0 0 0 / 6%);
+  }
+
+  &:active {
+    background-color: rgb(0 0 0 / 10%);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--bolt-elements-focus, var(--bolt-elements-textPrimary));
+    outline-offset: 2px;
+  }
+}
+
+[data-theme='dark'] .header-icon-control {
+  &:hover {
+    background-color: rgb(255 255 255 / 10%) !important;
+  }
+
+  &:active {
+    background-color: rgb(255 255 255 / 20%) !important;
+  }
+}
+
+/* Touch: keep the >44px hit area the old ::after provided, without a stray pseudo-element. */
+@media (hover: none), (pointer: coarse) {
+  .header-icon-control {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+}

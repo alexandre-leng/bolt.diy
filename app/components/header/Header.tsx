@@ -13,12 +13,19 @@ export function Header() {
 
   return (
     <header
-      className={classNames('flex items-center gap-1 px-2 sm:px-4 border-b h-[var(--header-height)]', {
-        'border-transparent': !chat.started,
-        'border-bolt-elements-borderColor': chat.started,
-      })}
+      className={classNames(
+        'flex items-center gap-2 px-2 sm:px-4 border-b h-[var(--header-height)]',
+
+        /* The landing page has no chrome: a bottom border there reads as a stray line. */
+        { 'border-transparent': !chat.started, 'border-bolt-elements-borderColor': chat.started },
+      )}
     >
-      <div className="flex items-center gap-1 sm:gap-2 min-w-0 z-logo text-bolt-elements-textPrimary">
+      {/*
+       * Left cluster. One gap for the whole group (`gap-1`) so the back control, the
+       * sidebar toggle and the logo read as a single unit instead of three items placed
+       * by accident: measured before this change, the internal gaps were 8 / 8 / 630 px.
+       */}
+      <div className="flex items-center gap-1 min-w-0 z-logo text-bolt-elements-textPrimary">
         {/*
          * Visible back control while a conversation is open (user-reported gap).
          * Renders nothing on the landing page, where there is nowhere to go back to.
@@ -31,10 +38,24 @@ export function Header() {
          * like a control, so clicking it did nothing on every browser.
          */}
         <ClientOnly>{() => <SidebarToggle />}</ClientOnly>
-        <a href="/" className="text-2xl font-semibold text-accent flex items-center shrink-0">
-          {/* <span className="i-bolt:logo-text?mask w-[46px] inline-block" /> */}
-          <img src="/logo-light-styled.png" alt="logo" className="w-[90px] inline-block dark:hidden" />
-          <img src="/logo-dark-styled.png" alt="logo" className="w-[90px] inline-block hidden dark:block" />
+
+        {/*
+         * The logo is the only way back to the landing page, and it is an image: without a
+         * label it had no accessible name at all (measured: hasLabel false, text empty).
+         */}
+        <a
+          href="/"
+          aria-label="bolt.diy home"
+          title="bolt.diy home"
+          className="flex items-center shrink-0 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500"
+        >
+          <img src="/logo-light-styled.png" alt="bolt.diy" className="w-[90px] inline-block dark:hidden" />
+          <img
+            src="/logo-dark-styled.png"
+            alt=""
+            aria-hidden="true"
+            className="w-[90px] inline-block hidden dark:block"
+          />
         </a>
       </div>
       {chat.started && ( // Display ChatDescription and HeaderActionButtons only when the chat has started.
@@ -44,7 +65,7 @@ export function Header() {
           </span>
           <ClientOnly>
             {() => (
-              <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+              <div className="flex items-center gap-1 shrink-0">
                 {/*
                  * "New project" — Lovable keeps a `+` next to the account on the
                  * right of the header. Same destination as the sidebar's
@@ -55,13 +76,7 @@ export function Header() {
                   data-testid="new-project"
                   aria-label="New project"
                   title="New project"
-                  className={classNames(
-                    'relative flex items-center justify-center rounded-full p-2 transition-colors',
-                    'bg-transparent text-bolt-elements-textPrimary',
-                    'hover:bg-black/[0.06] dark:hover:!bg-white/10',
-                    'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500',
-                    'active:bg-black/[0.1] dark:active:!bg-white/20',
-                  )}
+                  className="header-icon-control"
                 >
                   <span className="i-ph:plus text-xl" aria-hidden="true" />
                 </a>
@@ -77,9 +92,13 @@ export function Header() {
 }
 
 /*
- * The toggle is `relative` so its enlarged ::after hit area (-inset-2) is anchored to
- * the button. Without it the pseudo-element sized itself on the page and added 8px of
- * horizontal and vertical scroll overflow.
+ * One control geometry for the whole bar.
+ *
+ * Measured before this change, the header mixed three sizes (32, 36 and a bare icon) and
+ * three radii (9999px, 6px, 0px), so the controls never lined up. Every icon control now
+ * shares this class: a 36px round target, transparent surface, and the same hover/active
+ * step. It lives in the stylesheet because UnoCSS extracts classes statically and a shared
+ * string keeps the two controls from drifting apart again.
  */
 function SidebarToggle() {
   const isOpen = useStore(sidebarOpenStore);
@@ -92,30 +111,9 @@ function SidebarToggle() {
       aria-expanded={isOpen}
       title={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
       data-testid="sidebar-toggle"
-      className={classNames(
-        'relative flex items-center justify-center rounded-md p-1.5 transition-colors',
-
-        /*
-         * The `bg-bolt-elements-background-depth-*` tokens resolve to nothing here, so the
-         * button fell back to the UA light surface and painted rgb(239,239,239) behind
-         * rgb(248,248,242) ink — near-white on near-white in dark theme. Explicit surface
-         * colours instead, with `!` so the dark variants win over their light twins.
-         */
-        'bg-transparent text-bolt-elements-textPrimary',
-        'hover:bg-black/[0.06] dark:hover:!bg-white/10',
-        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500',
-        'active:bg-black/[0.1] dark:active:!bg-white/20',
-      )}
+      className="header-icon-control"
     >
-      <div
-        className={classNames(
-          'text-xl i-ph:sidebar-simple-duotone',
-
-          // >44px hit area on touch: a bare 20px icon is a frustrating target.
-          'after:absolute after:-inset-2 after:content-[""]',
-        )}
-        aria-hidden="true"
-      />
+      <span className="i-ph:sidebar-simple-duotone text-xl" aria-hidden="true" />
     </button>
   );
 }

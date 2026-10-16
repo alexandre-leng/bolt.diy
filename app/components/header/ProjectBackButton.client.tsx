@@ -2,7 +2,6 @@ import { useStore } from '@nanostores/react';
 import { chatStore } from '~/lib/stores/chat';
 import { openSidebar } from '~/lib/stores/sidebar';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { classNames } from '~/utils/classNames';
 
 /*
  * Visible "back" control (user-reported: "il faut que les boutons apparents de
@@ -36,13 +35,7 @@ export function ProjectBackButton() {
         workbenchStore.showWorkbench.set(false);
         openSidebar();
       }}
-      className={classNames(
-        'relative flex shrink-0 items-center justify-center rounded-full p-2 transition-colors',
-        'bg-transparent text-bolt-elements-textPrimary',
-        'hover:bg-black/[0.06] dark:hover:!bg-white/10',
-        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500',
-        'active:bg-black/[0.1] dark:active:!bg-white/20',
-      )}
+      className="header-icon-control"
     >
       <span className="i-ph:caret-left text-xl" aria-hidden="true" />
     </button>

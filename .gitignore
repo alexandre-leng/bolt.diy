@@ -52,6 +52,10 @@ docs/instructions/Roadmap.md
 .cursorrules
 *.md
 !docs/mcp-tool-migration.md
+# Shared agent memory and rules: must be versioned, or no agent on another
+# clone would ever see them (they are the whole point of the protocol).
+!AGENTS.md
+!memory.md
 .qodo
 
 test-results/

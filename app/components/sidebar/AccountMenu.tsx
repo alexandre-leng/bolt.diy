@@ -12,6 +12,23 @@ import { classNames } from '~/utils/classNames';
  * must never reach the client bundle; this component is the in-app counterpart and
  * deliberately mirrors that page's vocabulary ("Se connecter" / "Se déconnecter").
  */
+/*
+ * Menu entries share one set of classes: the settings link, the sign-out button and the
+ * sign-in link must look identical in every theme.
+ *
+ * `bg-transparent` is NOT cosmetic here. Without it the browser paints its native button
+ * background — measured `rgb(239, 239, 239)` on Chromium — while `textPrimary` is the
+ * theme's own colour. In a dark theme that reads as near-white text on a light-grey pill,
+ * a contrast of about 1:1 against a 4.5:1 requirement. An <a> is unaffected, which is why
+ * only the button was reported: "Mon compte" looked fine and "Se déconnecter" did not.
+ */
+const MENU_ITEM_CLASSES = classNames(
+  'text-bolt-elements-textPrimary flex w-full items-center gap-2 bg-transparent',
+  'rounded-md px-3 py-2 text-left text-sm transition-colors appearance-none',
+  'hover:bg-bolt-elements-background-depth-3',
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500',
+);
+
 export function AccountMenu() {
   const profile = useStore(profileStore);
   const [session, setSession] = useState<Session>({ loading: true, authenticated: false, user: null });
@@ -122,16 +139,7 @@ export function AccountMenu() {
 
           {session.authenticated ? (
             <>
-              <a
-                role="menuitem"
-                href="/settings"
-                data-testid="account-settings"
-                className={classNames(
-                  'text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 flex w-full items-center gap-2',
-                  'rounded-md px-3 py-2 text-left text-sm transition-colors',
-                  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500',
-                )}
-              >
+              <a role="menuitem" href="/settings" data-testid="account-settings" className={MENU_ITEM_CLASSES}>
                 <span className="i-ph:gear-six h-4 w-4" aria-hidden="true" />
                 Mon compte
               </a>
@@ -141,28 +149,14 @@ export function AccountMenu() {
                 onClick={handleSignOut}
                 disabled={signingOut}
                 data-testid="account-signout"
-                className={classNames(
-                  'text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 flex w-full items-center gap-2',
-                  'rounded-md px-3 py-2 text-left text-sm transition-colors',
-                  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500',
-                  'disabled:opacity-60',
-                )}
+                className={classNames(MENU_ITEM_CLASSES, 'disabled:opacity-60')}
               >
                 <span className="i-ph:sign-out h-4 w-4" aria-hidden="true" />
                 {signingOut ? 'Déconnexion…' : 'Se déconnecter'}
               </button>
             </>
           ) : (
-            <a
-              role="menuitem"
-              href="/login"
-              data-testid="account-signin"
-              className={classNames(
-                'text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 flex w-full items-center gap-2',
-                'rounded-md px-3 py-2 text-left text-sm transition-colors',
-                'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500',
-              )}
-            >
+            <a role="menuitem" href="/login" data-testid="account-signin" className={MENU_ITEM_CLASSES}>
               <span className="i-ph:sign-in h-4 w-4" aria-hidden="true" />
               Se connecter
             </a>

@@ -117,4 +117,42 @@ describe('AccountMenu', () => {
 
     await waitFor(() => expect(screen.queryByTestId('account-menu-panel')).toBeNull());
   });
+
+  /*
+   * Regression for "Se déconnecter est illisible".
+   *
+   * A <button> with no background utility keeps the browser's native button fill —
+   * measured rgb(239,239,239) on Chromium — while the text uses the theme colour. Under a
+   * dark theme that is near-white on light grey: a contrast near 1:1 against a 4.5:1
+   * requirement. Only the BUTTON was affected, because an <a> gets no native fill, which is
+   * why "Mon compte" looked right beside it. Asserting on the class rather than on a
+   * computed colour keeps this runnable in jsdom, which does not paint.
+   */
+  it('gives the sign-out button an explicit background, not the browser default', async () => {
+    withSession(admin);
+    render(<AccountMenu />);
+
+    // The entries only exist once the menu is open.
+    await userEvent.click(screen.getByTestId('account-menu-trigger'));
+    await waitFor(() => expect(screen.getByTestId('account-menu-panel')).toBeTruthy());
+
+    const signout = screen.getByTestId('account-signout');
+
+    expect(signout.className).toContain('bg-transparent');
+    expect(signout.className).toContain('appearance-none');
+  });
+
+  it('styles every menu entry the same, so none keeps a native fill', async () => {
+    withSession(admin);
+    render(<AccountMenu />);
+
+    await userEvent.click(screen.getByTestId('account-menu-trigger'));
+    await waitFor(() => expect(screen.getByTestId('account-menu-panel')).toBeTruthy());
+
+    for (const id of ['account-settings', 'account-signout']) {
+      const item = screen.getByTestId(id);
+
+      expect(item.className, `${id} must not rely on the browser's button fill`).toContain('bg-transparent');
+    }
+  });
 });

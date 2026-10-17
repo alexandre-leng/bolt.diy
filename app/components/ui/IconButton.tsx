@@ -10,6 +10,10 @@ interface BaseIconButtonProps {
   iconClassName?: string;
   disabledClassName?: string;
   title?: string;
+
+  /** Accessible name; defaults to `title` so an icon-only button is never announced as just "button". */
+  'aria-label'?: string;
+  'data-testid'?: string;
   disabled?: boolean;
   onClick?: (event: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
 }
@@ -38,6 +42,8 @@ export const IconButton = memo(
         disabledClassName,
         disabled = false,
         title,
+        'aria-label': ariaLabel,
+        'data-testid': dataTestId,
         onClick,
         children,
       }: IconButtonProps,
@@ -48,13 +54,15 @@ export const IconButton = memo(
           ref={ref}
           type="button"
           className={classNames(
-            'flex items-center text-bolt-elements-item-contentDefault bg-transparent enabled:hover:text-bolt-elements-item-contentActive rounded-md p-1 enabled:hover:bg-bolt-elements-item-backgroundActive disabled:cursor-not-allowed focus:outline-none',
+            'flex items-center text-bolt-elements-item-contentDefault bg-transparent enabled:hover:text-bolt-elements-item-contentActive rounded-md p-1 enabled:hover:bg-bolt-elements-item-backgroundActive disabled:cursor-not-allowed focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500',
             {
               [classNames('opacity-30', disabledClassName)]: disabled,
             },
             className,
           )}
           title={title}
+          aria-label={ariaLabel ?? title}
+          data-testid={dataTestId}
           disabled={disabled}
           onClick={(event) => {
             if (disabled) {

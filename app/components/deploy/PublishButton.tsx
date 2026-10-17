@@ -44,6 +44,45 @@ function projectName(): string {
   return fromArtifact || fromStorage || 'mon-site';
 }
 
+type PublishResult = { ok?: boolean; url?: string; slug?: string; error?: string; log?: string };
+
+/** French message for an HTTP failure that carried no usable JSON body. */
+export function publishErrorMessage(status: number): string {
+  if (status === 401 || status === 403 || (status >= 300 && status < 400)) {
+    return 'Session expirée : reconnectez-vous puis publiez à nouveau.';
+  }
+
+  if (status === 413) {
+    return 'Projet trop volumineux pour être publié.';
+  }
+
+  if (status === 502 || status === 503 || status === 504) {
+    return 'Serveur de publication indisponible, réessayez dans un instant.';
+  }
+
+  return `Échec de la publication (HTTP ${status}).`;
+}
+
+/*
+ * Read the publish answer without trusting it to be JSON. nginx answers an expired session
+ * (401/302), an oversized body (413) or a redeploy (502) with HTML, and `response.json()`
+ * then surfaced "JSON.parse: unexpected character…" to the user.
+ */
+async function readPublishResponse(response: Response): Promise<PublishResult> {
+  try {
+    const parsed: unknown = JSON.parse(await response.text());
+
+    if (parsed && typeof parsed === 'object') {
+      return parsed as PublishResult;
+    }
+  } catch {
+    // Not JSON (an HTML error page): fall through to the status-based message.
+  }
+
+  // A redirect that ended on an HTML page is the login page: the session expired.
+  return { ok: false, error: publishErrorMessage(response.redirected ? 401 : response.status) };
+}
+
 export function PublishButton() {
   const [state, setState] = useState<PublishState>({ status: 'idle' });
   const artifacts = useStore(workbenchStore.artifacts);
@@ -59,6 +98,14 @@ export function PublishButton() {
   const hasFiles = Object.keys(artifacts).length > 0 && !restoring;
 
   const publish = async () => {
+    /*
+     * Captured once, before the (long) build. Read again after it, they belonged to whatever
+     * conversation the user had opened meanwhile: the site built from chat A was recorded
+     * under chat B's name and id.
+     */
+    const name = projectName();
+    const ownerChatId = chatId.get();
+
     setState({ status: 'publishing' });
 
     try {
@@ -96,19 +143,17 @@ export function PublishButton() {
       const response = await fetch('/api/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: projectName(), files, binaryFiles }),
+        body: JSON.stringify({ name, files, binaryFiles }),
       });
 
-      const result = (await response.json()) as {
-        ok?: boolean;
-        url?: string;
-        slug?: string;
-        error?: string;
-        log?: string;
-      };
+      const result = await readPublishResponse(response);
 
       if (!response.ok || !result.ok) {
-        setState({ status: 'error', message: result.error || `Échec (HTTP ${response.status})`, log: result.log });
+        setState({
+          status: 'error',
+          message: result.error || publishErrorMessage(response.status),
+          log: result.log,
+        });
 
         return;
       }
@@ -130,7 +175,7 @@ export function PublishButton() {
           const recorded = await fetch(`/api/projects/${encodeURIComponent(result.slug)}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: projectName(), url: result.url, chatId: chatId.get() }),
+            body: JSON.stringify({ name, url: result.url, chatId: ownerChatId }),
           });
 
           if (!recorded.ok) {
@@ -187,9 +232,29 @@ export function PublishButton() {
         </a>
       )}
 
+      {/*
+       * Error: bounded and dismissable. A long message in this shrink-0 header group pushed
+       * the title away and overflowed a phone screen, and nothing could close it.
+       */}
       {state.status === 'error' && (
-        <span data-testid="publish-error" className="text-xs text-red-500" title={state.log}>
-          {state.message}
+        <span className="flex items-center gap-1 min-w-0 max-w-[40vw]">
+          <span
+            data-testid="publish-error"
+            className="truncate text-xs text-red-500"
+            title={state.log ? `${state.message}\n${state.log}` : state.message}
+          >
+            {state.message}
+          </span>
+          <button
+            type="button"
+            data-testid="publish-error-dismiss"
+            aria-label="Fermer le message d’erreur"
+            title="Fermer"
+            onClick={() => setState({ status: 'idle' })}
+            className="shrink-0 rounded p-0.5 text-red-500 hover:bg-bolt-elements-item-backgroundActive focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500"
+          >
+            <span className="i-ph:x text-xs" aria-hidden="true" />
+          </button>
         </span>
       )}
     </div>

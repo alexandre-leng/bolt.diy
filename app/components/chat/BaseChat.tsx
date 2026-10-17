@@ -28,6 +28,7 @@ const LazyWorkbench = lazy(() =>
   import('~/components/workbench/Workbench.client').then((m) => ({ default: m.Workbench })),
 );
 import { StickToBottom, useStickToBottomContext } from '~/lib/hooks';
+import { useSpeechRecognition } from '~/lib/hooks/useSpeechRecognition';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import { profileStore } from '~/lib/stores/profile';
 import { expoUrlAtom } from '~/lib/stores/qrCodeStore';
@@ -66,9 +67,9 @@ interface BaseChatProps {
   importChat?: (description: string, messages: UIMessage[]) => Promise<void>;
   exportChat?: () => void;
   uploadedFiles?: File[];
-  setUploadedFiles?: (files: File[]) => void;
+  setUploadedFiles?: React.Dispatch<React.SetStateAction<File[]>>;
   imageDataList?: string[];
-  setImageDataList?: (dataList: string[]) => void;
+  setImageDataList?: React.Dispatch<React.SetStateAction<string[]>>;
   actionAlert?: ActionAlert;
   clearAlert?: () => void;
   deployAlert?: DeployAlert;
@@ -144,9 +145,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
     // Collapsed by default: the toolbar's model chip opens provider/model/API key settings.
     const [isModelSettingsCollapsed, setIsModelSettingsCollapsed] = useState(true);
-    const [isListening, setIsListening] = useState(false);
-    const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
-    const [transcript, setTranscript] = useState('');
     const [isModelLoading, setIsModelLoading] = useState<string | undefined>('all');
 
     const expoUrl = useStore(expoUrlAtom);
@@ -160,44 +158,22 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     }, [expoUrl]);
 
     useEffect(() => {
-      console.log(transcript);
-    }, [transcript]);
-
-    useEffect(() => {
       onStreamingChange?.(isStreaming);
     }, [isStreaming, onStreamingChange]);
 
-    useEffect(() => {
-      if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-
-        recognition.onresult = (event) => {
-          const transcript = Array.from(event.results)
-            .map((result) => result[0])
-            .map((result) => result.transcript)
-            .join('');
-
-          setTranscript(transcript);
-
-          if (handleInputChange) {
-            const syntheticEvent = {
-              target: { value: transcript },
-            } as React.ChangeEvent<HTMLTextAreaElement>;
-            handleInputChange(syntheticEvent);
-          }
-        };
-
-        recognition.onerror = (event) => {
-          console.error('Speech recognition error:', event.error);
-          setIsListening(false);
-        };
-
-        setRecognition(recognition);
-      }
-    }, []);
+    // Dictation: appends to the typed text, French by default, disabled where unsupported.
+    const {
+      supported: speechSupported,
+      isListening,
+      startListening,
+      stopListening,
+      abortListening,
+    } = useSpeechRecognition({
+      input,
+      onTranscript: (text) => {
+        handleInputChange?.({ target: { value: text } } as React.ChangeEvent<HTMLTextAreaElement>);
+      },
+    });
 
     useEffect(() => {
       if (typeof window !== 'undefined') {
@@ -288,29 +264,13 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       return () => window.removeEventListener(API_KEYS_UPDATED_EVENT, handleApiKeysUpdated);
     }, []);
 
-    const startListening = () => {
-      if (recognition) {
-        recognition.start();
-        setIsListening(true);
-      }
-    };
-
-    const stopListening = () => {
-      if (recognition) {
-        recognition.stop();
-        setIsListening(false);
-      }
-    };
-
     const handleSendMessage = (event: React.UIEvent, messageInput?: string) => {
       if (sendMessage) {
         sendMessage(event, messageInput);
         setSelectedElement?.(null);
 
-        if (recognition) {
-          recognition.abort(); // Stop current recognition
-          setTranscript(''); // Clear transcript
-          setIsListening(false);
+        if (speechSupported) {
+          abortListening(); // Stop current recognition
 
           // Clear the input by triggering handleInputChange with empty value
           if (handleInputChange) {
@@ -336,8 +296,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
           reader.onload = (e) => {
             const base64Image = e.target?.result as string;
-            setUploadedFiles?.([...uploadedFiles, file]);
-            setImageDataList?.([...imageDataList, base64Image]);
+
+            // Functional updates: a list captured before the async read would drop other images.
+            setUploadedFiles?.((prev) => [...prev, file]);
+            setImageDataList?.((prev) => [...prev, base64Image]);
           };
           reader.readAsDataURL(file);
         }
@@ -364,8 +326,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
             reader.onload = (e) => {
               const base64Image = e.target?.result as string;
-              setUploadedFiles?.([...uploadedFiles, file]);
-              setImageDataList?.([...imageDataList, base64Image]);
+              setUploadedFiles?.((prev) => [...prev, file]);
+              setImageDataList?.((prev) => [...prev, base64Image]);
             };
             reader.readAsDataURL(file);
           }
@@ -492,6 +454,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   enhancingPrompt={enhancingPrompt}
                   enhancePrompt={enhancePrompt}
                   isListening={isListening}
+                  speechSupported={speechSupported}
                   startListening={startListening}
                   stopListening={stopListening}
                   chatStarted={chatStarted}
@@ -513,8 +476,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             {!chatStarted && (
               <div className="flex flex-col items-center gap-8 px-4 pb-[var(--mobile-nav-space)] md:pb-12 w-full">
                 {ExamplePrompts((event, messageInput) => {
+                  // Never stop a generation from a prompt click; Stop has its own button.
                   if (isStreaming) {
-                    handleStop?.();
                     return;
                   }
 

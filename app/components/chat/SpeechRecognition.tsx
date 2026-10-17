@@ -7,16 +7,26 @@ export const SpeechRecognitionButton = ({
   onStart,
   onStop,
   disabled,
+  supported = true,
 }: {
   isListening: boolean;
   onStart: () => void;
   onStop: () => void;
   disabled: boolean;
+
+  /** False without the Web Speech API (Firefox): disabled, and the title says why. */
+  supported?: boolean;
 }) => {
+  const title = !supported
+    ? 'Dictée non disponible sur ce navigateur'
+    : isListening
+      ? 'Arrêter la dictée'
+      : 'Dicter un message';
+
   return (
     <IconButton
-      title={isListening ? 'Stop listening' : 'Start speech recognition'}
-      disabled={disabled}
+      title={title}
+      disabled={disabled || !supported}
       className={classNames('transition-all', {
         'text-bolt-elements-item-contentAccent': isListening,
       })}

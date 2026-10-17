@@ -1,6 +1,11 @@
 import { generateText } from 'ai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import OpenCodeGoProvider, { opencodeGoProtocol, sessionScope, shouldDisableThinking } from './opencode-go';
+import OpenCodeGoProvider, {
+  isThinkingFieldRefusal,
+  opencodeGoProtocol,
+  sessionScope,
+  shouldDisableThinking,
+} from './opencode-go';
 
 /** Capture the request the provider sends, then fail it: only the request matters here. */
 async function captureRequest(model: string, sessionKey?: string) {
@@ -31,7 +36,10 @@ async function captureRequest(model: string, sessionKey?: string) {
 }
 
 describe('OpenCode Go provider', () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
 
   it('gives each conversation its own stable session, not one per model for everybody', async () => {
     // Before: every account and every chat shared `bolt-diy-<model>`.
@@ -81,6 +89,89 @@ describe('OpenCode Go provider', () => {
 
     // Before: the 400 was final and every turn on that model failed.
     expect(bodies.map((body) => 'thinking' in body)).toEqual([true, false]);
+  });
+
+  it('retries without `thinking` for that request only, and only when the field itself is refused', async () => {
+    const bodies: Record<string, unknown>[] = [];
+
+    let refuse = true;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body ?? '{}'));
+        bodies.push(body);
+
+        if (body.thinking && refuse) {
+          refuse = false;
+          return new Response(JSON.stringify({ error: { message: 'json: unknown field "thinking"' } }), {
+            status: 400,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+
+        throw new Error('captured');
+      }),
+    );
+
+    const make = () =>
+      new OpenCodeGoProvider().getModelInstance({
+        model: 'deepseek-v4.1-flash',
+        serverEnv: {} as Env,
+        apiKeys: { OpenCodeGo: 'test-key' },
+      });
+
+    await generateText({ model: make(), prompt: 'hi', maxRetries: 0 }).catch(() => undefined);
+    await generateText({ model: make(), prompt: 'hi', maxRetries: 0 }).catch(() => undefined);
+
+    // Before: the first refusal disabled the injection for every later request in the process.
+    expect(bodies.map((body) => 'thinking' in body)).toEqual([true, false, true]);
+
+    expect(isThinkingFieldRefusal('json: unknown field "thinking"')).toBe(true);
+    expect(isThinkingFieldRefusal('GLM-5.3 is a thinking-only model; disabling thinking is not supported')).toBe(true);
+    expect(isThinkingFieldRefusal('messages[0]: content is empty (thinking about it)')).toBe(false);
+  });
+
+  it('never sends the server key to a base URL chosen by the client cookie', async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new Error('captured');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('OPENCODE_GO_API_KEY', 'server-key');
+
+    const provider = new OpenCodeGoProvider();
+    const cookieSettings = { OpenCodeGo: { baseUrl: 'https://attacker.example/v1' } };
+
+    expect(() =>
+      provider.getModelInstance({
+        model: 'deepseek-v4.1-flash',
+        serverEnv: { OPENCODE_GO_API_KEY: 'server-key' } as unknown as Env,
+        providerSettings: cookieSettings,
+      }),
+    ).toThrow(/Missing configuration/);
+
+    expect(
+      await provider.getDynamicModels(undefined, cookieSettings.OpenCodeGo, { OPENCODE_GO_API_KEY: 'server-key' }),
+    ).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // The server's own endpoint, or the client's own key, keep working.
+    const own = provider.getProviderBaseUrlAndKey({
+      providerSettings: { baseUrl: 'https://opencode.ai/zen/go/v1/' },
+      serverEnv: { OPENCODE_GO_API_KEY: 'server-key' },
+      defaultBaseUrlKey: 'OPENCODE_GO_API_BASE_URL',
+      defaultApiTokenKey: 'OPENCODE_GO_API_KEY',
+    });
+    expect(own.apiKey).toBe('server-key');
+
+    const byo = provider.getProviderBaseUrlAndKey({
+      apiKeys: { OpenCodeGo: 'client-key' },
+      providerSettings: cookieSettings.OpenCodeGo,
+      serverEnv: { OPENCODE_GO_API_KEY: 'server-key' },
+      defaultBaseUrlKey: 'OPENCODE_GO_API_BASE_URL',
+      defaultApiTokenKey: 'OPENCODE_GO_API_KEY',
+    });
+    expect(byo).toMatchObject({ baseUrl: 'https://attacker.example/v1', apiKey: 'client-key' });
   });
 
   it('talks to GPT and Grok on /responses and to Claude on /messages', async () => {

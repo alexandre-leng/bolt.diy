@@ -135,6 +135,7 @@ export const Dialog = memo(
                 <RadixDialog.Close asChild onClick={onClose}>
                   <IconButton
                     icon="i-ph:x"
+                    title="Fermer"
                     className="absolute top-3 right-3 text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary"
                   />
                 </RadixDialog.Close>

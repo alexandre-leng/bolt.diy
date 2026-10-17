@@ -32,6 +32,16 @@ import type { ProviderInfo } from '~/types/model';
 import { classNames } from '~/utils/classNames';
 import { PROVIDER_LIST } from '~/utils/constants';
 
+/** Read one image file as a data URL (the composer previews and sends that string). */
+function readImageAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
 interface ChatBoxProps {
   isModelSettingsCollapsed: boolean;
   setIsModelSettingsCollapsed: (collapsed: boolean) => void;
@@ -51,6 +61,9 @@ interface ChatBoxProps {
   isStreaming: boolean;
   handleSendMessage: (event: React.UIEvent, messageInput?: string) => void;
   isListening: boolean;
+
+  /** False when the browser has no SpeechRecognition (Firefox): the mic is disabled with a reason. */
+  speechSupported?: boolean;
   startListening: () => void;
   stopListening: () => void;
   chatStarted: boolean;
@@ -61,8 +74,8 @@ interface ChatBoxProps {
   setProvider?: ((provider: ProviderInfo) => void) | undefined;
   model?: string | undefined;
   setModel?: ((model: string) => void) | undefined;
-  setUploadedFiles?: ((files: File[]) => void) | undefined;
-  setImageDataList?: ((dataList: string[]) => void) | undefined;
+  setUploadedFiles?: React.Dispatch<React.SetStateAction<File[]>> | undefined;
+  setImageDataList?: React.Dispatch<React.SetStateAction<string[]>> | undefined;
   handleInputChange?: ((event: React.ChangeEvent<HTMLTextAreaElement>) => void) | undefined;
   handleStop?: (() => void) | undefined;
   enhancingPrompt?: boolean | undefined;
@@ -291,21 +304,28 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
           }}
           onDrop={(e) => {
             e.preventDefault();
-            e.currentTarget.style.border = '1px solid var(--bolt-elements-borderColor)';
 
-            const files = Array.from(e.dataTransfer.files);
-            files.forEach((file) => {
-              if (file.type.startsWith('image/')) {
-                const reader = new FileReader();
+            // Clear the drag highlight entirely rather than pinning an inline 1px border.
+            e.currentTarget.style.border = '';
 
-                reader.onload = (e) => {
-                  const base64Image = e.target?.result as string;
-                  props.setUploadedFiles?.([...props.uploadedFiles, file]);
-                  props.setImageDataList?.([...props.imageDataList, base64Image]);
-                };
-                reader.readAsDataURL(file);
-              }
-            });
+            const images = Array.from(e.dataTransfer.files).filter((file) => file.type.startsWith('image/'));
+
+            if (images.length === 0) {
+              return;
+            }
+
+            /*
+             * Read every image, then append them in ONE update. Each reader used to call
+             * setUploadedFiles([...props.uploadedFiles, file]) with the list captured at drop
+             * time, so every callback overwrote the previous one and only the last image of a
+             * multi-file drop survived.
+             */
+            Promise.all(images.map(readImageAsDataUrl))
+              .then((dataUrls) => {
+                props.setUploadedFiles?.([...props.uploadedFiles, ...images]);
+                props.setImageDataList?.([...props.imageDataList, ...dataUrls]);
+              })
+              .catch((error) => console.error('Could not read the dropped images:', error));
           }}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
@@ -313,15 +333,19 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
                 return;
               }
 
-              event.preventDefault();
-
-              if (props.isStreaming) {
-                props.handleStop?.();
+              // An IME composition owns Enter: let it confirm the candidate, nothing else.
+              if (event.nativeEvent.isComposing) {
                 return;
               }
 
-              // ignore if using input method engine
-              if (event.nativeEvent.isComposing) {
+              event.preventDefault();
+
+              /*
+               * Enter during a generation does nothing. It used to call handleStop(), so typing
+               * the next instruction and pressing Enter aborted the running build (and its file
+               * and shell actions) without sending anything. Stopping stays on the Stop button.
+               */
+              if (props.isStreaming) {
                 return;
               }
 
@@ -338,9 +362,9 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
             maxHeight: props.TEXTAREA_MAX_HEIGHT,
           }}
           placeholder={
-            props.chatMode === 'build' ? 'Describe the app you want to build…' : 'What would you like to discuss?'
+            props.chatMode === 'build' ? 'Décrivez l’application à créer…' : 'De quoi voulez-vous discuter ?'
           }
-          aria-label={props.chatMode === 'build' ? 'Describe the app you want to build' : 'Message'}
+          aria-label={props.chatMode === 'build' ? 'Décrivez l’application à créer' : 'Message'}
           translate="no"
         />
         <div className="flex justify-between items-center gap-2 text-sm px-3 pb-3 pt-1">
@@ -400,8 +424,8 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
               <DropdownMenu.Trigger asChild>
                 <button
                   type="button"
-                  title={props.chatMode === 'discuss' ? 'Discuss Mode' : 'Agent Mode'}
-                  aria-label={props.chatMode === 'discuss' ? 'Mode: Discuss' : 'Mode: Agent'}
+                  title={props.chatMode === 'discuss' ? 'Mode Discussion' : 'Mode Agent'}
+                  aria-label={props.chatMode === 'discuss' ? 'Mode : Discussion' : 'Mode : Agent'}
                   className={classNames(
                     'transition-all flex items-center gap-1 rounded-md px-1.5 py-1 text-xs',
                     props.chatMode === 'discuss'
@@ -414,7 +438,7 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
                   {props.chatMode === 'discuss' ? (
                     <>
                       <div className="i-ph:chats text-lg" />
-                      <span className="hidden sm:inline">Discuss</span>
+                      <span className="hidden sm:inline">Discussion</span>
                     </>
                   ) : (
                     <>
@@ -453,7 +477,7 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
                     <div className="i-ph:robot text-lg" />
                     <div className="flex flex-col">
                       <span>Agent</span>
-                      <span className="text-xs text-bolt-elements-textSecondary">Plans & uses tools</span>
+                      <span className="text-xs text-bolt-elements-textSecondary">Planifie et utilise des outils</span>
                     </div>
                   </DropdownMenu.Item>
                   <DropdownMenu.Item
@@ -471,8 +495,8 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
                   >
                     <div className="i-ph:chats text-lg" />
                     <div className="flex flex-col">
-                      <span>Discuss</span>
-                      <span className="text-xs text-bolt-elements-textSecondary">Chat without tools</span>
+                      <span>Discussion</span>
+                      <span className="text-xs text-bolt-elements-textSecondary">Discussion sans outils</span>
                     </div>
                   </DropdownMenu.Item>
                 </DropdownMenu.Content>
@@ -483,9 +507,10 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
               onStart={props.startListening}
               onStop={props.stopListening}
               disabled={props.isStreaming}
+              supported={props.speechSupported ?? true}
             />
             <IconButton
-              title="Model Settings"
+              title="Réglages du modèle"
               className={classNames('transition-all flex items-center gap-1 min-w-0', {
                 'bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent':
                   props.isModelSettingsCollapsed,

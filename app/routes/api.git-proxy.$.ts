@@ -41,6 +41,37 @@ const EXPOSE_HEADERS = [
   'x-redirected-url',
 ];
 
+/*
+ * Git hosts this proxy may reach. It used to forward to ANY `https://<domain>` (including
+ * internal names and, through followed redirects, any http URL), with the caller's
+ * `authorization` header logged in clear. Override with GIT_PROXY_ALLOWED_HOSTS
+ * (comma-separated; each entry also allows its subdomains) for a self-hosted forge.
+ */
+const DEFAULT_ALLOWED_GIT_HOSTS = ['github.com', 'gitlab.com', 'bitbucket.org', 'codeberg.org'];
+const MAX_REDIRECTS = 5;
+
+function allowedGitHosts(): string[] {
+  const configured = typeof process !== 'undefined' ? process.env?.GIT_PROXY_ALLOWED_HOSTS : undefined;
+
+  const hosts = configured
+    ?.split(',')
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean);
+
+  return hosts && hosts.length > 0 ? hosts : DEFAULT_ALLOWED_GIT_HOSTS;
+}
+
+/** True for an https URL, default port, no credentials, on an allowed host or its subdomain. */
+function isAllowedGitUrl(target: URL): boolean {
+  if (target.protocol !== 'https:' || target.port !== '' || target.username || target.password) {
+    return false;
+  }
+
+  const host = target.hostname.toLowerCase();
+
+  return allowedGitHosts().some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
+}
+
 // Handle all HTTP methods
 export async function action({ request, params }: ActionFunctionArgs) {
   return handleProxyRequest(request, params['*']);
@@ -82,9 +113,21 @@ async function handleProxyRequest(request: Request, path: string | undefined) {
 
     // Reconstruct the target URL with query parameters
     const url = new URL(request.url);
-    const targetURL = `https://${domain}/${remainingPath}${url.search}`;
 
-    console.log('Target URL:', targetURL);
+    let target: URL;
+
+    try {
+      target = new URL(`https://${domain}/${remainingPath}${url.search}`);
+    } catch {
+      return Response.json({ error: 'Invalid proxy URL format' }, { status: 400 });
+    }
+
+    if (target.host.toLowerCase() !== domain.toLowerCase() || !isAllowedGitUrl(target)) {
+      return Response.json({ error: 'This git host is not allowed' }, { status: 403 });
+    }
+
+    // Host only: the path/query may carry tokens.
+    console.log('Git proxy:', request.method, target.hostname);
 
     // Filter and prepare headers
     const headers = new Headers();
@@ -104,8 +147,6 @@ async function handleProxyRequest(request: Request, path: string | undefined) {
       headers.set('User-Agent', 'git/@isomorphic-git/cors-proxy');
     }
 
-    console.log('Request headers:', Object.fromEntries(headers.entries()));
-
     /*
      * `duplex` is required by undici/Node when streaming a request body, but it is
      * absent from the Cloudflare `RequestInit` type, so widen it locally.
@@ -113,7 +154,9 @@ async function handleProxyRequest(request: Request, path: string | undefined) {
     const fetchOptions: RequestInit & { duplex?: 'half' } = {
       method: request.method,
       headers,
-      redirect: 'follow',
+
+      // Each hop is checked against the allowlist below; `follow` went anywhere.
+      redirect: 'manual',
     };
 
     // Add body for non-GET/HEAD requests
@@ -122,10 +165,33 @@ async function handleProxyRequest(request: Request, path: string | undefined) {
       fetchOptions.duplex = 'half';
     }
 
-    // Forward the request to the target URL
-    const response = await fetch(targetURL, fetchOptions);
+    // Forward the request to the target URL, following only redirects to allowed hosts.
+    let response = await fetch(target.href, fetchOptions);
+    let redirected = false;
 
-    console.log('Response status:', response.status);
+    for (let hop = 0; [301, 302, 303, 307, 308].includes(response.status); hop++) {
+      const location = response.headers.get('location');
+      const next = location ? new URL(location, target) : undefined;
+
+      await response.body?.cancel();
+
+      if (!next || hop >= MAX_REDIRECTS || !isAllowedGitUrl(next) || fetchOptions.body) {
+        return Response.json({ error: 'Redirect refused by the git proxy' }, { status: 502 });
+      }
+
+      // Never carry the caller's credentials to another host.
+      if (next.hostname !== target.hostname) {
+        headers.delete('authorization');
+        headers.delete('x-authorization');
+      }
+
+      headers.set('Host', next.host);
+      target = next;
+      redirected = true;
+      response = await fetch(target.href, fetchOptions);
+    }
+
+    console.log('Git proxy response:', response.status);
 
     // Create response headers
     const responseHeaders = new Headers();
@@ -149,11 +215,9 @@ async function handleProxyRequest(request: Request, path: string | undefined) {
     }
 
     // If the response was redirected, add the x-redirected-url header
-    if (response.redirected) {
-      responseHeaders.set('x-redirected-url', response.url);
+    if (redirected) {
+      responseHeaders.set('x-redirected-url', target.href);
     }
-
-    console.log('Response headers:', Object.fromEntries(responseHeaders.entries()));
 
     // Return the response with the target's body stream piped directly
     return new Response(response.body, {

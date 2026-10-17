@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { shouldContinueSegment } from './continuation';
+import { chainSegments, shouldContinueSegment } from './continuation';
 import { getAgentLoopProgress } from '~/lib/common/agentLoop';
 
 describe('shouldContinueSegment', () => {
@@ -39,5 +39,62 @@ describe('shouldContinueSegment', () => {
     ];
 
     expect(getAgentLoopProgress(continued as never, true).plan).toBeUndefined();
+  });
+});
+
+describe('chainSegments', () => {
+  function streamOf(parts: { type: string; text?: string }[]): ReadableStream<any> {
+    return new ReadableStream<any>({
+      start(controller) {
+        for (const part of parts) {
+          controller.enqueue(part);
+        }
+        controller.close();
+      },
+    });
+  }
+
+  function segment(text: string): ReadableStream<{ type: string; text?: string }> {
+    return streamOf([{ type: 'text-delta', text }, { type: 'finish' }]) as unknown as ReadableStream<{
+      type: string;
+      text?: string;
+    }>;
+  }
+
+  async function collect(stream: ReadableStream<{ type: string; text?: string }>) {
+    const events: { type: string; text?: string }[] = [];
+    const reader = stream.getReader();
+
+    for (;;) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      events.push(value);
+    }
+
+    return events;
+  }
+
+  it('plays segments in order and sends the single `finish` last', async () => {
+    let continuation: ReadableStream<{ type: string; text?: string }> | undefined = segment('part2');
+
+    const events = await collect(
+      chainSegments(segment('part1') as never, () => {
+        const next = continuation;
+        continuation = undefined;
+
+        return next as never;
+      }),
+    );
+
+    const texts = events.filter((event) => event.type === 'text-delta').map((event) => event.text);
+    expect(texts).toEqual(['part1', 'part2']);
+
+    // The defect: `finish` before the continuation text ended the message in the client.
+    expect(events.findIndex((event) => event.type === 'finish')).toBe(events.length - 1);
+    expect(events.filter((event) => event.type === 'finish')).toHaveLength(1);
   });
 });

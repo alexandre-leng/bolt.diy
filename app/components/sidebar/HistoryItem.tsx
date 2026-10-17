@@ -91,17 +91,20 @@ export function HistoryItem({
         <form onSubmit={handleSubmit} className="flex-1 flex items-center gap-2">
           <input
             type="text"
-            className="flex-1 bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary rounded-md px-3 py-1.5 text-sm border border-bolt-elements-borderColor focus:outline-none focus:ring-1 focus:ring-bolt-elements-borderColorActive/50"
+            aria-label="Titre de la conversation"
+            className="flex-1 min-w-0 bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary rounded-md px-3 py-1.5 text-sm border border-bolt-elements-borderColor focus:outline-none focus:ring-1 focus:ring-bolt-elements-borderColorActive/50"
             autoFocus
             value={currentDescription}
             onChange={handleChange}
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
           />
+          {/* Submit via the form only; mousedown keeps focus so the input's blur does not cancel. */}
           <button
             type="submit"
-            className="i-ph:check h-4 w-4 text-gray-500 hover:text-purple-500 transition-colors"
-            onMouseDown={handleSubmit}
+            aria-label="Enregistrer le titre"
+            className="i-ph:check h-4 w-4 shrink-0 text-gray-500 hover:text-purple-500 transition-colors"
+            onMouseDown={(event) => event.preventDefault()}
           />
         </form>
       ) : (
@@ -112,6 +115,15 @@ export function HistoryItem({
             if (selectionMode) {
               handleItemClick(event);
 
+              return;
+            }
+
+            /*
+             * The action buttons (Export, Duplicate, Rename) live inside this link and call
+             * preventDefault. Their click still bubbles here, and closing the panel then hid
+             * the rename field the user had just opened. Only a real open closes it.
+             */
+            if (event.defaultPrevented) {
               return;
             }
 
@@ -138,7 +150,7 @@ export function HistoryItem({
             {/* bolt-touch-visible: always shown on touch screens, where hover never happens. */}
             <div className="bolt-touch-visible flex items-center gap-2.5 text-gray-400 dark:text-gray-500 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
               <ChatActionButton
-                toolTipContent="Export"
+                toolTipContent="Exporter"
                 icon="i-ph:download-simple h-4 w-4"
                 onClick={(event) => {
                   event.preventDefault();
@@ -147,7 +159,7 @@ export function HistoryItem({
               />
               {onDuplicate && (
                 <ChatActionButton
-                  toolTipContent="Duplicate"
+                  toolTipContent="Dupliquer"
                   icon="i-ph:copy h-4 w-4"
                   onClick={(event) => {
                     event.preventDefault();
@@ -156,7 +168,7 @@ export function HistoryItem({
                 />
               )}
               <ChatActionButton
-                toolTipContent="Rename"
+                toolTipContent="Renommer"
                 icon="i-ph:pencil-fill h-4 w-4"
                 onClick={(event) => {
                   event.preventDefault();
@@ -164,7 +176,7 @@ export function HistoryItem({
                 }}
               />
               <ChatActionButton
-                toolTipContent="Delete"
+                toolTipContent="Supprimer"
                 icon="i-ph:trash h-4 w-4"
                 className="hover:text-red-500 dark:hover:text-red-400"
                 onClick={handleDeleteClick}
@@ -195,11 +207,17 @@ const ChatActionButton = forwardRef(
   ) => {
     return (
       <WithTooltip tooltip={toolTipContent} position="bottom" sideOffset={4}>
+        {/* aria-label: the tooltip alone left screen readers with an unnamed "button". */}
         <button
           ref={ref}
           type="button"
-          className={`text-gray-400 dark:text-gray-500 hover:text-purple-500 dark:hover:text-purple-400 transition-colors ${icon} ${className ? className : ''}`}
-          onClick={onClick}
+          aria-label={toolTipContent}
+          className={`text-gray-400 dark:text-gray-500 hover:text-purple-500 dark:hover:text-purple-400 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500 ${icon} ${className ? className : ''}`}
+          onClick={(event) => {
+            // Keep the click away from the enclosing link (it navigates and closes the panel).
+            event.stopPropagation();
+            onClick(event);
+          }}
         />
       </WithTooltip>
     );

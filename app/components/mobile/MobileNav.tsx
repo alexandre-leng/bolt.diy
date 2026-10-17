@@ -79,7 +79,7 @@ export function MobileNav() {
 
   return (
     <nav
-      aria-label="Main"
+      aria-label="Navigation principale"
       data-testid="mobile-nav"
       className={classNames(
         'md:hidden fixed inset-x-0 bottom-0 z-[998] flex justify-center px-3',

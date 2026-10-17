@@ -14,7 +14,7 @@ describe('MobileNav', () => {
   it('shows Accueil as the current tab on the landing page', () => {
     render(<MobileNav />);
 
-    expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy();
+    expect(screen.getByRole('navigation', { name: 'Navigation principale' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Accueil' }).getAttribute('aria-current')).toBe('page');
   });
 
@@ -50,12 +50,12 @@ describe('MobileNav', () => {
     act(() => {
       window.dispatchEvent(new CustomEvent('bolt:settings-visibility', { detail: { open: true } }));
     });
-    expect(screen.queryByRole('navigation', { name: 'Main' })).toBeNull();
+    expect(screen.queryByRole('navigation', { name: 'Navigation principale' })).toBeNull();
 
     act(() => {
       window.dispatchEvent(new CustomEvent('bolt:settings-visibility', { detail: { open: false } }));
     });
-    expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy();
+    expect(screen.getByRole('navigation', { name: 'Navigation principale' })).toBeTruthy();
   });
 
   it('renders visible labels for navigation items', () => {

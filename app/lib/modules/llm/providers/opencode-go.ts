@@ -59,8 +59,15 @@ function fnv1a(value: string): string {
  */
 const THINKING_ONLY_MODELS = new Set(['glm-5.3']);
 
-/** Models whose upstream refused the `thinking` field at runtime (see the fetch wrapper). */
-const THINKING_REJECTED = new Set<string>();
+/**
+ * A 400 that refuses the `thinking` field we injected — not any 400 that merely mentions
+ * "thinking" (a prompt echo or an unrelated validation message used to match).
+ */
+const THINKING_FIELD_REFUSED = /unknown field \\?"?thinking|thinking.*(not supported|unsupported|is a thinking-only)/i;
+
+export function isThinkingFieldRefusal(detail: string): boolean {
+  return THINKING_FIELD_REFUSED.test(detail);
+}
 
 /**
  * Which wire protocol the gateway speaks for a model.
@@ -93,6 +100,9 @@ export default class OpenCodeGoProvider extends BaseProvider {
   config = {
     baseUrlKey: 'OPENCODE_GO_API_BASE_URL',
     apiTokenKey: 'OPENCODE_GO_API_KEY',
+
+    // The server's own endpoint: a cookie naming it is not a "client-chosen" host (see base-provider).
+    baseUrl: OPENCODE_GO_BASE_URL,
   };
 
   staticModels: ModelInfo[] = [
@@ -251,7 +261,10 @@ export default class OpenCodeGoProvider extends BaseProvider {
     const env = typeof process !== 'undefined' ? process.env : undefined;
 
     const baseUrl = resolved.baseUrl || env?.OPENCODE_GO_API_BASE_URL || OPENCODE_GO_BASE_URL;
-    const apiKey = resolved.apiKey || apiKeys?.[this.name] || env?.OPENCODE_GO_API_KEY;
+
+    // Never the server key towards a host the client chose (cookie `providers.baseUrl`).
+    const apiKey =
+      resolved.apiKey || apiKeys?.[this.name] || (resolved.clientBaseUrl ? undefined : env?.OPENCODE_GO_API_KEY);
 
     if (!baseUrl || !apiKey) {
       throw new Error(`Missing configuration for ${this.name} provider`);
@@ -301,7 +314,7 @@ export default class OpenCodeGoProvider extends BaseProvider {
       fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
         const original = init;
 
-        if (disableThinking && !THINKING_REJECTED.has(model) && init?.body && typeof init.body === 'string') {
+        if (disableThinking && init?.body && typeof init.body === 'string') {
           try {
             const body = JSON.parse(init.body);
 
@@ -320,8 +333,9 @@ export default class OpenCodeGoProvider extends BaseProvider {
          * The gateway routes one model to different upstreams, and they disagree: the same
          * glm-5.3-flash accepted `thinking` on one probe and answered 400 `unknown field
          * "thinking"` on the next; glm-5.3 refuses to disable it. When the field we added is
-         * what was refused, send the caller's request unchanged — and stop adding it for
-         * that model in this process.
+         * what was refused, send the caller's request unchanged — for THIS request only. It used
+         * to be remembered process-wide: one stray 400 re-enabled thinking on deepseek-v4.1-flash
+         * for every user, and deepseek then returns no tool call at all.
          */
         if (init !== original && response.status === 400) {
           const detail = await response
@@ -329,9 +343,7 @@ export default class OpenCodeGoProvider extends BaseProvider {
             .text()
             .catch(() => '');
 
-          if (/thinking/i.test(detail)) {
-            THINKING_REJECTED.add(model);
-
+          if (isThinkingFieldRefusal(detail)) {
             return fetch(input, original);
           }
         }

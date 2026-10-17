@@ -81,25 +81,33 @@ export abstract class BaseProvider implements ProviderInfo {
 
     const baseUrlKey = this.config.baseUrlKey || defaultBaseUrlKey;
 
-    let baseUrl =
-      settingsBaseUrl ||
-      serverEnv?.[baseUrlKey] ||
-      process?.env?.[baseUrlKey] ||
-      managerEnv?.[baseUrlKey] ||
-      this.config.baseUrl;
+    const trimSlash = (url?: string) => (url && url.endsWith('/') ? url.slice(0, -1) : url);
 
-    if (baseUrl && baseUrl.endsWith('/')) {
-      baseUrl = baseUrl.slice(0, -1);
-    }
+    const serverBaseUrl = trimSlash(
+      serverEnv?.[baseUrlKey] || process?.env?.[baseUrlKey] || managerEnv?.[baseUrlKey] || this.config.baseUrl,
+    );
+
+    const baseUrl = trimSlash(settingsBaseUrl) || serverBaseUrl;
+
+    /*
+     * `providerSettings` comes from a client cookie. When it points the provider at a host the
+     * server did not configure, the server's own key must never be sent there (it leaked the
+     * OpenCode key to any URL a user typed): only a key the client supplied itself may go along.
+     */
+    const clientBaseUrl = Boolean(settingsBaseUrl) && baseUrl !== serverBaseUrl;
 
     const apiTokenKey = this.config.apiTokenKey || defaultApiTokenKey;
 
-    const apiKey =
-      apiKeys?.[this.name] || serverEnv?.[apiTokenKey] || process?.env?.[apiTokenKey] || managerEnv?.[apiTokenKey];
+    const serverApiKey = clientBaseUrl
+      ? undefined
+      : serverEnv?.[apiTokenKey] || process?.env?.[apiTokenKey] || managerEnv?.[apiTokenKey];
+
+    const apiKey = apiKeys?.[this.name] || serverApiKey;
 
     return {
       baseUrl,
       apiKey,
+      clientBaseUrl,
     };
   }
   getModelsFromCache(options: {

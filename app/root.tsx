@@ -84,10 +84,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
     document.documentElement.setAttribute('data-color-theme', theme === 'dark' ? 'dark-dracula' : theme);
   }, [theme]);
 
-  // The theme script applies saved browser preferences before hydration.
+  /*
+   * The theme script applies saved browser preferences before hydration.
+   * lang="fr": the UI is French; "en" made screen readers read it with an English voice.
+   */
   return (
     <html
-      lang="en"
+      lang="fr"
       suppressHydrationWarning
       data-theme={theme === 'dark' || theme.startsWith('dark-') ? 'dark' : 'light'}
       data-color-theme={theme === 'dark' ? 'dark-dracula' : theme}

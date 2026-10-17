@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyContextBufferUpdate } from './select-context';
+import { applyContextBufferUpdate, getFilePaths } from './select-context';
 
 const file = (content: string) => ({ type: 'file' as const, content, isBinary: false });
 
@@ -52,5 +52,19 @@ describe('applyContextBufferUpdate', () => {
     expect(applyContextBufferUpdate({ responseText: 'sorry, I cannot', files, filePaths, currentContext: {} })).toEqual(
       {},
     );
+  });
+});
+
+describe('getFilePaths', () => {
+  it('skips keys that are not project-relative instead of throwing', () => {
+    // Before: `ignore` threw RangeError on '/home/project' and '/tmp/x', failing the whole turn.
+    const paths = getFilePaths({
+      '/home/project': { type: 'folder' },
+      '/tmp/outside.txt': file('x'),
+      '/home/project/src/App.tsx': file('app'),
+      '/home/project/node_modules/a/index.js': file('dep'),
+    } as never);
+
+    expect(paths).toEqual(['/home/project/src/App.tsx']);
   });
 });

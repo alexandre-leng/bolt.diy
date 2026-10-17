@@ -23,6 +23,45 @@ import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('mcp-service');
 
+/** Runs `task` with an abort signal that fires on `parent` abort or after `timeoutMs`; rejects then. */
+async function runBounded<T>(
+  parent: AbortSignal | undefined,
+  timeoutMs: number,
+  label: string,
+  task: (signal: AbortSignal) => PromiseLike<T> | T,
+): Promise<T> {
+  const controller = new AbortController();
+  const onParentAbort = () => controller.abort(parent?.reason);
+
+  const timer = setTimeout(
+    () => controller.abort(new Error(`MCP tool "${label}" timed out after ${timeoutMs} ms`)),
+    timeoutMs,
+  );
+
+  if (parent?.aborted) {
+    onParentAbort();
+  } else {
+    parent?.addEventListener('abort', onParentAbort, { once: true });
+  }
+
+  try {
+    return await new Promise<T>((resolve, reject) => {
+      if (controller.signal.aborted) {
+        reject(controller.signal.reason);
+        return;
+      }
+
+      controller.signal.addEventListener('abort', () => reject(controller.signal.reason), { once: true });
+      Promise.resolve()
+        .then(() => task(controller.signal))
+        .then(resolve, reject);
+    });
+  } finally {
+    clearTimeout(timer);
+    parent?.removeEventListener('abort', onParentAbort);
+  }
+}
+
 export const stdioServerConfigSchema = z
   .object({
     type: z.enum(['stdio']).optional(),
@@ -104,6 +143,76 @@ export type MCPServerUnavailable = {
 };
 export type MCPServer = MCPServerAvailable | MCPServerUnavailable;
 
+/** Longest an approved MCP tool may run before the turn gets an error result instead. */
+export const MCP_TOOL_TIMEOUT_MS = 120_000;
+
+/** What a browser may see of a server: status, tool metadata and error. */
+export type MCPServerPublicStatus = {
+  status: MCPServer['status'];
+  tools: Record<string, { description?: string; inputSchema?: { jsonSchema?: unknown } }>;
+  error?: string;
+  config: { type: MCPServerConfig['type'] };
+};
+
+/**
+ * `/api/mcp-check` and `/api/mcp-update-config` returned the raw server map: each entry's
+ * `config` (with its `headers`/`env` secrets, e.g. API keys of a remote MCP server) and
+ * `client`, to any signed-in user — the config is shared process-wide. Only the transport
+ * type survives here (the UI uses it to pick a label), plus tool names/descriptions/schemas.
+ */
+export function toPublicServerStatuses(servers: MCPServerTools): Record<string, MCPServerPublicStatus> {
+  return Object.fromEntries(
+    Object.entries(servers).map(([name, server]) => {
+      const tools =
+        server.status === 'available'
+          ? Object.fromEntries(
+              Object.entries(server.tools).map(([toolName, tool]) => {
+                const schema = (tool as { inputSchema?: { jsonSchema?: unknown } }).inputSchema?.jsonSchema;
+
+                return [
+                  toolName,
+                  {
+                    ...(typeof tool.description === 'string' ? { description: tool.description } : {}),
+                    ...(schema && typeof schema === 'object' ? { inputSchema: { jsonSchema: schema } } : {}),
+                  },
+                ];
+              }),
+            )
+          : {};
+
+      return [
+        name,
+        {
+          status: server.status,
+          tools,
+          ...(server.status === 'unavailable' ? { error: server.error } : {}),
+          config: { type: server.config?.type },
+        },
+      ];
+    }),
+  );
+}
+
+/**
+ * Remote transports only. A `stdio` server makes this process spawn an arbitrary command
+ * chosen by the client (remote code execution on the host), so it is refused.
+ */
+export function assertRemoteServerConfig(serverName: string, config: unknown): void {
+  const candidate = (config ?? {}) as { type?: unknown; command?: unknown; url?: unknown };
+
+  if (candidate.type === 'stdio' || candidate.command !== undefined) {
+    throw new Error(`Server "${serverName}": stdio MCP servers are not allowed on this deployment.`);
+  }
+
+  if (candidate.type !== 'sse' && candidate.type !== 'streamable-http') {
+    throw new Error(`Server "${serverName}": only "sse" and "streamable-http" servers are supported.`);
+  }
+
+  if (typeof candidate.url !== 'string') {
+    throw new Error(`Server "${serverName}": missing "url" field.`);
+  }
+}
+
 export class MCPService {
   private static _instance: MCPService;
   private _tools: ToolSet = {};
@@ -164,7 +273,8 @@ export class MCPService {
   }
 
   async updateConfig(config: MCPConfig) {
-    logger.debug('updating config', JSON.stringify(config));
+    // Names only: the config carries headers/env secrets.
+    logger.debug('updating config', Object.keys(config?.mcpServers ?? {}).join(', '));
     this._config = config;
     await this._createClients();
 
@@ -225,6 +335,9 @@ export class MCPService {
   }
 
   private async _createMCPClient(serverName: string, serverConfig: MCPServerConfig): Promise<MCPClient> {
+    // Defence in depth: the route already refuses stdio, never spawn a client-chosen command.
+    assertRemoteServerConfig(serverName, serverConfig);
+
     const validatedConfig = this._validateServerConfig(serverName, serverConfig);
 
     if (validatedConfig.type === 'stdio') {
@@ -407,7 +520,7 @@ export class MCPService {
   async processToolInvocations(
     messages: UIMessage[],
     dataStream: UIMessageStreamWriter,
-    options: { browserUseCloudEnabled?: boolean; disabledTools?: string[] } = {},
+    options: { browserUseCloudEnabled?: boolean; disabledTools?: string[]; abortSignal?: AbortSignal } = {},
   ): Promise<UIMessage[]> {
     const lastMessage = messages[messages.length - 1];
     const parts = lastMessage?.parts;
@@ -449,16 +562,27 @@ export class MCPService {
             logger.debug(`calling tool "${toolName}" with args: ${JSON.stringify(toolInput)}`);
 
             try {
-              result = await toolInstance.execute(
-                toolInput as any,
-                {
-                  /*
-                   * convertToModelMessages reads message.parts directly and
-                   * throws on a v4 message, so migrate before calling it.
-                   */
-                  messages: await convertToModelMessages(migrateLegacyMessages(messages) as any),
-                  toolCallId,
-                } as any,
+              const execute = toolInstance.execute;
+              const modelMessages = await convertToModelMessages(migrateLegacyMessages(messages) as any);
+
+              /*
+               * Ran with neither deadline nor abort: a hung MCP server held the request (and the
+               * user's turn) forever, and a closed tab did not stop it.
+               */
+              result = await runBounded(options.abortSignal, MCP_TOOL_TIMEOUT_MS, toolName, (abortSignal) =>
+                execute.call(
+                  toolInstance,
+                  toolInput as any,
+                  {
+                    /*
+                     * convertToModelMessages reads message.parts directly and
+                     * throws on a v4 message, so migrate before calling it.
+                     */
+                    messages: modelMessages,
+                    toolCallId,
+                    abortSignal,
+                  } as any,
+                ),
               );
             } catch (error) {
               logger.error(`error while calling tool "${toolName}":`, error);

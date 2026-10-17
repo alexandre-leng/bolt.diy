@@ -1,0 +1,143 @@
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+/*
+ * History list item (audit U2, U3, U11, U12): renaming from the projects panel must keep
+ * the panel open, accept French titles, save once, and every action must be named.
+ */
+const persistence = vi.hoisted(() => ({
+  updateChatDescription: vi.fn(async () => undefined),
+  renameChat: vi.fn(async () => undefined),
+  getMessages: vi.fn(async () => undefined),
+}));
+
+vi.mock('~/lib/persistence', async () => {
+  const { atom } = await import('nanostores');
+
+  return {
+    db: {} as IDBDatabase,
+    prefetchChat: vi.fn(),
+    chatId: atom<string | undefined>(undefined),
+    description: atom<string | undefined>(undefined),
+    getMessages: persistence.getMessages,
+    updateChatDescription: persistence.updateChatDescription,
+  };
+});
+
+vi.mock('~/lib/persistence/historySync', () => ({ renameChat: persistence.renameChat }));
+
+const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() }));
+vi.mock('~/lib/toastify', () => ({ toast: toastMock }));
+
+import { HistoryItem } from './HistoryItem';
+import { sidebarOpenStore } from '~/lib/stores/sidebar';
+
+const item = { id: '42', urlId: 'mon-site', description: 'Mon site', messages: [], timestamp: '2026-10-17T10:00:00Z' };
+
+function renderItem() {
+  return render(
+    <MemoryRouter>
+      <HistoryItem item={item as never} exportChat={vi.fn()} onDuplicate={vi.fn()} onDelete={vi.fn()} />
+    </MemoryRouter>,
+  );
+}
+
+/** Rename button, found by its icon so the lookup does not depend on the fix under test. */
+function renameButton(container: HTMLElement) {
+  return container.querySelector('button.i-ph\\:pencil-fill') as HTMLButtonElement;
+}
+
+function saveCount() {
+  return persistence.renameChat.mock.calls.length + persistence.updateChatDescription.mock.calls.length;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  sidebarOpenStore.set(true);
+});
+
+describe('HistoryItem rename from the panel (U2)', () => {
+  it('keeps the panel open and shows the title field', () => {
+    const { container } = renderItem();
+
+    act(() => {
+      fireEvent.click(renameButton(container));
+    });
+
+    // Before: the click bubbled to the link, which closed the panel under the new field.
+    expect(sidebarOpenStore.get()).toBe(true);
+    expect(screen.getByRole('textbox')).toBeTruthy();
+  });
+});
+
+describe('HistoryItem rename submit (U3, U11)', () => {
+  it('saves an accented French title once and closes the editor', async () => {
+    const { container } = renderItem();
+
+    act(() => {
+      fireEvent.click(renameButton(container));
+    });
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Café de Noël – L’atelier' } });
+
+    const save = container.querySelector('form button[type="submit"]') as HTMLButtonElement;
+
+    // One real click: mousedown, then click (which submits the form).
+    await act(async () => {
+      fireEvent.mouseDown(save);
+      fireEvent.click(save);
+    });
+
+    expect(toastMock.error).not.toHaveBeenCalled();
+    expect(saveCount()).toBe(1);
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
+
+  it('saves a plain title only once per click', async () => {
+    const { container } = renderItem();
+
+    act(() => {
+      fireEvent.click(renameButton(container));
+    });
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Nouveau titre' } });
+
+    const save = container.querySelector('form button[type="submit"]') as HTMLButtonElement;
+
+    await act(async () => {
+      fireEvent.mouseDown(save);
+      fireEvent.click(save);
+    });
+
+    expect(saveCount()).toBe(1);
+    expect(toastMock.success).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
+
+  it('pushes the rename through renameChat (timestamp + server push)', async () => {
+    const { container } = renderItem();
+
+    act(() => {
+      fireEvent.click(renameButton(container));
+    });
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Pâtisserie' } });
+
+    await act(async () => {
+      fireEvent.submit(container.querySelector('form') as HTMLFormElement);
+    });
+
+    expect(persistence.renameChat).toHaveBeenCalledWith(expect.anything(), '42', 'Pâtisserie');
+  });
+});
+
+describe('HistoryItem accessible names (U12, U13)', () => {
+  it('names every action button in French', () => {
+    renderItem();
+
+    for (const name of ['Exporter', 'Dupliquer', 'Renommer', 'Supprimer']) {
+      expect(screen.getByRole('button', { name })).toBeTruthy();
+    }
+  });
+});

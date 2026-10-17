@@ -4,8 +4,8 @@ import {
   ApiError,
   isTokenLimitFailure,
   toApiErrorResponse,
+  toCheckedTextStream,
   toMissingCredentialError,
-  toSafeTextStream,
   toTokenLimitError,
 } from '~/lib/.server/api/errors';
 import { readJsonBody } from '~/lib/.server/api/read-body';
@@ -108,6 +108,9 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
       const result = await streamText({
         options: {
           system,
+
+          // The client can leave mid-stream; stop paying the provider for it.
+          abortSignal: request.signal,
         },
         messages: [
           /*
@@ -124,7 +127,12 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
         provider: providerName,
       });
 
-      return new Response(toSafeTextStream(result.textStream), {
+      /*
+       * `toSafeTextStream(result.textStream)` turned every provider failure into a 200
+       * with an empty body: textStream drops `error` parts. toCheckedTextStream waits for
+       * the first text so a pre-answer failure reaches catch as a typed error.
+       */
+      return new Response(await toCheckedTextStream(result.stream), {
         status: 200,
         headers: {
           'Content-Type': 'text/plain; charset=utf-8',

@@ -41,6 +41,15 @@ function isBlockedHostname(hostname: string): boolean {
     return true;
   }
 
+  /*
+   * Internal names that resolve to private addresses: Docker's `host.docker.internal`, any
+   * `.internal`/`.lan`/`.home.arpa`/`.localdomain`, and single-label names (`bolt-history`,
+   * `metadata`) that only a local resolver answers. A public site always has a dot.
+   */
+  if (!host.includes('.') || /\.(internal|intranet|lan|home\.arpa|localdomain|corp)$/.test(host)) {
+    return true;
+  }
+
   // URL normalizes alternate IPv4 spellings (integer, octal, hex) to dotted decimal.
   if (/^\d+(?:\.\d+){0,3}$/.test(host)) {
     const parts = host.split('.').map(Number);

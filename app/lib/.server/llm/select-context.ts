@@ -78,11 +78,7 @@ export async function selectContext(props: {
 
   const { codeContext } = extractCurrentContext(processedMessages);
 
-  let filePaths = getFilePaths(files || {});
-  filePaths = filePaths.filter((x) => {
-    const relPath = x.replace('/home/project/', '');
-    return !ig.ignores(relPath);
-  });
+  const filePaths = getFilePaths(files || {});
 
   let context = '';
 
@@ -248,11 +244,24 @@ export function applyContextBufferUpdate(args: {
 }
 
 export function getFilePaths(files: FileMap) {
-  let filePaths = Object.keys(files);
-  filePaths = filePaths.filter((x) => {
-    const relPath = x.replace('/home/project/', '');
-    return !ig.ignores(relPath);
-  });
+  return Object.keys(files).filter(isSelectablePath);
+}
 
-  return filePaths;
+/**
+ * `ignore` throws a RangeError on anything that is not a relative path — the project root
+ * `/home/project` itself, or any other absolute key the client sends. That failed the whole
+ * turn as a provider error. Such keys are simply not selectable.
+ */
+function isSelectablePath(path: string): boolean {
+  const relPath = path.startsWith('/home/project/') ? path.slice('/home/project/'.length) : path;
+
+  if (!relPath) {
+    return false;
+  }
+
+  try {
+    return !ig.ignores(relPath);
+  } catch {
+    return false;
+  }
 }

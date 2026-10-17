@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { checkRateLimit, createSecurityHeaders, withSecurity } from './security';
+import { checkRateLimit, createSecurityHeaders, getTrustedClientIP, withSecurity } from './security';
 
 describe('security middleware', () => {
   describe('checkRateLimit', () => {
@@ -41,6 +41,27 @@ describe('security middleware', () => {
       const blocked = checkRateLimit(request, '/api/llmcall', { clientAddress: ip });
       expect(blocked.allowed).toBe(false);
       expect(blocked.resetTime).toBeGreaterThan(Date.now());
+    });
+
+    it('keys rate limits on the real client IP behind the local proxy, not on one shared bucket', () => {
+      // nginx sets both headers ($remote_addr); the runtime's own identity is the proxy.
+      const proxied = (realIp: string) =>
+        new Request('https://bolt.example/api/chat', {
+          headers: { 'x-forwarded-proto': 'https', 'x-real-ip': realIp, 'cf-connecting-ip': '127.0.0.1' },
+        });
+
+      const context = { clientAddress: '127.0.0.1', cloudflare: { ctx: { waitUntil: () => undefined } } };
+
+      // Two different clients: before, both were counted as the proxy's own address.
+      expect(checkRateLimit(proxied('198.51.100.10'), '/api/chat', context).allowed).toBe(true);
+      expect(checkRateLimit(proxied('198.51.100.11'), '/api/chat', context).allowed).toBe(true);
+
+      // A forged cf-connecting-ip cannot move the counter: x-real-ip (set by nginx) wins.
+      const forged = new Request('https://bolt.example/api/chat', {
+        headers: { 'x-forwarded-proto': 'https', 'x-real-ip': '198.51.100.10', 'cf-connecting-ip': '198.51.100.99' },
+      });
+      expect(checkRateLimit(forged, '/api/chat', context).allowed).toBe(true);
+      expect(getTrustedClientIP(forged, context)).toBe('198.51.100.10');
     });
 
     it('does not use caller-supplied forwarding headers as a trusted identity', () => {

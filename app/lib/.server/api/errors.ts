@@ -237,6 +237,85 @@ export function toSafeTextStream(stream: ReadableStream<string>): ReadableStream
   });
 }
 
+type TextStreamPart = { type: string; text?: string; error?: unknown };
+
+/**
+ * Plain-text body for a streamText `stream` (the full part stream, not `textStream`).
+ *
+ * `textStream` silently drops `error` parts, so a provider failure (401, 429, 5xx) ended as
+ * a 200 with an EMPTY body: the enhancer left the prompt blank and /api/llmcall returned
+ * nothing, with no error anywhere. This waits for the first text: a failure before it is
+ * THROWN (the route turns it into a typed error response with a real status); a failure
+ * after text has been sent appends the safe error sentence, like toSafeTextStream.
+ */
+export async function toCheckedTextStream(parts: ReadableStream<TextStreamPart>): Promise<ReadableStream<Uint8Array>> {
+  const reader = parts.getReader();
+  const encoder = new TextEncoder();
+  const failureText = 'Custom error: The AI provider request failed. Check your provider settings and try again.';
+
+  const nextText = async (): Promise<string | undefined> => {
+    for (;;) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        return undefined;
+      }
+
+      if (value.type === 'error') {
+        throw value.error instanceof Error ? value.error : new Error(String(value.error));
+      }
+
+      if (value.type === 'text-delta' && value.text) {
+        return value.text;
+      }
+    }
+  };
+
+  let first: string | undefined;
+
+  try {
+    first = await nextText();
+  } catch (error) {
+    await reader.cancel().catch(() => undefined);
+    throw error;
+  }
+
+  let failed = false;
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      if (first !== undefined) {
+        controller.enqueue(encoder.encode(first));
+      }
+    },
+    async pull(controller) {
+      if (failed || first === undefined) {
+        controller.close();
+        return;
+      }
+
+      try {
+        const text = await nextText();
+
+        if (text === undefined) {
+          controller.close();
+          return;
+        }
+
+        controller.enqueue(encoder.encode(text));
+      } catch {
+        failed = true;
+        logger.error('Streaming provider error');
+        controller.enqueue(encoder.encode(failureText));
+        controller.close();
+      }
+    },
+    async cancel(reason) {
+      await reader.cancel(reason);
+    },
+  });
+}
+
 /** Returns a fixed client-safe token-limit response. */
 export function toTokenLimitError(provider: string): ApiError {
   return new ApiError(

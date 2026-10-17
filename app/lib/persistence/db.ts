@@ -412,7 +412,11 @@ export async function updateChatDescription(db: IDBDatabase, id: string, descrip
     throw new Error('Description cannot be empty');
   }
 
-  await setMessages(db, id, chat.messages, chat.urlId, description, chat.timestamp, chat.metadata);
+  /*
+   * A rename is a change: it must carry a fresh timestamp, otherwise the next sync sees the
+   * server copy as newer and pulls the old name back (historySync.renameChat also pushes it).
+   */
+  await setMessages(db, id, chat.messages, chat.urlId, description, new Date().toISOString(), chat.metadata);
 }
 
 export async function updateChatMetadata(

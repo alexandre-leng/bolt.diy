@@ -1,12 +1,7 @@
 import { useStore } from '@nanostores/react';
-import { useCallback, useEffect, useState } from 'react';
-import {
-  chatId as chatIdStore,
-  db,
-  description as descriptionStore,
-  getMessages,
-  updateChatDescription,
-} from '~/lib/persistence';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { chatId as chatIdStore, db, description as descriptionStore, getMessages } from '~/lib/persistence';
+import { renameChat } from '~/lib/persistence/historySync';
 import { toast } from '~/lib/toastify';
 
 interface EditChatDescriptionOptions {
@@ -59,6 +54,16 @@ export function useEditChatDescription({
 
   const toggleEditMode = useCallback(() => setEditing((prev) => !prev), []);
 
+  /*
+   * Submit, blur and Escape CLOSE the editor; they never toggle it. One click on the check
+   * used to fire handleSubmit on mousedown, again on the form submit, then handleBlur, and
+   * each toggled: double save, double toast, and an editor that reopened.
+   */
+  const closeEditMode = useCallback(() => setEditing(false), []);
+
+  // Set while a save is in flight, so a second submit from the same gesture is a no-op.
+  const savingRef = useRef(false);
+
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setCurrentDescription(e.target.value);
   }, []);
@@ -78,70 +83,93 @@ export function useEditChatDescription({
   }, [db, chatId, initialDescription]);
 
   const handleBlur = useCallback(async () => {
+    if (savingRef.current) {
+      return;
+    }
+
+    closeEditMode();
+
     const latestDescription = await fetchLatestDescription();
     setCurrentDescription(latestDescription);
-    toggleEditMode();
-  }, [fetchLatestDescription, toggleEditMode]);
+  }, [fetchLatestDescription, closeEditMode]);
 
-  const isValidDescription = useCallback((desc: string): boolean => {
-    const trimmedDesc = desc.trim();
+  const isValidDescription = useCallback(
+    (desc: string): boolean => {
+      const trimmedDesc = desc.trim();
 
-    if (trimmedDesc === initialDescription) {
-      toggleEditMode();
-      return false; // No change, skip validation
-    }
+      if (trimmedDesc === initialDescription) {
+        closeEditMode();
+        return false; // No change, nothing to save
+      }
 
-    const lengthValid = trimmedDesc.length > 0 && trimmedDesc.length <= 100;
+      const lengthValid = trimmedDesc.length > 0 && trimmedDesc.length <= 100;
 
-    // Allow letters, numbers, spaces, and common punctuation but exclude characters that could cause issues
-    const characterValid = /^[a-zA-Z0-9\s\-_.,!?()[\]{}'"]+$/.test(trimmedDesc);
+      /*
+       * Any letter, digit, punctuation or space in any script. The old ASCII whitelist
+       * refused every accented letter and the typographic apostrophe, so « Café de Noël »
+       * or « L’atelier » could never be saved. Only control characters and angle brackets
+       * are refused.
+       */
+      const characterValid = !/[\p{Cc}<>]/u.test(trimmedDesc);
 
-    if (!lengthValid) {
-      toast.error('Description must be between 1 and 100 characters.');
-      return false;
-    }
+      if (!lengthValid) {
+        toast.error('Le titre doit contenir entre 1 et 100 caractères.');
+        return false;
+      }
 
-    if (!characterValid) {
-      toast.error('Description can only contain letters, numbers, spaces, and basic punctuation.');
-      return false;
-    }
+      if (!characterValid) {
+        toast.error('Le titre ne peut pas contenir de caractères de contrôle ni de chevrons (< >).');
+        return false;
+      }
 
-    return true;
-  }, []);
+      return true;
+    },
+    [initialDescription, closeEditMode],
+  );
 
   const handleSubmit = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault();
 
+      if (savingRef.current) {
+        return;
+      }
+
       if (!isValidDescription(currentDescription)) {
         return;
       }
 
+      const nextDescription = currentDescription.trim();
+      savingRef.current = true;
+
       try {
         if (!db) {
-          toast.error('Chat persistence is not available');
+          toast.error('L’historique local n’est pas disponible.');
           return;
         }
 
         if (!chatId) {
-          toast.error('Chat Id is not available');
+          toast.error('Conversation introuvable.');
           return;
         }
 
-        await updateChatDescription(db, chatId, currentDescription);
+        // renameChat bumps the timestamp and pushes to the server, so other devices see it.
+        await renameChat(db, chatId, nextDescription);
+        setCurrentDescription(nextDescription);
 
         if (syncWithGlobalStore) {
-          descriptionStore.set(currentDescription);
+          descriptionStore.set(nextDescription);
         }
 
-        toast.success('Chat description updated successfully');
+        toast.success('Titre mis à jour');
       } catch (error) {
-        toast.error('Failed to update chat description: ' + (error as Error).message);
+        toast.error('Impossible de renommer la conversation : ' + (error as Error).message);
+      } finally {
+        savingRef.current = false;
+        closeEditMode();
       }
-
-      toggleEditMode();
     },
-    [currentDescription, db, chatId, initialDescription, customChatId],
+    [currentDescription, db, chatId, syncWithGlobalStore, isValidDescription, closeEditMode],
   );
 
   const handleKeyDown = useCallback(

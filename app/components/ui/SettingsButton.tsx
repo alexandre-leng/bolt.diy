@@ -17,7 +17,7 @@ export const SettingsButton = memo(({ onClick }: SettingsButtonProps) => {
       onClick={onClick}
       icon="i-ph:gear"
       size="xl"
-      title="Preferences"
+      title="Réglages"
       data-testid="settings-button"
       className={ICON_BUTTON_CLASS}
     />
@@ -34,7 +34,7 @@ export const HelpButton = memo(({ onClick }: HelpButtonProps) => {
       onClick={onClick}
       icon="i-ph:question"
       size="xl"
-      title="Help & Documentation"
+      title="Aide et documentation"
       data-testid="help-button"
       className={ICON_BUTTON_CLASS}
     />

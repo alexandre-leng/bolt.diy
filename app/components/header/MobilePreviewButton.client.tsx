@@ -20,7 +20,7 @@ export function MobilePreviewButton() {
     <button
       type="button"
       data-testid="mobile-preview-button"
-      aria-label={ready ? 'Open preview (running)' : 'Open preview'}
+      aria-label={ready ? 'Ouvrir l’aperçu (en cours)' : 'Ouvrir l’aperçu'}
       onClick={() => {
         workbenchStore.selectWorkbenchView('preview', { userInitiated: true });
         workbenchStore.showWorkbench.set(true);
@@ -28,7 +28,7 @@ export function MobilePreviewButton() {
       className="lg:hidden relative inline-flex items-center gap-1.5 rounded-full border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-3 h-9 text-sm font-medium text-bolt-elements-textPrimary shadow-xs transition-colors hover:bg-bolt-elements-background-depth-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500"
     >
       <span className="i-ph:play-circle text-base" aria-hidden="true" />
-      Preview
+      Aperçu
       {ready && (
         <span
           aria-hidden="true"

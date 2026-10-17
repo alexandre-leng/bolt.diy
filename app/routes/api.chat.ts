@@ -6,6 +6,7 @@ import {
   toUIMessageStream,
   type JSONSchema7,
   type UIMessage,
+  type UIMessageChunk,
 } from 'ai';
 import type { ActionFunctionArgs } from 'react-router';
 import { createChatUIMessageStream } from '~/lib/.server/api/chat-stream';
@@ -29,7 +30,7 @@ import { createAgentLoopTools } from '~/lib/.server/llm/agent-loop';
 import { createAgentStreamRecovery } from '~/lib/.server/llm/agent-stream';
 import { MAX_RESPONSE_SEGMENTS, MAX_TOKENS, type FileMap } from '~/lib/.server/llm/constants';
 import { shouldOptimizeRequestContext } from '~/lib/.server/llm/context-optimization';
-import { shouldContinueSegment } from '~/lib/.server/llm/continuation';
+import { chainSegments, shouldContinueSegment } from '~/lib/.server/llm/continuation';
 import { createSummary } from '~/lib/.server/llm/create-summary';
 import { getWebResearchInstructions } from '~/lib/.server/llm/prompt-web-tools';
 import { getFilePaths, selectContext } from '~/lib/.server/llm/select-context';
@@ -50,6 +51,9 @@ import { WORK_DIR } from '~/utils/constants';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('api.chat');
+
+/** Longest wait for a provider's first chunk outside agent recovery (which has its own deadlines). */
+const FIRST_CHUNK_TIMEOUT_MS = 120_000;
 
 export const action = withSecurity(chatAction, {
   allowedMethods: ['POST'],
@@ -187,6 +191,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         );
 
         const processedMessages = await mcpService.processToolInvocations(messages, writer, {
+          abortSignal: request.signal,
           browserUseCloudEnabled: connectorEnabled?.browserUseCloud === true,
           disabledTools: Object.entries(body.toolEnabled ?? {})
             .filter(([, enabled]) => !enabled)
@@ -220,22 +225,37 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           // Create a summary of the chat
           console.log(`Messages count: ${processedMessages.length}`);
 
-          summary = await createSummary({
-            messages: [...processedMessages],
-            env: context.cloudflare?.env,
-            apiKeys,
-            providerSettings,
-            promptId,
-            contextOptimization,
-            onFinish(resp) {
-              if (resp.usage) {
-                logger.debug('createSummary token usage', JSON.stringify(resp.usage));
-                cumulativeUsage.completionTokens += (resp.usage as any)?.outputTokens || 0;
-                cumulativeUsage.promptTokens += (resp.usage as any)?.inputTokens || 0;
-                cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
-              }
-            },
-          });
+          try {
+            summary = await createSummary({
+              messages: [...processedMessages],
+              env: context.cloudflare?.env,
+              apiKeys,
+              providerSettings,
+              promptId,
+              contextOptimization,
+              abortSignal: request.signal,
+              onFinish(resp) {
+                if (resp.usage) {
+                  logger.debug('createSummary token usage', JSON.stringify(resp.usage));
+                  cumulativeUsage.completionTokens += (resp.usage as any)?.outputTokens || 0;
+                  cumulativeUsage.promptTokens += (resp.usage as any)?.inputTokens || 0;
+                  cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
+                }
+              },
+            });
+          } catch (error) {
+            /*
+             * The summary is an optimisation, like the context selection below: its failure
+             * (rate limit, timeout, provider hiccup) used to fail the whole turn.
+             */
+            if (request.signal.aborted) {
+              throw error;
+            }
+
+            logger.warn('chat summary failed; continuing without context optimisation', error);
+            summary = undefined;
+          }
+
           writer.write({
             type: 'data-progress',
             data: {
@@ -243,10 +263,12 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               label: 'summary',
               status: 'complete',
               order: progressCounter++,
-              message: 'Analysis Complete',
+              message: summary === undefined ? 'Analysis skipped' : 'Analysis Complete',
             } satisfies ProgressAnnotation,
           });
+        }
 
+        if (summary !== undefined) {
           writer.write({
             type: 'data-chatSummary',
             data: { summary, chatId: processedMessages.slice(-1)?.[0]?.id } as ContextAnnotation,
@@ -330,7 +352,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           // logger.debug('Code Files Selected');
         }
 
-        const mcpTools = mcpService.getToolsWithoutExecute({
+        const allMcpTools = mcpService.getToolsWithoutExecute({
           disabledServers: connectorEnabled?.browserUseCloud === true ? [] : ['browser-use-cloud'],
           disabledTools: Object.entries(body.toolEnabled ?? {})
             .filter(([, enabled]) => !enabled)
@@ -346,10 +368,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             .map(([toolName]) => toolName),
         );
 
-        const browserUseToolNames = Object.keys(mcpTools).filter(
-          (toolName) => mcpService.getToolServerName(toolName) === 'browser-use-cloud',
-        );
-
         const projectTools =
           chatMode === 'build'
             ? Object.fromEntries(
@@ -362,6 +380,31 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 ]),
               )
             : {};
+
+        /*
+         * An MCP server may expose a tool named like a built-in one (`web_search`, `agent_plan`…).
+         * That used to throw here, failing every build turn for everybody sharing the MCP config.
+         * Built-ins win; the shadowed MCP tool is dropped with a warning.
+         */
+        const reservedToolNames = new Set([
+          ...Object.keys(projectTools),
+          ...Object.keys(pluginTools),
+          ...Object.keys(createAgentLoopTools([], false, false).tools),
+        ]);
+
+        const shadowedMcpTools = Object.keys(allMcpTools).filter((name) => reservedToolNames.has(name));
+
+        if (shadowedMcpTools.length > 0) {
+          logger.warn(`MCP tools shadowed by built-in tools and ignored: ${shadowedMcpTools.join(', ')}`);
+        }
+
+        const mcpTools = Object.fromEntries(
+          Object.entries(allMcpTools).filter(([name]) => !reservedToolNames.has(name)),
+        ) as typeof allMcpTools;
+
+        const browserUseToolNames = Object.keys(mcpTools).filter(
+          (toolName) => mcpService.getToolServerName(toolName) === 'browser-use-cloud',
+        );
 
         const agentLoop = createAgentLoopTools(
           processedMessages,
@@ -409,6 +452,9 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
         const recovery = createAgentStreamRecovery(notifyRetry);
 
+        /** Continuation segments, queued by onEnd and played in order by chainSegments. */
+        const continuations: ReadableStream<UIMessageChunk>[] = [];
+
         const mapStreamError = (error: unknown) =>
           toSafeStreamErrorMessage(recoveringAgent ? recovery.getError(error) : error);
 
@@ -439,7 +485,14 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
            * hard per-request ceiling even if the user's general step setting is higher.
            */
           stopWhen: isStepCount(agentLoopEnabled ? Math.min(maxLLMSteps ?? 12, 12) : (maxLLMSteps ?? 1)),
-          timeout: recoveringAgent ? { stepMs: 660_000, totalMs: 900_000 } : { chunkMs: 45_000 },
+
+          /*
+           * `chunkMs` only runs once a first chunk has arrived: a provider that accepted the
+           * request and never answered left the turn hanging forever. `firstChunkMs` bounds that.
+           */
+          timeout: recoveringAgent
+            ? { stepMs: 660_000, totalMs: 900_000 }
+            : { firstChunkMs: FIRST_CHUNK_TIMEOUT_MS, chunkMs: 45_000 },
           ...(recoveringAgent
             ? { streamRetries: 0, onError: recovery.onError, onToolCallRetry: () => notifyRetry('tool-call') }
             : {}),
@@ -452,7 +505,9 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             }
 
             toolCalls.forEach((toolCall) => {
-              mcpService.processToolCall(toolCall, writer);
+              if (toolCall.toolName in mcpTools) {
+                mcpService.processToolCall(toolCall, writer);
+              }
 
               const toolName = toolCall.toolName;
 
@@ -532,7 +587,23 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             }
 
             if (responseSegments >= MAX_RESPONSE_SEGMENTS) {
-              throw Error('Cannot continue message: Maximum segments reached');
+              /*
+               * Throwing here (inside the SDK's onEnd) did not reach the user as a message;
+               * end the turn normally and say the answer was cut.
+               */
+              logger.warn('Cannot continue message: maximum segments reached');
+              writer.write({
+                type: 'data-progress',
+                data: {
+                  type: 'progress',
+                  label: 'response',
+                  status: 'complete',
+                  order: progressCounter++,
+                  message: 'Response truncated: maximum length reached',
+                } satisfies ProgressAnnotation,
+              });
+
+              return;
             }
 
             responseSegments += 1;
@@ -577,21 +648,21 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               onModelFallback: reportModelFallback,
             });
 
-            writer.merge(
+            /*
+             * Queued, not merged: a merge ran in parallel with the previous segment, whose
+             * `finish` chunk was then sent BEFORE this continuation's text. `chainSegments`
+             * plays it after the previous segment and moves `finish` to the very end.
+             * (Chunk observation happens in onChunk, which fires as the consumer reads.)
+             */
+            continuations.push(
               toUIMessageStream({
                 stream: result.stream,
                 sendStart: false,
-                sendFinish: false,
+                sendFinish: true,
                 onError: mapStreamError,
               }),
             );
 
-            /*
-             * The old code iterated result.fullStream here in parallel with the
-             * merge above. In v7 fullStream is the same stream object, so the
-             * second consumer starved the first. Chunk observation now happens
-             * in onChunk, which fires as the merged consumer reads.
-             */
             return;
           },
         };
@@ -627,20 +698,23 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         });
 
         writer.merge(
-          toUIMessageStream({
-            stream: result.stream,
-            sendStart: false,
-            sendFinish: true,
+          chainSegments(
+            toUIMessageStream({
+              stream: result.stream,
+              sendStart: false,
+              sendFinish: true,
 
-            /*
-             * This is the hook that actually decides what the client sees. The
-             * model's errors are turned into chunks by *this* `toUIMessageStream`,
-             * and its own default is `() => 'An error occurred.'`. Passing the
-             * mapper only to the outer `createUIMessageStream` (or to `streamText`)
-             * left every failure showing the generic string.
-             */
-            onError: mapStreamError,
-          }),
+              /*
+               * This is the hook that actually decides what the client sees. The
+               * model's errors are turned into chunks by *this* `toUIMessageStream`,
+               * and its own default is `() => 'An error occurred.'`. Passing the
+               * mapper only to the outer `createUIMessageStream` (or to `streamText`)
+               * left every failure showing the generic string.
+               */
+              onError: mapStreamError,
+            }),
+            () => continuations.shift(),
+          ),
         );
       },
 

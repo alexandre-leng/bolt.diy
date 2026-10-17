@@ -32,6 +32,7 @@ import {
 } from '~/lib/persistence';
 import { migrateLocalHistoryToServer, markDeleted } from '~/lib/persistence/historySync';
 import { deleteHistory } from '~/lib/persistence/syncClient';
+import { chatStore } from '~/lib/stores/chat';
 import {
   closeSidebar,
   initSidebar,
@@ -47,6 +48,11 @@ import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('HistoryMenu');
+
+/** A DELETE that answered 404: nothing left to delete on the server. */
+function isNotFound(result: { ok: boolean; error?: string; status?: number }): boolean {
+  return result.status === 404 || result.error === 'HTTP 404';
+}
 
 const menuVariants = {
   closed: {
@@ -136,6 +142,7 @@ export const Menu = () => {
    * start collapsed: on a phone the 340px panel would cover the whole chat.
    */
   const open = useStore(sidebarOpenStore);
+  const { started: chatStarted } = useStore(chatStore);
 
   // Explicit open/close (buttons): remembered. Hover peeks use peek/unpeekSidebar.
   const setOpen = useCallback((next: boolean) => (next ? openSidebar() : closeSidebar()), []);
@@ -233,14 +240,27 @@ export const Menu = () => {
         return Boolean(value) && all.indexOf(value) === index;
       });
 
+      let serverConfirmed = false;
+
       for (const serverId of serverIds) {
         const serverResult = await deleteHistory(serverId);
 
-        if (serverResult.ok) {
+        // 404: the server never had (or already dropped) this key — the outcome we want.
+        if (serverResult.ok || isNotFound(serverResult)) {
+          serverConfirmed = true;
           break;
         }
 
         logger.debug(`server delete failed for ${serverId}`, serverResult.error);
+      }
+
+      /*
+       * Every candidate failed (network, 5xx, 409): keep the local copy and report it. Going
+       * on deleted the chat here only, it stayed on the server and came back on the other
+       * devices, all under a "deleted" success toast.
+       */
+      if (!serverConfirmed) {
+        throw new Error('Le serveur n’a pas confirmé la suppression.');
       }
 
       /*
@@ -283,7 +303,7 @@ export const Menu = () => {
 
       deleteChat(item.id)
         .then(() => {
-          toast.success('Chat deleted successfully', {
+          toast.success('Conversation supprimée', {
             position: 'bottom-right',
             autoClose: 3000,
           });
@@ -299,9 +319,9 @@ export const Menu = () => {
         })
         .catch((error) => {
           console.error('Failed to delete chat:', error);
-          toast.error('Failed to delete conversation', {
+          toast.error('Échec de la suppression : la conversation est conservée. Réessayez plus tard.', {
             position: 'bottom-right',
-            autoClose: 3000,
+            autoClose: 5000,
           });
 
           // Still try to reload entries in case data has changed
@@ -344,11 +364,16 @@ export const Menu = () => {
 
       // Show appropriate toast message
       if (errors.length === 0) {
-        toast.success(`${deletedCount} chat${deletedCount === 1 ? '' : 's'} deleted successfully`);
+        toast.success(
+          `${deletedCount} conversation${deletedCount === 1 ? '' : 's'} supprimée${deletedCount === 1 ? '' : 's'}`,
+        );
       } else {
-        toast.warning(`Deleted ${deletedCount} of ${itemsToDeleteIds.length} chats. ${errors.length} failed.`, {
-          autoClose: 5000,
-        });
+        toast.warning(
+          `${deletedCount} sur ${itemsToDeleteIds.length} supprimées. ${errors.length} en échec, conservées.`,
+          {
+            autoClose: 5000,
+          },
+        );
       }
 
       // Reload the list after all deletions
@@ -391,7 +416,7 @@ export const Menu = () => {
 
   const handleBulkDeleteClick = useCallback(() => {
     if (selectedItems.length === 0) {
-      toast.info('Select at least one chat to delete');
+      toast.info('Sélectionnez au moins une conversation');
       return;
     }
 
@@ -594,8 +619,8 @@ export const Menu = () => {
           <button
             type="button"
             onClick={() => setOpen(false)}
-            aria-label="Collapse sidebar"
-            title="Collapse sidebar"
+            aria-label="Fermer le panneau"
+            title="Fermer le panneau"
             data-testid="sidebar-close"
             className="header-icon-control text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary"
           >
@@ -615,7 +640,7 @@ export const Menu = () => {
                 className="flex-1 flex gap-2 items-center bg-accent-500/10 text-accent-600 hover:bg-accent-500/20 dark:bg-accent-500/15 dark:text-accent-400 rounded-lg px-4 py-2 transition-colors"
               >
                 <span className="inline-block i-ph:plus-circle h-4 w-4" />
-                <span className="text-sm font-medium">Start new chat</span>
+                <span className="text-sm font-medium">Nouvelle conversation</span>
               </a>
               <button
                 type="button"
@@ -626,7 +651,7 @@ export const Menu = () => {
                     ? 'bg-accent-500 text-white'
                     : 'bg-transparent border border-bolt-elements-borderColor text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary',
                 )}
-                aria-label={selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
+                aria-label={selectionMode ? 'Quitter la sélection' : 'Sélectionner des conversations'}
               >
                 <span className={selectionMode ? 'i-ph:x h-4 w-4' : 'i-ph:check-square h-4 w-4'} />
               </button>
@@ -638,15 +663,15 @@ export const Menu = () => {
               <input
                 className="w-full bg-bolt-elements-background-depth-2 relative pl-9 pr-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-bolt-elements-borderColorActive/50 text-sm text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary border border-bolt-elements-borderColor"
                 type="search"
-                placeholder="Search chats..."
+                placeholder="Rechercher une conversation…"
                 onChange={handleSearchChange}
-                aria-label="Search chats"
+                aria-label="Rechercher une conversation"
               />
             </div>
           </div>
           <div className="flex items-center justify-between text-sm px-4 py-2">
             <div className="flex items-center gap-2">
-              <div className="font-medium text-gray-600 dark:text-gray-400">Your Chats</div>
+              <div className="font-medium text-gray-600 dark:text-gray-400">Vos conversations</div>
               {/*
                * Discreet sync state. Only speaks up when something is wrong: a permanent
                * "synced" badge would be noise on every visit.
@@ -673,7 +698,7 @@ export const Menu = () => {
             {selectionMode && (
               <div className="flex items-center gap-2">
                 <Button variant="ghost" size="sm" onClick={selectAll}>
-                  {selectedItems.length === filteredList.length ? 'Deselect all' : 'Select all'}
+                  {selectedItems.length === filteredList.length ? 'Tout désélectionner' : 'Tout sélectionner'}
                 </Button>
                 <Button
                   variant="destructive"
@@ -681,7 +706,7 @@ export const Menu = () => {
                   onClick={handleBulkDeleteClick}
                   disabled={selectedItems.length === 0}
                 >
-                  Delete selected
+                  Supprimer la sélection
                 </Button>
               </div>
             )}
@@ -689,10 +714,18 @@ export const Menu = () => {
           <div className="flex-1 overflow-auto modern-scrollbar px-3 pb-3">
             {filteredList.length === 0 && (
               <div className="px-4 text-gray-500 dark:text-gray-400 text-sm">
-                {list.length === 0 ? 'No previous conversations' : 'No matches found'}
+                {list.length === 0 ? 'Aucune conversation' : 'Aucun résultat'}
               </div>
             )}
-            <DialogRoot open={dialogContent !== null}>
+            {/* onOpenChange: Radix closes on Escape (and Android back) only through it. */}
+            <DialogRoot
+              open={dialogContent !== null}
+              onOpenChange={(isOpen) => {
+                if (!isOpen) {
+                  closeDialog();
+                }
+              }}
+            >
               {binDates(filteredList).map(({ category, items }) => (
                 <div key={category} className="mt-2 first:mt-0 space-y-1">
                   <div className="text-xs font-medium text-bolt-elements-textTertiary sticky top-0 z-1 bg-bolt-elements-background-depth-1 px-4 py-1">
@@ -723,20 +756,20 @@ export const Menu = () => {
                 {dialogContent?.type === 'delete' && (
                   <>
                     <div className="p-6 bg-bolt-elements-background-depth-1">
-                      <DialogTitle className="text-bolt-elements-textPrimary">Delete Chat?</DialogTitle>
+                      <DialogTitle className="text-bolt-elements-textPrimary">Supprimer la conversation ?</DialogTitle>
                       <DialogDescription className="mt-2 text-bolt-elements-textSecondary">
                         <p>
-                          You are about to delete{' '}
+                          Vous allez supprimer{' '}
                           <span className="font-medium text-bolt-elements-textPrimary">
                             {dialogContent.item.description}
                           </span>
                         </p>
-                        <p className="mt-2">Are you sure you want to delete this chat?</p>
+                        <p className="mt-2">Cette action est définitive sur tous vos appareils.</p>
                       </DialogDescription>
                     </div>
                     <div className="flex justify-end gap-3 px-6 py-4 bg-bolt-elements-background-depth-2 border-t border-bolt-elements-borderColor">
                       <DialogButton type="secondary" onClick={closeDialog}>
-                        Cancel
+                        Annuler
                       </DialogButton>
                       <DialogButton
                         type="danger"
@@ -746,7 +779,7 @@ export const Menu = () => {
                           closeDialog();
                         }}
                       >
-                        Delete
+                        Supprimer
                       </DialogButton>
                     </div>
                   </>
@@ -754,11 +787,13 @@ export const Menu = () => {
                 {dialogContent?.type === 'bulkDelete' && (
                   <>
                     <div className="p-6 bg-bolt-elements-background-depth-1">
-                      <DialogTitle className="text-bolt-elements-textPrimary">Delete Selected Chats?</DialogTitle>
+                      <DialogTitle className="text-bolt-elements-textPrimary">
+                        Supprimer les conversations sélectionnées ?
+                      </DialogTitle>
                       <DialogDescription className="mt-2 text-bolt-elements-textSecondary">
                         <p>
-                          You are about to delete {dialogContent.items.length}{' '}
-                          {dialogContent.items.length === 1 ? 'chat' : 'chats'}:
+                          Vous allez supprimer {dialogContent.items.length}{' '}
+                          {dialogContent.items.length === 1 ? 'conversation' : 'conversations'} :
                         </p>
                         <div className="mt-2 max-h-32 overflow-auto border border-bolt-elements-borderColor rounded-md bg-bolt-elements-background-depth-2 p-2">
                           <ul className="list-disc pl-5 space-y-1">
@@ -769,12 +804,12 @@ export const Menu = () => {
                             ))}
                           </ul>
                         </div>
-                        <p className="mt-3">Are you sure you want to delete these chats?</p>
+                        <p className="mt-3">Cette action est définitive sur tous vos appareils.</p>
                       </DialogDescription>
                     </div>
                     <div className="flex justify-end gap-3 px-6 py-4 bg-bolt-elements-background-depth-2 border-t border-bolt-elements-borderColor">
                       <DialogButton type="secondary" onClick={closeDialog}>
-                        Cancel
+                        Annuler
                       </DialogButton>
                       <DialogButton
                         type="danger"
@@ -789,7 +824,7 @@ export const Menu = () => {
                           closeDialog();
                         }}
                       >
-                        Delete
+                        Supprimer
                       </DialogButton>
                     </div>
                   </>
@@ -797,9 +832,18 @@ export const Menu = () => {
               </Dialog>
             </DialogRoot>
           </div>
-          {/* Phones: the bottom navigation already has Settings, and floats over this row. */}
-          <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-800 px-4 py-3 pb-[5.5rem] md:pb-3">
-            <div className="hidden md:flex items-center gap-3">
+          {/*
+           * Phones: on the landing page the bottom navigation has Settings and floats over
+           * this row. In a conversation that navigation is not rendered, so this button is
+           * the only way to Settings and must show (and the row needs no reserved space).
+           */}
+          <div
+            className={classNames(
+              'flex items-center justify-between border-t border-gray-200 dark:border-gray-800 px-4 py-3',
+              chatStarted ? 'pb-3' : 'pb-[5.5rem] md:pb-3',
+            )}
+          >
+            <div className={classNames('items-center gap-3', chatStarted ? 'flex' : 'hidden md:flex')}>
               <SettingsButton onClick={handleSettingsClick} />
             </div>
             <ThemeSwitch />
@@ -819,7 +863,7 @@ export const Menu = () => {
             'hover:bg-bolt-elements-background-depth-2',
             'transition-colors',
           )}
-          aria-label="Open sidebar"
+          aria-label="Ouvrir le panneau"
         >
           <div className="i-ph:caret-right text-gray-500 dark:text-gray-400" />
         </button>

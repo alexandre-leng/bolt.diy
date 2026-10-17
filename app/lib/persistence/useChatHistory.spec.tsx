@@ -22,6 +22,7 @@ vi.mock('~/lib/stores/workbench', () => ({
     waitForExecutionQueue,
     files: { get: () => ({}) },
     firstArtifact: undefined,
+    fileEditRevision: { listen: () => () => undefined },
   },
 }));
 
@@ -43,6 +44,7 @@ vi.mock('./db', () => ({
   createChatFromMessages: vi.fn(async () => 'imported'),
   getMessagesByIdRaw: vi.fn(async () => undefined),
   getMessagesByUrlIdRaw: vi.fn(async () => undefined),
+  getUrlId: vi.fn(async (_db: unknown, id: string) => id),
 }));
 
 /*

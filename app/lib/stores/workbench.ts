@@ -64,6 +64,13 @@ export class WorkbenchStore {
    * preview transition is observable on that render (see `showPreviewAfterRestore`).
    */
   previewRestoreToken: WritableAtom<number> = atom(0);
+
+  /*
+   * Bumped on every user-driven file change (editor save, file tree create/delete). Manual
+   * edits were only ever captured by the next chat turn, so a reload without sending a
+   * message lost them; useChatHistory listens to take a snapshot.
+   */
+  fileEditRevision: WritableAtom<number> = atom(0);
   currentView: WritableAtom<WorkbenchViewType> = import.meta.hot?.data?.currentView ?? atom('code');
   userSelectedView: WritableAtom<WorkbenchViewType | undefined> =
     import.meta.hot?.data?.userSelectedView ?? atom<WorkbenchViewType | undefined>(undefined);
@@ -494,6 +501,11 @@ export class WorkbenchStore {
     }
 
     await this.saveFile(currentDocument.filePath);
+    this.#noteUserFileEdit();
+  }
+
+  #noteUserFileEdit() {
+    this.fileEditRevision.set(this.fileEditRevision.get() + 1);
   }
 
   resetCurrentDocument() {
@@ -514,8 +526,14 @@ export class WorkbenchStore {
   }
 
   async saveAllFiles() {
-    for (const filePath of this.unsavedFiles.get()) {
+    const unsaved = [...this.unsavedFiles.get()];
+
+    for (const filePath of unsaved) {
       await this.saveFile(filePath);
+    }
+
+    if (unsaved.length > 0) {
+      this.#noteUserFileEdit();
     }
   }
 
@@ -597,6 +615,7 @@ export class WorkbenchStore {
       const success = await this.#filesStore.createFile(filePath, content);
 
       if (success) {
+        this.#noteUserFileEdit();
         this.setSelectedFile(filePath);
 
         /*
@@ -619,7 +638,13 @@ export class WorkbenchStore {
 
   async createFolder(folderPath: string) {
     try {
-      return await this.#filesStore.createFolder(folderPath);
+      const success = await this.#filesStore.createFolder(folderPath);
+
+      if (success) {
+        this.#noteUserFileEdit();
+      }
+
+      return success;
     } catch (error) {
       console.error('Failed to create folder:', error);
       throw error;
@@ -634,6 +659,8 @@ export class WorkbenchStore {
       const success = await this.#filesStore.deleteFile(filePath);
 
       if (success) {
+        this.#noteUserFileEdit();
+
         const newUnsavedFiles = new Set(this.unsavedFiles.get());
 
         if (newUnsavedFiles.has(filePath)) {
@@ -672,6 +699,8 @@ export class WorkbenchStore {
       const success = await this.#filesStore.deleteFolder(folderPath);
 
       if (success) {
+        this.#noteUserFileEdit();
+
         const unsavedFiles = this.unsavedFiles.get();
         const newUnsavedFiles = new Set<string>();
 

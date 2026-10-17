@@ -37,6 +37,130 @@
 
 ---
 
+## 2026-10-16 (nuit) — Refacto client screenshot-to-code : variantes multiples et flux complet
+
+- **Type** : refactor
+- **Contexte** : le backend envoie bien plus que ce que le client comprenait. Mesure reelle du
+  flux : `variantCount`, `status`, `thinking`, `toolStart`, `toolResult`, `setCode`, `assistant`,
+  `variantComplete`. Le client n'en traitait que 4 et resolvait sur UNE seule chaine, donc :
+  une variante gardee sur 4, aucune progression visible au-dela d'un statut generique, aucune
+  trace du raisonnement, et une generation de plusieurs minutes qui semblait figee.
+- **Action** :
+  1. `generate.ts` : la promesse resout desormais `Variant[]` (toutes les variantes valides,
+     triees par index) au lieu d'une chaine. Nouveau `onEvent` qui remonte chaque frame
+     (`status`, `variantCount`, `thinking`, `toolStart`, `toolResult`, `setCode`, `assistant`,
+     `variantComplete`, `variantError`). Exposes : `STACKS` (6), `INPUT_MODES` (3),
+     `generateMany` pour le mode texte et les images multiples. Nouvelle capacite :
+     `generationType: 'update'`, `designSystem`. Le repli sur les `setCode` recus quand la
+     connexion se ferme sans `variantComplete` est sur : le backend envoie `setCode` en UN
+     message complet, et `validateGeneratedHtml` exige `<!doctype html>` ET un `</html>` final.
+  2. `ScreenshotToCode.tsx` : selecteur de stack, journal de progression repliable
+     (`thinking`, outils, nombre de designs), et selection parmi les designs generes avec
+     apercu et import du design choisi.
+- **Preuve** : 35/35 tests verts sur `app/lib/screenshot` + `ScreenshotToCode` (3 nouveaux tests
+  couvrent les variantes multiples, le flux riche et le choix de stack). `tsc --noEmit` : 0
+  erreur. Un test au comportement inverse a ete corrige EN CONSCIENCE : « never returns partial
+  code » exigeait un rejet quand la connexion se ferme sans `variantComplete` ; il est remplace
+  par un test qui accepte un document COMPLET et un autre qui rejette un document TRONQUE.
+- **Conséquence** : les 4 designs du backend sont enfin visibles et selectionnables, et une
+  generation longue montre sa progression.
+- **Commit** : a venir.
+- **Reste ouvert** : (a) generation d'images (prompt -> 4 designs) non branchee ; (b) seules les
+  capacites `create` sont exposees dans l'UI (le client sait envoyer `update` mais l'ecran
+  correspondant n'existe pas) ; (c) STACKS couvre 6 valeurs mais le rendu d'un projet React/Vue
+  dans Bolt n'est pas teste.
+- **Piège** : un mock de test qui emet `onEvent` SYNCHRONEMENT depuis la fabrique echoue alors que
+  le vrai backend emet apres l'ouverture du socket. Emettre dans un `act()` apres avoir attendu
+  l'appel, sinon l'evenement arrive avant l'enregistrement de l'etat.
+
+## 2026-10-16 (nuit) — screenshot-to-code : le backend n'existait pas, il tourne maintenant
+
+- **Type** : feat / deploy
+- **Contexte** : le fork contenait un client `screenshot-to-code` complet (generate.ts, composants,
+  tests) qui appelait `wss://<host>/screenshot-api/generate-code` — une route qui **n'existait
+  nulle part** : aucun service, aucune route nginx, port 7001 ferme. La fonction etait donc morte
+  a l'usage (`Connection failed`) alors que le code semblait livre.
+- **Action** :
+  1. venv Python 3.12 dans `backend/.venv` via `uv` (le projet est en Poetry avec
+     `package-mode = false` : `uv pip install -r pyproject.toml` echoue avec « Building a package
+     is not possible in non-package mode » ; installer les dependances explicitement).
+     Dependances reelles au-dela de la liste : `playwright` et `langfuse` sont importes par
+     `main.py` de facon non optionnelle.
+  2. Unite `screenshot-api.service` : `User=boltsites`, `ProtectSystem=strict`,
+     `ProtectHome=yes`, `MemoryMax=2G`, `CPUQuota=200%`, secrets dans
+     `/etc/screenshot-api.env` (600 root:root) charge par `EnvironmentFile`.
+  3. Route nginx `/screenshot-api/` : `auth_request /_bolt_auth`, upgrade WebSocket
+     (`proxy_http_version 1.1` + `Upgrade`/`Connection`), `proxy_read_timeout 600s`,
+     `proxy_buffering off`, `client_max_body_size 32m`. Sans la session, la route repond 302.
+- **Preuve** : `GET /` -> 200 ; WebSocket teste D'ABORD en boucle locale, PUIS a travers nginx
+  avec une vraie session (`bolt_account_session`) : handshake OK, `variantCount: 4`,
+  `variantComplete`, code de 804 caracteres. Le code produit correspond a l'image envoyee
+  (rectangle bleu, texte « Landing page test », rectangle gris aux bonnes coordonnees) :
+  la conversion image -> code fonctionne reellement.
+- **Conséquence** : la fonction est utilisable pour la premiere fois. Le backend survit au reboot
+  (`systemctl enable`).
+- **Commit** : backend hors depot git (`/opt/bolt/vendor/`) — seuls memory.md et le client Bolt
+  sont versionnes.
+- **Reste ouvert** : (a) le flux reel est bien plus riche que ce que le client comprend — le
+  backend envoie `variantCount`, `thinking`, `toolStart`, `toolResult`, `assistant`, et
+  `generate.ts` n'en traite que 4 (`status`, `setCode`, `variantComplete`, `variantError`) :
+  sans refacto, aucune progression, aucun raisonnement et une seule variante sur 4. (b) Le client
+  n'expose qu'UNE stack sur 6 (`html_tailwind`), UN mode sur 3 (`image`), UN type sur 2
+  (`create`). (c) Generation d'images (prompt -> 4 designs) pas encore branchee :
+  l'upstream passe par Replicate, le workflow voulu par Alex est OpenAI Images.
+- **Piège** : un client sans serveur est livre « vert » par les tests et casse en production. Un
+  WebSocket vers une route inexistante echoue silencieusement. Verifier que la route appelee
+  existe (nginx + service + port) avant de croire une integration terminee.
+
+## 2026-10-16 (soir) — Durcissement sécurité : isolation du code non fiable, comptes, plafonds
+
+- **Type** : fix / decision
+- **Contexte** : audit 360 demandé. Le point le plus grave : `bolt-publish` et
+  `bolt-private-preview` **exécutent du code fourni par l'utilisateur en root**. Un
+  `vite.config.ts` ou un plugin est du code qui s'exécute pendant le build, quoi que dise la
+  liste `allow-scripts` du `.npmrc` : cela donnait un accès en lecture à
+  `/opt/bolt/.env.local` et `/root/.hermes/.env` (clés API) et un accès en écriture au host.
+- **Action** (lots 1-6) :
+  1. Utilisateur système `boltsites` (uid 997) propriétaire de `/srv/bolt-sites` seulement.
+     Node **déplacé** de `/root/.hermes/tools/` vers `/opt/bolt/tools/` : `ProtectHome=yes`
+     rend `/root` invisible, un binaire qui y vit casse tout build.
+  2. `bolt-publish` et `bolt-private-preview` : `User=boltsites`, `ProtectSystem=strict`,
+     `ProtectHome=yes`, `PrivateTmp=yes`, `NoNewPrivileges=yes`, `MemoryMax=1G`,
+     `CPUQuota=200%`, `TasksMax=256`. `ProtectSystem=strict` + `ReadWritePaths=` remplace le
+     `ProtectSystem=false` historique, qui existait parce qu'un `full` faisait sortir npm en 0
+     sans rien écrire (faux « bug de build »).
+  3. Comptes : les 5 fixtures de test supprimées (`bolt-test-*`, `brute-*`, `other-*`,
+     `third-*` dont deux `is_admin=true` actifs), `alexandre@lengereau.fr` nommé en exclusion
+     explicite dans le WHERE. Hash vérifié identique avant/après.
+  4. Plafonds dans `bolt_publish.py` : refus si moins de 2 G libres, max 50 sites, source
+     limitée à 200 Mo, `node_modules` supprimé après chaque build (le suivant réinstalle).
+  5. SSH : `PermitRootLogin prohibit-password`, `X11Forwarding no`, `MaxAuthTries 4`,
+     `PermitEmptyPasswords no` via `sshd_config.d/99-hardening.conf` (nommé 99 pour avoir le
+     dernier mot : cloud-init réécrit `50-cloud-init.conf` au boot).
+  6. CSP servie en **Report-Only** (`Content-Security-Policy-Report-Only`) : une politique
+     fausse ne dégrade pas, elle blanchit silencieusement la preview WebContainer, l'échec le
+     plus dur à attribuer du produit. À passer en enforce après observation.
+- **Preuve** : build réel sous durcissement via `systemd-run` avec les mêmes options —
+  `node_modules/vite PRESENT`, `dist/index.html` créé, marqueur présent ; `/opt/bolt/.env.local`
+  NON lisible ; écriture dans `/opt/bolt` et `/root` refusée. Publish via l'API réelle :
+  `npm install -> 0`, `vite build -> 0`, site servi 200, `node_modules` nettoyé. 765 Mo libérés,
+  les 5 sites publiés répondent 200. `systemctl show` confirme les valeurs effectives.
+- **Conséquence** : le code généré ne peut plus lire les secrets du host ni écrire hors de son
+  répertoire de build. 5 comptes dont 2 admin supprimés. Disque sous surveillance.
+- **Commit** : non versionné (units systemd + service hors dépôt git) — seuls les changements
+  de `bolt_publish.py` sont dans `/opt/bolt/publish/`.
+- **Reste ouvert** : (a) **`PasswordAuthentication no` NON activé** — la clé privée n'existe pas
+  sur ce serveur, donc la connexion par clé n'a pas pu être testée d'ici ; la couper sans
+  vérification depuis le poste d'Alex risque un lockout. Marche à suivre : Alex teste
+  `ssh -i <sa clé> root@169.58.18.46` depuis son poste, puis on passe le 99-hardening.conf en
+  `PasswordAuthentication no` + `systemctl reload ssh`. (b) CSP à passer en enforce après
+  observation. (c) La sandbox vraiment jetable par build (conteneur éphémère, sans secrets,
+  réseau filtré) reste le vrai remède pour accepter des projets inconnus ; le durcissement
+  systemd est le minimum pour du semi-fiable.
+- **Piège** : un service qui exécute du code utilisateur en root est un chemin de compromission
+  du host, pas un réglage de permissions. Ne jamais conclure « le build réussit donc c'est
+  isolé » : un `dist/` filtré et un HTTP 200 ne prouvent rien sur l'isolation.
+
 ## 2026-10-16 (soir) — Un projet construit en mode Agent revenait au template après réouverture
 
 - **Type** : fix (correctif principal de la session)

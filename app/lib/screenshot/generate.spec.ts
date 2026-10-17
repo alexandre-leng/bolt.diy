@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { generateScreenshotCode, validateGeneratedHtml } from './generate';
+import { generateMany, generateScreenshotCode, validateGeneratedHtml } from './generate';
 
 class FakeSocket {
   static latest: FakeSocket;
@@ -33,12 +33,12 @@ const html = '<!doctype html><html><head><title>Example</title></head><body><h1>
 const connect = vi.fn((url: string) => new FakeSocket(url) as unknown as WebSocket);
 const location = { protocol: 'https:', host: 'bolt.example' };
 
-function start(onProgress = vi.fn()) {
-  const task = generateScreenshotCode(image, { connect, location, onProgress });
+function start(onProgress = vi.fn(), onEvent = vi.fn()) {
+  const task = generateScreenshotCode(image, { connect, location, onProgress, onEvent });
   const socket = FakeSocket.latest;
   socket.emit('open');
 
-  return { task, socket, onProgress };
+  return { task, socket, onProgress, onEvent };
 }
 
 describe('screenshot generation', () => {
@@ -56,16 +56,128 @@ describe('screenshot generation', () => {
     socket.message({ type: 'setCode', variantIndex: 0, value: html });
     socket.message({ type: 'variantComplete', variantIndex: 0 });
     socket.emit('close', { code: 1000 });
-    await expect(task).resolves.toBe(html);
+    await expect(task).resolves.toEqual([{ index: 0, code: html }]);
   });
 
-  it('never returns partial code on chunks, setCode, or a clean close without variantComplete', async () => {
+  it('returns EVERY completed valid variant, ordered by index', async () => {
+    /*
+     * The backend generates 4 variants per image (NUM_VARIANTS). The previous client
+     * resolved on the first completed one and discarded the rest, so the user could never
+     * compare designs. All of them must come back.
+     */
+    const second = html.replace('Hello', 'Second');
+    const third = html.replace('Hello', 'Third');
+    const { task, socket } = start();
+
+    socket.message({ type: 'variantCount', value: 3 });
+    socket.message({ type: 'setCode', variantIndex: 2, value: third });
+    socket.message({ type: 'setCode', variantIndex: 0, value: html });
+    socket.message({ type: 'setCode', variantIndex: 1, value: second });
+    socket.message({ type: 'variantComplete', variantIndex: 2 });
+    socket.message({ type: 'variantComplete', variantIndex: 0 });
+    socket.message({ type: 'variantComplete', variantIndex: 1 });
+    socket.emit('close', { code: 1000 });
+
+    await expect(task).resolves.toEqual([
+      { index: 0, code: html },
+      { index: 1, code: second },
+      { index: 2, code: third },
+    ]);
+  });
+
+  it('surfaces the rich progress frames instead of swallowing them', async () => {
+    /*
+     * thinking / toolStart / toolResult / assistant are what makes a multi-minute
+     * generation visibly alive; the old client dropped them silently.
+     */
+    const { task, socket, onEvent } = start();
+
+    socket.message({ type: 'status', value: 'Generating code...' });
+    socket.message({ type: 'thinking', value: 'Considering layout' });
+    socket.message({ type: 'toolStart', value: 'create_file' });
+    socket.message({ type: 'toolResult', value: 'ok' });
+    socket.message({ type: 'setCode', variantIndex: 0, value: html });
+    socket.message({ type: 'variantComplete', variantIndex: 0 });
+    socket.emit('close', { code: 1000 });
+    await task;
+
+    const kinds = onEvent.mock.calls.map((call: any[]) => call[0].kind);
+    expect(kinds).toContain('status');
+    expect(kinds).toContain('thinking');
+    expect(kinds).toContain('toolStart');
+    expect(kinds).toContain('toolResult');
+  });
+
+  it('sends the selected stack, input mode and design system when asked', async () => {
+    const task = generateScreenshotCode(image, {
+      connect,
+      location,
+      stack: 'react_tailwind',
+      inputMode: 'image',
+      generationType: 'update',
+      text: 'make it blue',
+      designSystem: 'Material',
+    });
+
+    const socket = FakeSocket.latest;
+    socket.emit('open');
+
+    expect(JSON.parse(socket.sent[0])).toMatchObject({
+      generatedCodeConfig: 'react_tailwind',
+      generationType: 'update',
+      prompt: { text: 'make it blue' },
+      designSystem: 'Material',
+    });
+
+    socket.message({ type: 'setCode', variantIndex: 0, value: html });
+    socket.message({ type: 'variantComplete', variantIndex: 0 });
+    socket.emit('close', { code: 1000 });
+    await task;
+  });
+
+  it('accepts a text-only generation', async () => {
+    // Text mode has no image, so it goes through generateMany directly.
+    const task = generateMany([], {
+      connect,
+      location,
+      inputMode: 'text',
+      text: 'A pricing page with three tiers',
+    });
+
+    const socket = FakeSocket.latest;
+    socket.emit('open');
+    expect(JSON.parse(socket.sent[0])).toMatchObject({
+      inputMode: 'text',
+      prompt: { text: 'A pricing page with three tiers' },
+    });
+
+    socket.message({ type: 'setCode', variantIndex: 0, value: html });
+    socket.message({ type: 'variantComplete', variantIndex: 0 });
+    socket.emit('close', { code: 1000 });
+    await expect(task).resolves.toEqual([{ index: 0, code: html }]);
+  });
+
+  it('accepts complete code when the backend closes without a variantComplete frame', async () => {
+    /*
+     * The backend sends `setCode` in ONE complete message (routes/generate_code.py) and
+     * always closes afterwards, but a partial run can close with valid code and no
+     * variantComplete. A complete document is still a valid result, so it is accepted.
+     * A fragment stays impossible: validateGeneratedHtml requires a leading <!doctype html>
+     * AND a closing </html>, so truncated output is rejected below.
+     */
     const { task, socket, onProgress } = start();
     socket.message({ type: 'status', variantIndex: 0, value: 'Generating code...' });
     socket.message({ type: 'chunk', variantIndex: 0, value: '<html>' });
     socket.message({ type: 'setCode', variantIndex: 0, value: html });
     socket.emit('close', { code: 1000 });
     expect(onProgress).toHaveBeenCalledWith('Generating code...');
+    await expect(task).resolves.toEqual([{ index: 0, code: html }]);
+  });
+
+  it('never returns truncated code, even when it arrives as a complete-looking frame', async () => {
+    const { task, socket } = start();
+    socket.message({ type: 'setCode', variantIndex: 0, value: '<!doctype html><html><body><h1>cut' });
+    socket.emit('close', { code: 1000 });
     await expect(task).rejects.toThrow(/incomplete/i);
   });
 
@@ -75,7 +187,7 @@ describe('screenshot generation', () => {
     socket.message({ type: 'setCode', variantIndex: 1, value: html });
     socket.message({ type: 'variantComplete', variantIndex: 1 });
     socket.emit('close', { code: 1000 });
-    await expect(task).resolves.toBe(html);
+    await expect(task).resolves.toEqual([{ index: 1, code: html }]);
   });
 
   it('rejects server error even after one variant appears complete', async () => {

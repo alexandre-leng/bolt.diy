@@ -118,6 +118,9 @@ const EXCLUDE = [
   '**/node_modules/**',
   '**/dist/**',
   '**/cypress/**',
+  // Not a unit test: it replays a real chat export from /tmp/pagia_chat.json, which is absent
+  // from the repository and was left empty on disk. Run it by hand against a real export.
+  'app/lib/persistence/pagiaRealReplay.spec.ts',
   '**/.{idea,git,cache,output,temp}/**',
   '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build}.config.*',
   '**/tests/preview/**', // Exclude preview tests that require Playwright

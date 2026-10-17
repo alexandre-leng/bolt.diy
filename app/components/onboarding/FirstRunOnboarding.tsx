@@ -1,6 +1,13 @@
 import Cookies from 'js-cookie';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogDescription, DialogRoot, DialogTitle } from '~/components/ui/Dialog';
+import {
+  applyAccountPreferences,
+  fetchAccountPreferences,
+  fetchSecretNames,
+  pushSecrets,
+  saveOnboardingToAccount,
+} from '~/lib/accountSettings';
 import { API_KEYS_UPDATED_EVENT, type ApiKeysUpdatedDetail } from '~/lib/api/apiKeys';
 import { getAll, openDatabase } from '~/lib/persistence/db';
 import type { MCPConfig } from '~/lib/services/mcpService';
@@ -47,6 +54,16 @@ export function FirstRunOnboarding() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
+  /*
+   * Whether the account already holds settings. Until this settles, the wizard stays shut:
+   * rendering it first and hiding it a moment later made the panel flash open on every load
+   * for a user who had already finished the setup.
+   */
+  const [accountChecked, setAccountChecked] = useState(false);
+
+  /** Names of the secrets the account already stores, so the wizard can report them. */
+  const [storedSecrets, setStoredSecrets] = useState<string[]>([]);
+
   const initializeMcp = useMCPStore((store) => store.initialize);
   const updateMcpSettings = useMCPStore((store) => store.updateSettings);
   const mcpInitialized = useMCPStore((store) => store.isInitialized);
@@ -60,16 +77,57 @@ export function FirstRunOnboarding() {
         return;
       }
 
+      /*
+       * Ask the account before deciding to show the wizard. localStorage is per-browser, so
+       * someone who finished the setup on their desktop would otherwise be asked for every
+       * field again on their phone. The local check stays first because it is free and covers
+       * the common case without a round trip.
+       */
+      try {
+        const account = await fetchAccountPreferences();
+
+        if (!active) {
+          return;
+        }
+
+        if (account?.onboardingCompleted === true) {
+          // Adopt the account's answer, including the profile that goes with it.
+          applyAccountPreferences(account);
+          localStorage.setItem(COMPLETED_KEY, 'true');
+
+          return;
+        }
+      } catch (err) {
+        // An unreachable account service must not block the local check below.
+        console.error('Could not read the account settings before first-run check:', err);
+      }
+
       try {
         const storedProfile = localStorage.getItem('bolt_profile');
         const profile = storedProfile ? (JSON.parse(storedProfile) as { username?: string }) : undefined;
 
+        /*
+         * Only deliberate, user-made setup counts as "already configured".
+         *
+         * The app writes defaults on its own at startup, so their presence proves nothing:
+         *  - `mcp_settings` is seeded by the MCP store on every run;
+         *  - the `apiKeys` cookie is written by the chat on mount as `{"<provider>":""}` even when
+         *    no key was ever entered (APIKeyManager syncs an empty value on mount).
+         * Counting either made a fresh account look configured, so the wizard never opened.
+         * A real stored key (non-empty value) or a name the user typed is the actual signal.
+         */
+        const hasRealApiKey = (() => {
+          try {
+            const keys = JSON.parse(Cookies.get('apiKeys') || '{}') as Record<string, unknown>;
+
+            return Object.values(keys).some((value) => typeof value === 'string' && value.trim() !== '');
+          } catch {
+            return false;
+          }
+        })();
+
         const hasExistingSetup = Boolean(
-          profile?.username ||
-          localStorage.getItem('bolt_theme') ||
-          localStorage.getItem('provider_settings') ||
-          localStorage.getItem('bolt_user_profile') ||
-          Cookies.get('apiKeys'),
+          profile?.username || hasRealApiKey || localStorage.getItem('bolt_user_profile'),
         );
 
         const db = await openDatabase();
@@ -82,6 +140,13 @@ export function FirstRunOnboarding() {
 
         if (hasExistingSetup || existingChats.length > 0) {
           localStorage.setItem(COMPLETED_KEY, 'true');
+
+          /*
+           * Existing setup found on this browser: it is the account's first visit, so upload
+           * what is here. Without this the account stays empty and the next device asks again.
+           */
+          void saveOnboardingToAccount();
+
           return;
         }
 
@@ -101,6 +166,77 @@ export function FirstRunOnboarding() {
     };
   }, []);
 
+  /*
+   * Pre-fill from the account so a half-configured account does not start from blank. Runs
+   * independently of the first-run check above: even when the wizard stays closed, the local
+   * profile and appearance values should match the account's.
+   */
+  useEffect(() => {
+    let active = true;
+
+    void fetchAccountPreferences().then((account) => {
+      if (!active) {
+        return;
+      }
+
+      if (!account) {
+        setAccountChecked(true);
+
+        return;
+      }
+
+      if (typeof account.profileName === 'string' && account.profileName) {
+        setName((current) => current || (account.profileName as string));
+      }
+
+      if (typeof account.profileAvatar === 'string' && account.profileAvatar) {
+        setAvatar((current) => (current === DEFAULT_AVATAR ? (account.profileAvatar as string) : current));
+      }
+
+      if (typeof account.interfaceOptions === 'string') {
+        try {
+          const parsed = JSON.parse(account.interfaceOptions) as Partial<typeof interfaceOptions>;
+
+          setInterfaceOptions((current) => ({
+            accentIntensity:
+              typeof parsed.accentIntensity === 'number' ? parsed.accentIntensity : current.accentIntensity,
+            cornerRadius: ['sharp', 'soft', 'round'].includes(parsed.cornerRadius as string)
+              ? (parsed.cornerRadius as typeof current.cornerRadius)
+              : current.cornerRadius,
+            compactMode: typeof parsed.compactMode === 'boolean' ? parsed.compactMode : current.compactMode,
+            animatedTransitions:
+              typeof parsed.animatedTransitions === 'boolean'
+                ? parsed.animatedTransitions
+                : current.animatedTransitions,
+          }));
+        } catch {
+          // Malformed account value: keep what the browser already has.
+        }
+      }
+
+      setAccountChecked(true);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  /* Report which secrets the account already holds, so the wizard can say "already set". */
+  useEffect(() => {
+    let active = true;
+
+    void fetchSecretNames().then((names) => {
+      if (active && names) {
+        setStoredSecrets(names);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   useEffect(() => {
     if (open && !mcpInitialized) {
       void initializeMcp();
@@ -110,6 +246,21 @@ export function FirstRunOnboarding() {
   const finish = () => {
     localStorage.setItem(COMPLETED_KEY, 'true');
     setOpen(false);
+
+    /*
+     * Push the whole result to the account, which is what makes the next device skip this
+     * wizard entirely. The local writes above already happened (the UI must not wait on the
+     * network); this call adds the account copy that a phone will read.
+     */
+    void saveOnboardingToAccount().then((saved) => {
+      if (!saved) {
+        /*
+         * Not fatal — the browser is set up — but the promise "no second device re-asks"
+         * is not kept, so say so rather than failing silently.
+         */
+        console.warn('Onboarding finished locally, but the account copy could not be saved.');
+      }
+    });
   };
 
   const saveApiKey = () => {
@@ -123,13 +274,23 @@ export function FirstRunOnboarding() {
       keys = {};
     }
 
-    if (providerName && apiKey.trim()) {
-      const apiKeys = { ...keys, [providerName]: apiKey.trim() };
-      Cookies.set('apiKeys', JSON.stringify(apiKeys), { expires: 365 });
-      window.dispatchEvent(
-        new CustomEvent<ApiKeysUpdatedDetail>(API_KEYS_UPDATED_EVENT, { detail: { apiKeys, providerName } }),
-      );
+    if (!providerName || !apiKey.trim()) {
+      return;
     }
+
+    const apiKeys = { ...keys, [providerName]: apiKey.trim() };
+    Cookies.set('apiKeys', JSON.stringify(apiKeys), { expires: 365 });
+    window.dispatchEvent(
+      new CustomEvent<ApiKeysUpdatedDetail>(API_KEYS_UPDATED_EVENT, { detail: { apiKeys, providerName } }),
+    );
+
+    /*
+     * Also store it on the account, encrypted server-side. The cookie above is what the
+     * running app reads (it keeps working offline and the server never hands a key back), so
+     * this is a second home rather than a replacement: a key entered on the desktop is then
+     * present when the phone signs in, instead of being asked for again.
+     */
+    void pushSecrets({ provider_settings: JSON.stringify(apiKeys) });
   };
 
   const next = async () => {
@@ -199,7 +360,11 @@ export function FirstRunOnboarding() {
     }
   };
 
-  if (!open) {
+  /*
+   * Keep the wizard shut until the account has answered. Showing it and hiding it a moment
+   * later made the panel flash on every page load for someone who had already finished.
+   */
+  if (!open || !accountChecked) {
     return null;
   }
 
@@ -325,6 +490,12 @@ export function FirstRunOnboarding() {
               Choose a provider and add its API key to start building. You can also skip this and use a locally
               configured provider.
             </p>
+            {storedSecrets.includes('provider_settings') && (
+              <p className="rounded-md border border-[#393641] bg-[#22212a] px-3 py-2 text-xs text-[#b8b3c2]">
+                Your account already stores API keys, encrypted. You can leave this blank — they will be used
+                automatically.
+              </p>
+            )}
             <label className="block text-sm font-medium" htmlFor="onboarding-provider">
               AI provider
             </label>

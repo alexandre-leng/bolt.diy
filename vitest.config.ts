@@ -75,6 +75,7 @@ const DOM_TESTS = [
   'app/lib/auth/session.spec.ts',
   'app/lib/stores/toolAccess.spec.ts',
   'app/lib/preferences.spec.ts',
+  'app/lib/accountSettings.spec.ts',
   'app/lib/persistence/syncClient.spec.ts',
   'app/lib/persistence/historySync.spec.ts',
   'app/lib/persistence/chatCache.spec.ts',

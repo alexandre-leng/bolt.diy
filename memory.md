@@ -67,6 +67,23 @@
   flaky sous charge (connu). Cross-Origin-Opener-Policy toujours absent de nginx.
 - **Commit** : `e82a868`
 
+## 2026-10-17 — Correction du bilan de tests de l'onboarding compte
+
+- **Type** : docs
+- **Contexte** : l'entrée précédente annonçait « suite complète : 1110/1112, 2 échecs ». La relecture
+  de la sortie complète (`npx vitest run`, 73 s) donne **4 échecs sur 1094 tests, 3 fichiers en échec**.
+- **Preuve** : `Test Files 3 failed | 136 passed (139)`, `Tests 4 failed | 1090 passed (1094)`.
+  Aucun échec ne porte sur `accountSettings`, `FirstRunOnboarding`, `entry.client` ou `preferences`
+  (vérifié par filtrage des lignes FAIL).
+- **Échecs connus, hors périmètre** :
+  - `create-summary.spec.ts` : « Missing API key for OpenRouter provider » — le test ne fournit pas de
+    clé ; fichier d'un autre agent (commit `f942ba8`).
+  - `pagiaRealReplay.spec.ts` : le fichier ne charge pas ; non suivi par git.
+  - `tests/performance/*` : fragiles sous charge parallèle (déjà documenté plus haut).
+- **Leçon** : annoncer un chiffre de test sans relire la sortie complète a produit un bilan faux.
+  Toujours citer la ligne `Tests N failed | M passed` telle quelle.
+- **Reste ouvert** : ces 4 échecs ne sont pas réparés ; ils ne sont pas dans le périmètre de cette tâche.
+
 ## 2026-10-17 — Deux modes dans l'interface : generer un design, ou partir d'une image
 
 - **Type** : feat

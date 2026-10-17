@@ -45,8 +45,8 @@ export function Header() {
          */}
         <a
           href="/"
-          aria-label="bolt.diy home"
-          title="bolt.diy home"
+          aria-label="Accueil bolt.diy"
+          title="Accueil bolt.diy"
           className="flex items-center shrink-0 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500"
         >
           <img src="/logo-light-styled.png" alt="bolt.diy" className="w-[90px] inline-block dark:hidden" />
@@ -74,8 +74,8 @@ export function Header() {
                 <a
                   href="/"
                   data-testid="new-project"
-                  aria-label="New project"
-                  title="New project"
+                  aria-label="Nouveau projet"
+                  title="Nouveau projet"
                   className="header-icon-control"
                 >
                   <span className="i-ph:plus text-xl" aria-hidden="true" />
@@ -107,9 +107,9 @@ function SidebarToggle() {
     <button
       type="button"
       onClick={toggleSidebar}
-      aria-label={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+      aria-label={isOpen ? 'Fermer le panneau' : 'Ouvrir le panneau'}
       aria-expanded={isOpen}
-      title={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+      title={isOpen ? 'Fermer le panneau' : 'Ouvrir le panneau'}
       data-testid="sidebar-toggle"
       className="header-icon-control"
     >

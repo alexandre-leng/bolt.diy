@@ -163,6 +163,57 @@ describe('MCPService.processToolInvocations', () => {
     });
   });
 
+  it('bounds an approved tool with a deadline and the request abort signal', async () => {
+    vi.useFakeTimers();
+
+    try {
+      // A hung MCP server: before, the turn waited forever and a closed tab did not stop it.
+      const execute = vi.fn(() => new Promise(() => undefined));
+      const service = serviceWithTools({ search: { execute } });
+      const request = new AbortController();
+      const settled = vi.fn();
+
+      const pending = service
+        .processToolInvocations(
+          messageWithParts([toolInvocationPart('search', 'result', TOOL_EXECUTION_APPROVAL.APPROVE)]),
+          createWriter(),
+          { abortSignal: request.signal } as never,
+        )
+        .then((messages) => {
+          settled();
+          return messages;
+        });
+
+      await vi.advanceTimersByTimeAsync(130_000);
+
+      expect(settled).toHaveBeenCalledTimes(1);
+      expect(resultOf(await pending)).toBe('Error: An error occured while calling tool');
+
+      const signal = (execute.mock.calls[0] as unknown[])[1] as { abortSignal?: AbortSignal };
+      expect(signal.abortSignal).toBeInstanceOf(AbortSignal);
+      expect(signal.abortSignal?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('aborts a running tool when the request is aborted', async () => {
+    const execute = vi.fn(() => new Promise(() => undefined));
+    const service = serviceWithTools({ search: { execute } });
+    const request = new AbortController();
+
+    const pending = service.processToolInvocations(
+      messageWithParts([toolInvocationPart('search', 'result', TOOL_EXECUTION_APPROVAL.APPROVE)]),
+      createWriter(),
+      { abortSignal: request.signal } as never,
+    );
+
+    await vi.waitFor(() => expect(execute).toHaveBeenCalled());
+    request.abort();
+
+    expect(resultOf(await pending)).toBe('Error: An error occured while calling tool');
+  }, 2_000);
+
   it('reports a tool error instead of throwing when execution fails', async () => {
     const service = serviceWithTools({ search: { execute: vi.fn().mockRejectedValue(new Error('boom')) } });
     const writer = createWriter();

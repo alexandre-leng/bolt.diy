@@ -80,7 +80,7 @@ const uiMessagePartSchema = z
 const uiMessageSchema = z
   .looseObject({
     id: z.string().max(REQUEST_LIMITS.MAX_ID_CHARS).optional(),
-    role: z.enum(['system', 'user', 'assistant']),
+    role: z.enum(['user', 'assistant']),
     parts: z.array(uiMessagePartSchema).max(REQUEST_LIMITS.MAX_PARTS_PER_MESSAGE).optional(),
     content: z.union([z.string(), z.array(z.unknown())]).optional(),
     experimental_attachments: z.array(z.unknown()).max(REQUEST_LIMITS.MAX_ATTACHMENTS_PER_MESSAGE).optional(),
@@ -150,7 +150,18 @@ const supabaseSchema = z.looseObject({
  */
 export const chatRequestSchema = z
   .looseObject({
-    messages: z.array(uiMessageSchema).min(1, 'at least one message is required').max(REQUEST_LIMITS.MAX_MESSAGES),
+    /*
+     * `system` messages were accepted here, then refused by the SDK (system text belongs in
+     * `system`, not in `messages`), so the turn failed as a provider error. A client must not
+     * inject system instructions anyway: they are dropped at the boundary.
+     */
+    messages: z.preprocess(
+      (value) =>
+        Array.isArray(value)
+          ? value.filter((message) => (message as { role?: unknown } | null)?.role !== 'system')
+          : value,
+      z.array(uiMessageSchema).min(1, 'at least one message is required').max(REQUEST_LIMITS.MAX_MESSAGES),
+    ),
     files: fileMapSchema.optional(),
     promptId: z.string().max(REQUEST_LIMITS.MAX_PROMPT_ID_CHARS).optional(),
     contextOptimization: z.boolean().optional(),

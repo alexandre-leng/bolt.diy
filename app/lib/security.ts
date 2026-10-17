@@ -97,6 +97,29 @@ export function getTrustedClientIP(request: Request, context?: unknown): string 
   const runtimeContext = context as
     { clientAddress?: string; cloudflare?: { ctx?: { waitUntil?: unknown } } } | undefined;
 
+  /*
+   * Behind the local nginx proxy, every identity the runtime reports is the proxy's
+   * (127.0.0.1: workerd fills `cf-connecting-ip` from the socket peer; the dev adapter's
+   * `clientAddress` too), so all clients shared ONE rate-limit bucket — trivially saturated,
+   * and bypassable by forging `cf-connecting-ip` straight at the app port.
+   *
+   * ASSUMPTION, kept in sync with /etc/nginx/sites-enabled/bolt: the app's location sets
+   * `X-Real-IP $remote_addr` (overwriting any client value) AND `X-Forwarded-Proto $scheme`,
+   * and the app port is not reachable otherwise. `x-forwarded-proto` is therefore the
+   * "came through the local proxy" signature, and its `x-real-ip` is the real client. The
+   * nginx agent (lot D) also makes nginx set `CF-Connecting-IP $remote_addr`, overwriting
+   * anything a client sends.
+   */
+  const proxiedByLocalProxy = request.headers.has('x-forwarded-proto');
+
+  if (proxiedByLocalProxy) {
+    const proxiedClient = normalizeIpAddress(request.headers.get('x-real-ip'));
+
+    if (proxiedClient) {
+      return proxiedClient;
+    }
+  }
+
   const adapterClientAddress = runtimeContext?.clientAddress;
 
   if (adapterClientAddress) {

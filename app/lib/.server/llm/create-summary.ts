@@ -8,6 +8,9 @@ import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('create-summary');
 
+export const SUMMARY_TIMEOUT_MS = 60_000;
+export const SUMMARY_MAX_OUTPUT_TOKENS = 4_096;
+
 export async function createSummary(props: {
   messages: UIMessage[];
   env?: Env;
@@ -16,8 +19,9 @@ export async function createSummary(props: {
   promptId?: string;
   contextOptimization?: boolean;
   onFinish?: (resp: Awaited<ReturnType<typeof generateText>>) => void;
+  abortSignal?: AbortSignal;
 }) {
-  const { messages, env: serverEnv, apiKeys, providerSettings, onFinish } = props;
+  const { messages, env: serverEnv, apiKeys, providerSettings, onFinish, abortSignal } = props;
 
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
@@ -197,6 +201,14 @@ Please provide a summary of the chat till now including the hitorical summary of
       providerSettings,
     }),
     reasoning: 'none',
+
+    /*
+     * This extra call ran unbounded: no abort when the user left, no deadline, no output cap —
+     * a stalled provider held the turn before the real answer even started.
+     */
+    abortSignal,
+    timeout: SUMMARY_TIMEOUT_MS,
+    maxOutputTokens: SUMMARY_MAX_OUTPUT_TOKENS,
   });
 
   const response = resp.text;

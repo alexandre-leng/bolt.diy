@@ -59,4 +59,44 @@ describe('chatCache', () => {
     expect(dbModule.getMessages).not.toHaveBeenCalled();
     expect(dbModule.getSnapshot).not.toHaveBeenCalled();
   });
+
+  /*
+   * P1. A miss was cached as a resolved `undefined`: once a direct link had bounced to the
+   * home page, the chat stayed unreachable at that URL until a full reload, even after the
+   * sidebar had pulled it.
+   */
+  it('does not cache a miss: a chat written later is found on the next read', async () => {
+    const pulled = { id: 'x', urlId: 'x', messages: [{ id: 'm' }], timestamp: 'now' } as any;
+
+    vi.mocked(dbModule.getMessages)
+      .mockResolvedValueOnce(undefined as any)
+      .mockResolvedValueOnce(pulled);
+
+    expect(await getCachedMessages(fakeDb, 'x')).toBeUndefined();
+    expect(await getCachedMessages(fakeDb, 'x')).toEqual(pulled);
+  });
+
+  it('does not cache a failed read', async () => {
+    const chat = { id: 'y', messages: [], timestamp: 'now' } as any;
+
+    vi.mocked(dbModule.getMessages).mockRejectedValueOnce(new Error('blocked')).mockResolvedValueOnce(chat);
+
+    await expect(getCachedMessages(fakeDb, 'y')).rejects.toThrow('blocked');
+    expect(await getCachedMessages(fakeDb, 'y')).toEqual(chat);
+  });
+
+  it('does not keep a prefetched miss either', async () => {
+    const chat = { id: 'z', messages: [{ id: 'm' }], timestamp: 'now' } as any;
+
+    vi.mocked(dbModule.getMessages)
+      .mockResolvedValueOnce(undefined as any)
+      .mockResolvedValueOnce(chat);
+    vi.mocked(dbModule.getSnapshot).mockResolvedValue(undefined);
+
+    prefetchChat(fakeDb, 'z');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(await getCachedMessages(fakeDb, 'z')).toEqual(chat);
+  });
 });

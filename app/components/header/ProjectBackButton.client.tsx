@@ -23,7 +23,7 @@ export function ProjectBackButton() {
     return null;
   }
 
-  const label = 'Back to projects';
+  const label = 'Retour aux projets';
 
   return (
     <button

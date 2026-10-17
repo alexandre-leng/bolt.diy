@@ -15,8 +15,7 @@ export function prefetchChat(database: IDBDatabase | undefined, id: string) {
     return;
   }
 
-  const messages = messageCache.get(id) ?? getMessages(database, id);
-  messageCache.set(id, messages);
+  const messages = messageCache.get(id) ?? cacheMessages(database, id);
 
   void messages
     .then((chat) => {
@@ -37,8 +36,29 @@ export async function getCachedMessages(database: IDBDatabase, id: string): Prom
     return cached;
   }
 
+  return cacheMessages(database, id);
+}
+
+/*
+ * A miss (no such chat yet) or a failed read is not cached: the chat may be pulled from the
+ * server a moment later, and a cached `undefined` kept sending that route back to the home
+ * page until a full reload.
+ */
+function cacheMessages(database: IDBDatabase, id: string): Promise<ChatHistoryItem> {
   const promise = getMessages(database, id);
   messageCache.set(id, promise);
+
+  const forget = () => {
+    if (messageCache.get(id) === promise) {
+      messageCache.delete(id);
+    }
+  };
+
+  promise.then((chat) => {
+    if (!chat) {
+      forget();
+    }
+  }, forget);
 
   return promise;
 }

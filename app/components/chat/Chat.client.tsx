@@ -949,8 +949,11 @@ export const ChatImpl = memo(
         return;
       }
 
+      /*
+       * A send while a generation runs is ignored, not turned into a stop: Enter used to
+       * abort the running build and drop the message. The Stop button calls abort itself.
+       */
       if (isLoading) {
-        abort();
         return;
       }
 

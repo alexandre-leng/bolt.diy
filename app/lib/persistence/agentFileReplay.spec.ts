@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createDeleteActions,
   createEncodedFileActions,
   lastAgentStartCommand,
   messagesContainStartAction,
   replayAgentFileOps,
   toAbsoluteProjectPath,
+  touchesDependencies,
 } from './agentFileReplay';
 import { StreamingMessageParser } from '~/lib/runtime/message-parser';
 
@@ -272,5 +274,129 @@ describe('lastAgentStartCommand', () => {
     for (const cmd of ['pnpm dev', 'yarn dev', 'bun run start', 'npm start']) {
       expect(lastAgentStartCommand([runCommand(cmd)])).toBe(cmd);
     }
+  });
+});
+
+const deletePart = (path: string, output: Record<string, unknown> = { deleted: true }) => ({
+  type: 'tool-project_delete_path',
+  toolCallId: `d-${path}`,
+  state: 'output-available',
+  input: { path },
+  output: { path, ...output },
+});
+
+const artifact = (id: string, body: string) => ({
+  id,
+  role: 'assistant',
+  parts: [{ type: 'text', text: `<boltArtifact id="a-${id}" title="T" type="bundled">\n${body}\n</boltArtifact>` }],
+});
+
+/*
+ * P10. A path the agent deleted was only dropped from the replay state: the re-run artifact
+ * (or the snapshot) wrote it back and the deleted file reappeared on reopen.
+ */
+describe('replayAgentFileOps — deletions (P10)', () => {
+  it('reports a file the agent deleted so the replay can delete it again', () => {
+    const result = replayAgentFileOps([
+      artifact('m1', '<boltAction type="file" filePath="src/a.css">a {}</boltAction>'),
+      { id: 'm2', role: 'assistant', parts: [deletePart('src/a.css')] },
+    ]);
+
+    expect(result.deleted).toEqual(['/home/project/src/a.css']);
+    expect(result.state['/home/project/src/a.css']).toBeUndefined();
+  });
+
+  it('forgets a deletion that a later write undid, and ignores a failed delete', () => {
+    const result = replayAgentFileOps([
+      { id: 'm1', role: 'assistant', parts: [deletePart('src/a.css'), write('src/a.css', 'b {}\n')] },
+      { id: 'm2', role: 'assistant', parts: [deletePart('src/b.css', { deleted: false })] },
+    ]);
+
+    expect(result.deleted).toEqual([]);
+  });
+
+  it('keeps a deleted directory only when nothing was recreated inside it', () => {
+    const result = replayAgentFileOps([
+      { id: 'm1', role: 'assistant', parts: [deletePart('old'), deletePart('src'), write('src/main.ts', 'x\n')] },
+    ]);
+
+    expect(result.deleted).toEqual(['/home/project/old']);
+  });
+
+  it('reports only deletions in the replayed range when a snapshot is the base', () => {
+    const result = replayAgentFileOps(
+      [
+        { id: 'm1', role: 'assistant', parts: [deletePart('before.css')] },
+        { id: 'm2', role: 'assistant', parts: [deletePart('after.css')] },
+      ],
+      { base: { '/home/project/after.css': 'x' }, replayFrom: 1 },
+    );
+
+    expect(result.deleted).toEqual(['/home/project/after.css']);
+  });
+
+  it('turns deletions into shell actions, refusing anything outside the project', () => {
+    expect(createDeleteActions(['/home/project/src/a.css'])).toBe(
+      '<boltAction type="shell">rm -rf "/home/project/src/a.css"</boltAction>',
+    );
+    expect(createDeleteActions(['/home/project/../etc', '/home/project', '/home/project/a$(x)'])).toBe('');
+  });
+});
+
+/*
+ * P11. The agent rewrote package.json: the replay must install again before restarting.
+ */
+describe('touchesDependencies (P11)', () => {
+  it('is true for a manifest or a lockfile, false otherwise', () => {
+    expect(touchesDependencies({ '/home/project/package.json': '{}' })).toBe(true);
+    expect(touchesDependencies({ '/home/project/pnpm-lock.yaml': '' })).toBe(true);
+    expect(touchesDependencies({ '/home/project/src/App.tsx': '' })).toBe(false);
+  });
+});
+
+/*
+ * P15. The replay base for an artifact file kept the raw model text, while the parser had
+ * stripped a whole-file code fence and decoded `&lt;`. A later patch then produced a file
+ * with ``` lines, or did not apply at all.
+ */
+describe('replayAgentFileOps — parser normalisation (P15)', () => {
+  it('folds a patch over the fence-stripped, unescaped body the parser wrote', () => {
+    const fenced = '```tsx\nconst a = 1;\nexport const b = a &lt; 2;\n```';
+
+    const result = replayAgentFileOps([
+      artifact('m1', `<boltAction type="file" filePath="src/b.tsx">${fenced}</boltAction>`),
+      { id: 'm2', role: 'assistant', parts: [patchPart('src/b.tsx', 'const a = 1;', 'const a = 3;')] },
+    ]);
+
+    expect(result.unresolved).toEqual([]);
+    expect(result.files['/home/project/src/b.tsx']).toBe('const a = 3;\nexport const b = a < 2;\n');
+
+    // Exactly what the parser itself writes for that action, before the patch.
+    const parsed: string[] = [];
+
+    const parser = new StreamingMessageParser({
+      callbacks: { onActionClose: ({ action }) => parsed.push((action as { content: string }).content) },
+    });
+    parser.parse(
+      'm1',
+      (
+        artifact('m1', `<boltAction type="file" filePath="src/b.tsx">${fenced}</boltAction>`).parts[0] as {
+          text: string;
+        }
+      ).text,
+    );
+    expect(
+      replayAgentFileOps([artifact('m1', `<boltAction type="file" filePath="src/b.tsx">${fenced}</boltAction>`)]).state[
+        '/home/project/src/b.tsx'
+      ],
+    ).toBe(parsed[0]);
+  });
+
+  it('leaves a markdown file untouched, like the parser', () => {
+    const result = replayAgentFileOps([
+      artifact('m1', '<boltAction type="file" filePath="README.md">a &lt; b</boltAction>'),
+    ]);
+
+    expect(result.state['/home/project/README.md']).toBe('a &lt; b\n');
   });
 });

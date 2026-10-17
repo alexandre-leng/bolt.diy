@@ -15,6 +15,7 @@
  * not known exactly is never guessed: that path is left alone rather than overwritten with a
  * wrong version.
  */
+import { cleanEscapedTags, cleanoutMarkdownSyntax } from '~/lib/runtime/message-parser';
 import { decodeBase64Utf8, encodeBase64Utf8 } from '~/utils/base64Utf8';
 import { WORK_DIR } from '~/utils/constants';
 
@@ -33,6 +34,13 @@ export interface AgentReplayResult {
 
   /** True when the replayed range contains any successful agent file operation. */
   hasAgentWrites: boolean;
+
+  /**
+   * Paths an agent `project_delete_path` removed in the replayed range and that nothing
+   * recreated afterwards. The replay must delete them again: the re-run artifacts (or the
+   * snapshot) bring them back otherwise.
+   */
+  deleted: string[];
 }
 
 const FILE_ACTION_RE = /<boltAction\b([^>]*)>([\s\S]*?)<\/boltAction>/g;
@@ -114,6 +122,7 @@ export function replayAgentFileOps(
   const state = new Map<string, string>(Object.entries(options.base || {}));
   const unknown = new Set<string>();
   const touched = new Set<string>();
+  const deleted = new Set<string>();
   const replayFrom = options.replayFrom ?? 0;
 
   let hasAgentWrites = false;
@@ -148,9 +157,12 @@ export function replayAgentFileOps(
 
           const absolute = toAbsoluteProjectPath(filePath);
           const raw = match[2];
-          const content = attr(tag, 'encoding') === 'base64' ? decodeBase64Utf8(raw.trim()) : `${raw.trim()}\n`;
+
+          const content =
+            attr(tag, 'encoding') === 'base64' ? decodeBase64Utf8(raw.trim()) : parserFileContent(filePath, raw);
           state.set(absolute, content);
           unknown.delete(absolute);
+          deleted.delete(absolute);
 
           /*
            * Artifact actions are re-executed by the parser on restore; they are only
@@ -189,6 +201,7 @@ export function replayAgentFileOps(
 
         state.set(absolute, input.content);
         unknown.delete(absolute);
+        deleted.delete(absolute);
       } else if (toolName === 'project_patch_file') {
         if (output.patched !== true || output.changed === false) {
           continue;
@@ -228,6 +241,16 @@ export function replayAgentFileOps(
           }
         }
 
+        if (inRange && isSafeDeletePath(absolute)) {
+          for (const key of [...deleted]) {
+            if (key.startsWith(`${absolute}/`)) {
+              deleted.delete(key);
+            }
+          }
+
+          deleted.add(absolute);
+        }
+
         continue;
       } else {
         continue;
@@ -252,7 +275,63 @@ export function replayAgentFileOps(
     files[path] = state.get(path)!;
   }
 
-  return { files, state: Object.fromEntries(state), unresolved, hasAgentWrites };
+  /*
+   * A deleted directory that a later write recreated something inside is only partly gone:
+   * deleting it again would also remove the recreated file, so it is left alone.
+   */
+  const stillDeleted = [...deleted].filter((path) => ![...state.keys()].some((key) => key.startsWith(`${path}/`)));
+
+  return { files, state: Object.fromEntries(state), unresolved, hasAgentWrites, deleted: stillDeleted };
+}
+
+/**
+ * The body the message parser actually writes for a non-base64 `<boltAction type="file">`.
+ * The replay must use the same normalisation, or a later patch is applied to text the user
+ * never had (a whole-file code fence, `&lt;` instead of `<`) and the restored file differs.
+ */
+function parserFileContent(filePath: string, raw: string): string {
+  let content = raw.trim();
+
+  if (!filePath.endsWith('.md')) {
+    content = cleanEscapedTags(cleanoutMarkdownSyntax(content));
+  }
+
+  return `${content}\n`;
+}
+
+/** Only paths strictly inside the project, with no shell-sensitive character, are ever deleted. */
+function isSafeDeletePath(path: string): boolean {
+  return (
+    path.startsWith(`${WORK_DIR}/`) &&
+    !path.split('/').some((segment) => segment === '..' || segment === '.') &&
+    !/["`$\\\n\r]/.test(path)
+  );
+}
+
+/** Shell actions that delete `paths` again on replay (see AgentReplayResult.deleted). */
+export function createDeleteActions(paths: string[]): string {
+  return paths
+    .filter(isSafeDeletePath)
+    .map((path) => `<boltAction type="shell">rm -rf "${path}"</boltAction>`)
+    .join('\n');
+}
+
+const DEPENDENCY_FILES = new Set([
+  'package.json',
+  'package-lock.json',
+  'pnpm-lock.yaml',
+  'yarn.lock',
+  'bun.lock',
+  'bun.lockb',
+]);
+
+/**
+ * True when the agent rewrote a manifest or a lockfile. The replay then has to install again:
+ * the template's install ran on the template's package.json, before the replay wrote the
+ * agent's, and the dev server failed with "Failed to resolve import".
+ */
+export function touchesDependencies(files: Record<string, string>): boolean {
+  return Object.keys(files).some((path) => DEPENDENCY_FILES.has(path.split('/').at(-1) || ''));
 }
 
 /** `<boltAction type="file">` actions whose content survives the parser byte for byte. */

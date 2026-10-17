@@ -24,6 +24,9 @@ export interface SyncResult<T> {
   ok: boolean;
   data?: T;
   error?: string;
+
+  /** HTTP status when the server answered; 410 on a PUT means the chat was deleted. */
+  status?: number;
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<SyncResult<T>> {
@@ -39,10 +42,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<SyncRes
 
     if (!response.ok) {
       // 401 means the session expired; the app's normal auth flow handles it.
-      return { ok: false, error: `HTTP ${response.status}` };
+      return { ok: false, error: `HTTP ${response.status}`, status: response.status };
     }
 
-    return { ok: true, data: (await response.json()) as T };
+    return { ok: true, data: (await response.json()) as T, status: response.status };
   } catch (error) {
     logger.debug('history sync unavailable', error);
 
@@ -55,14 +58,29 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<SyncRes
 /** Chat list without messages: enough to render the projects list cheaply. */
 export type ChatSummary = Omit<ChatHistoryItem, 'messages'>;
 
-export async function listHistory(): Promise<SyncResult<ChatSummary[]>> {
-  const result = await request<{ ok: boolean; chats: ChatSummary[] }>(BASE);
+/** A chat this account deleted (on any device), as listed by the server. */
+export interface ChatTombstone {
+  id: string;
+  urlId?: string | null;
+  deletedAt?: string;
+}
+
+export async function listHistory(): Promise<SyncResult<ChatSummary[]> & { deleted?: ChatTombstone[] }> {
+  const result = await request<{ ok: boolean; chats: ChatSummary[]; deleted?: ChatTombstone[] }>(BASE);
 
   if (!result.ok || !result.data) {
     return { ok: false, error: result.error };
   }
 
-  return { ok: true, data: result.data.chats ?? [] };
+  /*
+   * Tombstones let a deletion reach the other devices; an older server does not send the
+   * field, which must simply mean "nothing deleted".
+   */
+  const deleted = Array.isArray(result.data.deleted)
+    ? result.data.deleted.filter((entry) => entry && typeof entry.id === 'string')
+    : [];
+
+  return { ok: true, data: result.data.chats ?? [], deleted };
 }
 
 export async function getHistory(id: string): Promise<SyncResult<ChatHistoryItem>> {
@@ -82,7 +100,7 @@ export async function putHistory(chat: ChatHistoryItem): Promise<SyncResult<null
     body: JSON.stringify(chat),
   });
 
-  return { ok: result.ok, error: result.error };
+  return { ok: result.ok, error: result.error, status: result.status };
 }
 
 export async function deleteHistory(id: string): Promise<SyncResult<null>> {
@@ -138,6 +156,22 @@ export function pickNewest<T extends { timestamp?: string; messages?: unknown }>
   const remoteTime = Date.parse(remote.timestamp ?? '') || 0;
 
   return remoteTime > localTime ? 'remote' : 'local';
+}
+
+/**
+ * Both copies carry the same version: nothing to transfer either way.
+ *
+ * pickNewest keeps the local copy on a tie, which is right for display but made the sync
+ * re-upload every already-synchronised chat in full each time the sidebar opened.
+ */
+export function sameVersion(local?: { timestamp?: string }, remote?: { timestamp?: string }): boolean {
+  if (!local || !remote) {
+    return false;
+  }
+
+  const localTime = Date.parse(local.timestamp ?? '');
+
+  return !isNaN(localTime) && localTime === Date.parse(remote.timestamp ?? '');
 }
 
 /** Message count of a chat-like object, tolerating the summary shape (no `messages`). */

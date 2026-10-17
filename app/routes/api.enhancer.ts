@@ -1,16 +1,19 @@
 import type { UIMessage } from 'ai';
 import type { ActionFunctionArgs } from 'react-router';
-import { toApiErrorResponse, toMissingCredentialError } from '~/lib/.server/api/errors';
+import { toApiErrorResponse, toCheckedTextStream, toMissingCredentialError } from '~/lib/.server/api/errors';
 import { readJsonBody } from '~/lib/.server/api/read-body';
 import { REQUEST_LIMITS, enhancerRequestSchema, parseBody } from '~/lib/.server/api/schemas';
 import { streamText } from '~/lib/.server/llm/stream-text';
 import { getApiKeysFromCookie, getProviderSettingsFromCookie } from '~/lib/api/cookies';
 import { createMessage } from '~/lib/persistence/messageMigration';
+import { withSecurity } from '~/lib/security';
 import { stripIndents } from '~/utils/stripIndent';
 
-export async function action(args: ActionFunctionArgs) {
-  return enhancerAction(args);
-}
+/*
+ * Rate limited and security-headed like every other API route: it spent provider tokens on
+ * an unauthenticated POST and had no abort signal either.
+ */
+export const action = withSecurity(enhancerAction, { allowedMethods: ['POST'] });
 
 async function enhancerAction({ context, request }: ActionFunctionArgs) {
   /*
@@ -75,6 +78,8 @@ async function enhancerAction({ context, request }: ActionFunctionArgs) {
       apiKeys,
       providerSettings,
       options: {
+        // The client leaves the page without the enhancer being retried.
+        abortSignal: request.signal,
         system:
           'You are a senior software principal architect, you should help the user analyse the user query and enrich it with the necessary context and constraints to make it more specific, actionable, and effective. You should also ensure that the prompt is self-contained and uses professional language. Your response should ONLY contain the enhanced prompt text. Do not include any explanations, metadata, or wrapper tags.',
 
@@ -89,8 +94,14 @@ async function enhancerAction({ context, request }: ActionFunctionArgs) {
       },
     });
 
-    // Return the text stream directly since it's already text data
-    return new Response(result.textStream, {
+    /*
+     * NOT `result.textStream`: it discards `error` parts, so a provider 401/429 answered
+     * 200 with an empty body (the enhancer wiped the user's prompt). Waiting for the first
+     * text first turns a pre-answer failure into the typed error response below.
+     */
+    const body = await toCheckedTextStream(result.stream);
+
+    return new Response(body, {
       status: 200,
       headers: {
         'Content-Type': 'text/event-stream',

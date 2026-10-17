@@ -69,6 +69,13 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
               const isFirst = index === 0;
               const isHidden = hasMessageFlag(message, 'hidden');
 
+              /*
+               * A never-stored message (the restore's replay) has an id the stored chat does
+               * not know: rewinding to it emptied the conversation, forking it failed. Only
+               * the snapshot-restore message carries a stored id ('rewindable').
+               */
+              const canRewind = !hasMessageFlag(message, 'no-store') || hasMessageFlag(message, 'rewindable');
+
               if (isHidden) {
                 return <Fragment key={index} />;
               }
@@ -93,8 +100,8 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                         content={parsedContent ?? getMessageText(message)}
                         messageId={messageId}
                         isStreaming={isStreaming && index === messages.length - 1}
-                        onRewind={handleRewind}
-                        onFork={handleFork}
+                        onRewind={canRewind ? handleRewind : undefined}
+                        onFork={canRewind ? handleFork : undefined}
                         append={props.append}
                         chatMode={props.chatMode}
                         setChatMode={props.setChatMode}

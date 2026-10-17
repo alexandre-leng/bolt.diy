@@ -3,10 +3,12 @@ import { atom } from 'nanostores';
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { useLoaderData, useNavigate, useParams, useSearchParams, type NavigateFunction } from 'react-router';
 import {
+  createDeleteActions,
   createEncodedFileActions,
   lastAgentStartCommand,
   messagesContainStartAction,
   replayAgentFileOps,
+  touchesDependencies,
 } from './agentFileReplay';
 import { getCachedMessages, getCachedSnapshot, invalidateChatCache } from './chatCache';
 import {
@@ -17,11 +19,12 @@ import {
   duplicateChat,
   createChatFromMessages,
   createChatWithNextId,
+  getUrlId,
   setSnapshot,
   type IChatMetadata,
 } from './db';
-import { pushChat } from './historySync';
-import { createMessage, getMessageAnnotations, hasMessageFlag, type AnyPart } from './messageMigration';
+import { pushChat, reconcileChat } from './historySync';
+import { createMessage, getMessageAnnotations, getMessageText, hasMessageFlag, type AnyPart } from './messageMigration';
 import { buildAgentReplayMessage } from './restoreArtifacts';
 import { snapshotFileMapEntries } from './snapshotFiles';
 import type { Snapshot } from './types';
@@ -35,6 +38,73 @@ import { detectProjectCommands, createCommandActionsString } from '~/utils/proje
 
 /** How often a long Agent turn refreshes its in-progress snapshot. */
 const STREAMING_SNAPSHOT_INTERVAL_MS = 20_000;
+
+/*
+ * How often a streaming turn mirrors the whole conversation to the server. Every 50 ms
+ * sample used to send a full PUT; the end of the turn always pushes.
+ */
+const STREAMING_PUSH_INTERVAL_MS = 10_000;
+
+/** Quiet time after a manual file edit before it is captured in the chat's snapshot. */
+const USER_EDIT_SNAPSHOT_DEBOUNCE_MS = 1_500;
+
+/** Longest description derived from the first prompt when no artifact names the chat. */
+const FALLBACK_DESCRIPTION_LENGTH = 80;
+
+/**
+ * Commands appended to the replay message: deletions the agent made, a fresh install when
+ * it rewrote the manifest, then the dev server again. A shell action interrupts the running
+ * process, so anything emitted here must end with the start command.
+ */
+function replayCommandActions(options: {
+  deleted: string[];
+  reinstall: boolean;
+  setupCommand?: string;
+  startCommand?: string;
+}): string {
+  const deleteActions = createDeleteActions(options.deleted);
+  const install = options.reinstall ? options.setupCommand || 'npm install' : '';
+
+  if (!deleteActions && !install) {
+    return '';
+  }
+
+  return [
+    deleteActions,
+    install ? `<boltAction type="shell">${install}</boltAction>` : '',
+    options.startCommand ? `<boltAction type="start">${options.startCommand}</boltAction>` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/** Removes `?rewindTo=` from the address bar without a router navigation (which would reload). */
+function stripRewindParam() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const url = new URL(window.location.href);
+
+  if (!url.searchParams.has('rewindTo')) {
+    return;
+  }
+
+  url.searchParams.delete('rewindTo');
+  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+}
+
+/** A readable name for a chat no artifact ever titled (Agent mode, discussion). */
+function fallbackDescription(messages: UIMessage[]): string | undefined {
+  const firstPrompt = messages.find((message) => message.role === 'user');
+  const text = firstPrompt ? getMessageText(firstPrompt).replace(/\s+/g, ' ').trim() : '';
+
+  if (!text) {
+    return undefined;
+  }
+
+  return text.length > FALLBACK_DESCRIPTION_LENGTH ? `${text.slice(0, FALLBACK_DESCRIPTION_LENGTH - 1)}…` : text;
+}
 
 export interface ChatHistoryItem {
   id: string;
@@ -98,7 +168,36 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
   const [archivedMessages, setArchivedMessages] = useState<UIMessage[]>([]);
   const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
   const [ready, setReady] = useState<boolean>(false);
-  const [urlId, setUrlId] = useState<string | undefined>();
+  const [urlId, setUrlIdState] = useState<string | undefined>();
+
+  /*
+   * Read by the save queue, which runs in closures from older renders: an urlId allocated
+   * by one save must be seen by the next one, or each save allocated a new suffix.
+   */
+  const urlIdRef = useRef<string | undefined>(undefined);
+
+  const setUrlId = useCallback((value: string | undefined) => {
+    urlIdRef.current = value;
+    setUrlIdState(value);
+  }, []);
+
+  /*
+   * Lost-update guard (another device continued this chat while it is open here): the
+   * timestamp of the record this tab last loaded or wrote, and whether a conflict stopped
+   * the saves.
+   */
+  const knownTimestampRef = useRef<string | undefined>(undefined);
+  const conflictChatIdRef = useRef<string | undefined>(undefined);
+  const lastCheckedCountRef = useRef(0);
+  const lastPushAtRef = useRef(0);
+
+  /* `${chatId}:${rewindId}` once that rewind's truncated history has been saved. */
+  const consumedRewindRef = useRef<string | undefined>(undefined);
+  const activeRewindRef = useRef<string | undefined>(undefined);
+
+  /* What a manual-edit snapshot anchors on, and whether a turn is streaming. */
+  const lastPersistedMessageIdRef = useRef<string | undefined>(undefined);
+  const streamingRef = useRef(false);
 
   /*
    * Whether `initialMessages` belong to a different chat than the one that was
@@ -169,7 +268,17 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
       }
 
       getCachedMessages(db, mixedId)
-        .then(async (storedMessages) => {
+        .then(async (localMessages) => {
+          /*
+           * Not on this device yet (direct link, another device, sidebar never synced): ask
+           * the server before giving up. Only IndexedDB was read, so such a link always
+           * bounced to the home page.
+           */
+          const storedMessages =
+            localMessages && localMessages.messages.length > 0
+              ? localMessages
+              : ((await reconcileChat(db, mixedId).catch(() => undefined)) ?? localMessages);
+
           const snapshot = storedMessages ? await getCachedSnapshot(db, storedMessages.id) : undefined;
 
           return [storedMessages, snapshot] as const;
@@ -223,13 +332,37 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
             const validSnapshot: Snapshot = snapshot || { chatIndex: '', files: {} }; // Ensure snapshot is not undefined
             const summary = validSnapshot.summary;
 
-            const rewindId = searchParams.get('rewindTo');
+            const requestedRewind = searchParams.get('rewindTo');
+            const rewindKey = `${storedMessages.id}:${requestedRewind}`;
+
+            const rewindIndex = requestedRewind
+              ? storedMessages.messages.findIndex((m) => m.id === requestedRewind)
+              : -1;
+
+            /*
+             * An unknown target (a never-stored replay message, a stale link) used to give
+             * endingIdx 0: an empty conversation that the next save wrote over the whole
+             * history. A rewind already saved must not apply again either, or every reload
+             * dropped the turns made after it.
+             */
+            const rewindId =
+              requestedRewind && rewindIndex >= 0 && consumedRewindRef.current !== rewindKey
+                ? requestedRewind
+                : undefined;
+
+            if (requestedRewind && !rewindId) {
+              if (rewindIndex < 0) {
+                toast.warning('Impossible de revenir à ce message : il ne fait pas partie de la conversation.');
+              }
+
+              stripRewindParam();
+            }
+
+            activeRewindRef.current = rewindId ? rewindKey : undefined;
 
             let startingIdx = -1;
 
-            const endingIdx = rewindId
-              ? storedMessages.messages.findIndex((m) => m.id === rewindId) + 1
-              : storedMessages.messages.length;
+            const endingIdx = rewindId ? rewindIndex + 1 : storedMessages.messages.length;
 
             const snapshotIndex = storedMessages.messages.findIndex((m) => m.id === validSnapshot.chatIndex);
 
@@ -237,7 +370,8 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
               startingIdx = snapshotIndex;
             }
 
-            if (snapshotIndex > 0 && storedMessages.messages[snapshotIndex].id == rewindId) {
+            // Index 0 is a valid anchor: the mid-turn snapshot of a chat's first turn sits there.
+            if (snapshotIndex >= 0 && storedMessages.messages[snapshotIndex].id == rewindId) {
               startingIdx = -1;
             }
 
@@ -249,7 +383,7 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
               archivedMessages = storedMessages.messages.slice(0, startingIdx + 1);
             }
 
-            if (startingIdx > 0 && validSnapshot.preserveMessagesOnRestore) {
+            if (startingIdx >= 0 && validSnapshot.preserveMessagesOnRestore) {
               archivedMessages = [];
               await restoreSnapshot(validSnapshot, isCurrentLoad);
 
@@ -281,10 +415,14 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
                   return;
                 }
 
-                const commandActions =
+                const commandActions = [
+                  createDeleteActions(agentReplay.deleted),
                   projectCommands.setupCommand || projectCommands.startCommand
                     ? createCommandActionsString(projectCommands)
-                    : '';
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join('\n');
 
                 /*
                  * Appended as a synthetic setup message so the parser emits the
@@ -302,7 +440,7 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
               if (setupMessage) {
                 filteredMessages = [...filteredMessages, setupMessage];
               }
-            } else if (startingIdx > 0) {
+            } else if (startingIdx >= 0) {
               const files = Object.entries(validSnapshot?.files || {})
                 .map(([key, value]) => {
                   if (value?.type !== 'file') {
@@ -374,7 +512,9 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
                     id: storedMessages.messages[snapshotIndex].id,
                     role: 'assistant',
                     text: restoredAssistantText,
-                    flags: ['no-store'],
+
+                    // Carries a stored message's id, so Rewind to it is meaningful.
+                    flags: ['no-store', 'rewindable'],
                   }) as UIMessage),
 
                   /*
@@ -412,10 +552,15 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
 
               const startCommand = projectCommands.startCommand || agentStartCommand;
 
-              const agentReplayMessage = createAgentReplayMessage(
-                agentReplay.files,
-                startCommand ? `<boltAction type="start">${startCommand}</boltAction>` : '',
-              );
+              const replayCommands =
+                replayCommandActions({
+                  deleted: agentReplay.deleted,
+                  reinstall: touchesDependencies(agentReplay.files),
+                  setupCommand: projectCommands.setupCommand,
+                  startCommand,
+                }) || (startCommand ? `<boltAction type="start">${startCommand}</boltAction>` : '');
+
+              const agentReplayMessage = createAgentReplayMessage(agentReplay.files, replayCommands);
 
               if (agentReplayMessage) {
                 filteredMessages = [...filteredMessages, agentReplayMessage];
@@ -446,11 +591,13 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
               const replayed = storedMessages.messages.slice(0, endingIdx);
               const agentReplay = replayAgentFileOps(replayed);
 
-              if (agentReplay.hasAgentWrites) {
+              if (agentReplay.hasAgentWrites || agentReplay.deleted.length > 0) {
                 let commandActions = '';
                 let startsProject = messagesContainStartAction(replayed);
 
-                if (!startsProject) {
+                const reinstall = touchesDependencies(agentReplay.files);
+
+                if (!startsProject || reinstall || agentReplay.deleted.length > 0) {
                   const projectCommands = await detectProjectCommands(
                     Object.entries(agentReplay.state).map(([path, content]) => ({ path, content })),
                   );
@@ -459,8 +606,26 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
                     return;
                   }
 
-                  commandActions = createCommandActionsString(projectCommands);
-                  startsProject = Boolean(projectCommands.startCommand);
+                  if (startsProject) {
+                    /*
+                     * The template's own install ran on the template's package.json, before
+                     * this message writes the agent's: install again, then restart.
+                     */
+                    commandActions = replayCommandActions({
+                      deleted: agentReplay.deleted,
+                      reinstall,
+                      setupCommand: projectCommands.setupCommand,
+                      startCommand: projectCommands.startCommand || lastAgentStartCommand(replayed),
+                    });
+                  } else {
+                    commandActions = [
+                      createDeleteActions(agentReplay.deleted),
+                      createCommandActionsString(projectCommands),
+                    ]
+                      .filter(Boolean)
+                      .join('\n');
+                    startsProject = Boolean(projectCommands.startCommand);
+                  }
                 }
 
                 const agentReplayMessage = createAgentReplayMessage(agentReplay.files, commandActions);
@@ -480,6 +645,10 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
             }
 
             loadedChatIdRef.current = storedMessages.id;
+            knownTimestampRef.current = storedMessages.timestamp;
+            conflictChatIdRef.current = undefined;
+            lastCheckedCountRef.current = 0;
+            lastPersistedMessageIdRef.current = storedMessages.messages[endingIdx - 1]?.id;
             setArchivedMessages(archivedMessages);
             setChatChanged(switchedChat);
             setInitialMessages(filteredMessages);
@@ -543,6 +712,8 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
 
           loadedChatIdRef.current = undefined;
           routeHandoffChatIdRef.current = undefined;
+          knownTimestampRef.current = undefined;
+          lastPersistedMessageIdRef.current = undefined;
           setInitialMessages([]);
           setArchivedMessages([]);
           setChatChanged(true);
@@ -592,6 +763,9 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
           }
         });
 
+      knownTimestampRef.current = undefined;
+      conflictChatIdRef.current = undefined;
+      lastPersistedMessageIdRef.current = undefined;
       setChatChanged(leftChat);
       setArchivedMessages([]);
       setInitialMessages([]);
@@ -602,7 +776,7 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
     }
 
     return cleanup;
-  }, [loadHistory, mixedId, db, navigate, searchParams]); // Added db, navigate, searchParams dependencies
+  }, [loadHistory, mixedId, db, navigate, searchParams, setUrlId]); // Added db, navigate, searchParams dependencies
 
   const takeSnapshot = useCallback(
     async (chatRecordId: string, chatIdx: string, files: FileMap, chatSummary?: string) => {
@@ -660,6 +834,58 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
     },
     [takeSnapshot],
   );
+
+  /*
+   * Manual edits (Ctrl+S, file tree) reached the history only through the next chat turn:
+   * reloading without sending a message lost them. Debounced, and skipped while a turn
+   * streams (its end-of-turn snapshot captures them).
+   */
+  useEffect(() => {
+    if (!loadHistory || !db) {
+      return undefined;
+    }
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const unsubscribe = workbenchStore.fileEditRevision.listen(() => {
+      const editedChatId = chatId.get();
+
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        void (async () => {
+          const currentChatId = chatId.get();
+
+          if (
+            !db ||
+            !currentChatId ||
+            currentChatId !== editedChatId ||
+            loadedChatIdRef.current !== currentChatId ||
+            streamingRef.current ||
+            conflictChatIdRef.current === currentChatId
+          ) {
+            return;
+          }
+
+          const previous = await getCachedSnapshot(db, currentChatId).catch(() => undefined);
+          const anchor = previous?.chatIndex || lastPersistedMessageIdRef.current;
+
+          if (!anchor || chatId.get() !== currentChatId) {
+            return;
+          }
+
+          await takeSnapshot(currentChatId, anchor, workbenchStore.files.get(), previous?.summary).catch(
+            () => undefined,
+          );
+          invalidateChatCache(currentChatId);
+        })();
+      }, USER_EDIT_SNAPSHOT_DEBOUNCE_MS);
+    });
+
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [loadHistory, takeSnapshot]);
 
   const restoreSnapshot = useCallback(async (snapshot?: Snapshot, isCurrentLoad: () => boolean = () => true) => {
     await serializeFilesystemTransition(async () => {
@@ -764,10 +990,24 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
           return;
         }
 
-        let _urlId = urlId;
+        streamingRef.current = isStreaming;
 
-        if (!urlId && firstArtifact?.id) {
-          _urlId = firstArtifact.id;
+        let _urlId = urlIdRef.current;
+
+        // Ensure chatId.get() is used here as well
+        const creatingNewChat = initialMessages.length === 0 && !chatId.get();
+
+        if (conflictChatIdRef.current && conflictChatIdRef.current === chatId.get()) {
+          return;
+        }
+
+        if (!_urlId && firstArtifact?.id) {
+          /*
+           * An existing chat getting its urlId from its first artifact: another local chat
+           * may already hold that id (unique index), and every later save then failed.
+           * A new chat is deduplicated by createChatWithNextId itself.
+           */
+          _urlId = creatingNewChat ? firstArtifact.id : await getUrlId(db, firstArtifact.id);
         }
 
         let chatSummary: string | undefined = undefined;
@@ -788,8 +1028,14 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
           description.set(firstArtifact?.title);
         }
 
-        // Ensure chatId.get() is used here as well
-        const creatingNewChat = initialMessages.length === 0 && !chatId.get();
+        /*
+         * A turn that ended without any artifact (Agent mode, discussion) left the chat with
+         * neither a description nor a urlId, and the sidebar lists neither kind: the chat was
+         * reachable by its URL only, on every device.
+         */
+        if (!isStreaming && !description.get()) {
+          description.set(fallbackDescription([...archivedMessages, ...messages]));
+        }
 
         let createdChat: { id: string; urlId?: string } | undefined;
         let ownsChatCreation = false;
@@ -805,7 +1051,7 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
               _urlId,
               description.get(),
               chatMetadata.get(),
-              Boolean(_urlId),
+              Boolean(_urlId) || !isStreaming,
             );
             pendingChatCreationRef.current = creationPromise;
           }
@@ -829,6 +1075,8 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
             _urlId = createdChat.urlId;
 
             chatId.set(nextId);
+            knownTimestampRef.current = new Date().toISOString();
+            conflictChatIdRef.current = undefined;
 
             /*
              * Claimed before navigating: the messages on screen already belong to
@@ -854,16 +1102,62 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
 
         const persistedMessages = [...archivedMessages, ...messages];
 
+        if (!_urlId && !isStreaming && !createdChat) {
+          _urlId = await getUrlId(db, finalChatId);
+        }
+
+        /*
+         * Lost-update guard. The chat may have been continued on another device and pulled
+         * into IndexedDB while this tab kept the older messages on screen: writing them
+         * would erase the other device's turns here and, through the push, everywhere.
+         * Checked once per new message and at the end of a turn, not on every sample.
+         */
+        if (!createdChat && (!isStreaming || persistedMessages.length !== lastCheckedCountRef.current)) {
+          lastCheckedCountRef.current = persistedMessages.length;
+
+          const current = await getMessagesByIdRaw(db, finalChatId).catch(() => undefined);
+          const known = Date.parse(knownTimestampRef.current ?? '');
+
+          if (current && !isNaN(known) && Date.parse(current.timestamp) > known) {
+            const ours = new Set(persistedMessages.map((message) => message.id));
+
+            if ((current.messages || []).some((message) => !ours.has(message.id))) {
+              conflictChatIdRef.current = finalChatId;
+              invalidateChatCache(finalChatId);
+
+              if (_urlId) {
+                invalidateChatCache(_urlId);
+              }
+
+              toast.error(
+                "Cette conversation a été poursuivie sur un autre appareil. Rechargez la page pour l'afficher : ce message n'a pas été enregistré, pour ne pas écraser l'autre version.",
+              );
+
+              return;
+            }
+          }
+        }
+
+        // One timestamp for the local record and the server copy: they must compare equal.
+        const savedAt = new Date().toISOString();
+
         if (!createdChat || !ownsChatCreation) {
-          await setMessages(
-            db,
-            finalChatId,
-            persistedMessages,
-            _urlId,
-            description.get(),
-            undefined,
-            chatMetadata.get(),
-          );
+          await setMessages(db, finalChatId, persistedMessages, _urlId, description.get(), savedAt, chatMetadata.get());
+          knownTimestampRef.current = savedAt;
+
+          if (_urlId !== urlIdRef.current && messageHistoryGeneration === messageHistoryGenerationRef.current) {
+            setUrlId(_urlId);
+          }
+        }
+
+        /*
+         * A rewind is applied for good once its truncated history is saved: drop it from the
+         * address bar, or every reload truncated the conversation again.
+         */
+        if (activeRewindRef.current?.startsWith(`${finalChatId}:`)) {
+          consumedRewindRef.current = activeRewindRef.current;
+          activeRewindRef.current = undefined;
+          stripRewindParam();
         }
 
         /*
@@ -876,14 +1170,20 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
          * and the next sync retries; the user must never lose a conversation because the
          * network hiccuped.
          */
-        void pushChat({
-          id: finalChatId,
-          urlId: _urlId,
-          description: description.get(),
-          messages: persistedMessages,
-          timestamp: new Date().toISOString(),
-          metadata: chatMetadata.get(),
-        } as Parameters<typeof pushChat>[0]);
+        if (!isStreaming || Date.now() - lastPushAtRef.current >= STREAMING_PUSH_INTERVAL_MS) {
+          lastPushAtRef.current = Date.now();
+          void pushChat(
+            {
+              id: finalChatId,
+              urlId: _urlId,
+              description: description.get(),
+              messages: persistedMessages,
+              timestamp: savedAt,
+              metadata: chatMetadata.get(),
+            } as Parameters<typeof pushChat>[0],
+            db,
+          );
+        }
 
         /*
          * The IndexedDB write may finish after a route change; invalidate its
@@ -891,8 +1191,8 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
          */
         invalidateChatCache(finalChatId);
 
-        if (urlId) {
-          invalidateChatCache(urlId);
+        if (_urlId) {
+          invalidateChatCache(_urlId);
         }
 
         if (messageHistoryGeneration !== messageHistoryGenerationRef.current) {
@@ -900,6 +1200,8 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
         }
 
         if (!isStreaming) {
+          lastPersistedMessageIdRef.current = messages[messages.length - 1].id;
+
           /*
            * Final file actions and assistant tool calls must finish before the
            * snapshot is captured, otherwise a newer chat record can point at an

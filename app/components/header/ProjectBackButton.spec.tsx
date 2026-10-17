@@ -33,8 +33,8 @@ describe('ProjectBackButton', () => {
     chatStore.setKey('started', true);
     render(<ProjectBackButton />);
 
-    const button = screen.getByRole('button', { name: 'Back to projects' });
-    expect(button.getAttribute('aria-label')).toBe('Back to projects');
+    const button = screen.getByRole('button', { name: 'Retour aux projets' });
+    expect(button.getAttribute('aria-label')).toBe('Retour aux projets');
   });
 
   it('returns to the projects list and closes the workbench when clicked', () => {

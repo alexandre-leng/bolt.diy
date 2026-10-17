@@ -58,7 +58,12 @@ interface MessageState {
   actionId: number;
 }
 
-function cleanoutMarkdownSyntax(content: string) {
+/*
+ * Exported so the agent-file replay normalises artifact file bodies exactly like the parser
+ * does: otherwise a patch is folded onto the raw text and the restored file differs from the
+ * one the user saw (fences, `&lt;`).
+ */
+export function cleanoutMarkdownSyntax(content: string) {
   const codeBlockRegex = /^\s*```\w*\n([\s\S]*?)\n\s*```\s*$/;
   const match = content.match(codeBlockRegex);
 
@@ -71,7 +76,7 @@ function cleanoutMarkdownSyntax(content: string) {
   }
 }
 
-function cleanEscapedTags(content: string) {
+export function cleanEscapedTags(content: string) {
   return content.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 }
 export class StreamingMessageParser {

@@ -835,7 +835,7 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
       )}
       <div className="bg-bolt-elements-background-depth-2 p-2 flex items-center gap-2">
         <div className="flex items-center gap-2">
-          <IconButton icon="i-ph:arrow-clockwise" onClick={reloadPreview} />
+          <IconButton icon="i-ph:arrow-clockwise" onClick={reloadPreview} title="Recharger l’aperçu" />
           <IconButton
             icon={isPreviewPaused ? 'i-ph:play' : 'i-ph:pause'}
             onClick={() => setIsPreviewPaused((prev) => !prev)}
@@ -843,6 +843,7 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
           />
           <IconButton
             icon="i-ph:selection"
+            title={isSelectionMode ? 'Quitter le mode sélection' : 'Mode sélection'}
             onClick={() => setIsSelectionMode(!isSelectionMode)}
             className={isSelectionMode ? 'bg-bolt-elements-background-depth-3' : ''}
           />

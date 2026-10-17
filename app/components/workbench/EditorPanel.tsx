@@ -16,6 +16,7 @@ import {
 } from '~/components/editor/codemirror/CodeMirrorEditor';
 import { PanelHeader } from '~/components/ui/PanelHeader';
 import { PanelHeaderButton } from '~/components/ui/PanelHeaderButton';
+import useViewport from '~/lib/hooks/useViewport';
 import type { FileMap } from '~/lib/stores/files';
 import { themeStore } from '~/lib/stores/theme';
 import type { FileHistory } from '~/types/actions';
@@ -23,6 +24,17 @@ import { classNames } from '~/utils/classNames'; // <-- Import classNames if not
 import { WORK_DIR } from '~/utils/constants';
 import { renderLogger } from '~/utils/logger';
 import { isMobile } from '~/utils/mobile';
+
+/*
+ * Width share of the file tree. 20% is fine on a desktop but is ~78px on a 390px phone:
+ * the Files/Search/Locks tabs and every file name were unreadable. Below 768px the tree
+ * gets a usable share instead.
+ */
+export const FILE_TREE_SMALL_VIEWPORT = 768;
+
+export function fileTreePanelSizes(isSmallViewport: boolean): { defaultSize: number; minSize: number } {
+  return isSmallViewport ? { defaultSize: 45, minSize: 30 } : { defaultSize: 20, minSize: 15 };
+}
 
 interface EditorPanelProps {
   files?: FileMap;
@@ -57,6 +69,7 @@ export const EditorPanel = memo(
     renderLogger.trace('EditorPanel');
 
     const theme = useStore(themeStore);
+    const isSmallViewport = useViewport(FILE_TREE_SMALL_VIEWPORT);
 
     const activeFileSegments = useMemo(() => {
       if (!editorDocument) {
@@ -75,9 +88,20 @@ export const EditorPanel = memo(
       return unsavedFiles instanceof Set && unsavedFiles.has(editorDocument.filePath);
     }, [editorDocument, unsavedFiles]);
 
+    const treeSizes = fileTreePanelSizes(isSmallViewport);
+
+    /*
+     * Keyed on the breakpoint: react-resizable-panels reads defaultSize only at mount, so a
+     * rotation across 768px would otherwise keep the previous layout.
+     */
     return (
-      <Group orientation="horizontal">
-        <Panel defaultSize={20} minSize={15} collapsible className="border-r border-bolt-elements-borderColor">
+      <Group key={isSmallViewport ? 'small' : 'large'} orientation="horizontal">
+        <Panel
+          defaultSize={treeSizes.defaultSize}
+          minSize={treeSizes.minSize}
+          collapsible
+          className="border-r border-bolt-elements-borderColor"
+        >
           <div className="h-full">
             <Tabs.Root defaultValue="files" className="flex flex-col h-full">
               <PanelHeader className="w-full text-sm font-medium text-bolt-elements-textSecondary px-1">

@@ -2,6 +2,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import type { LanguageModel } from 'ai';
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
+import { keyFallbackFetch, orderedKeys } from '~/lib/modules/llm/providers/opencode-go-key-fallback';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 
@@ -270,6 +271,13 @@ export default class OpenCodeGoProvider extends BaseProvider {
       throw new Error(`Missing configuration for ${this.name} provider`);
     }
 
+    /*
+     * Server keys (OPENCODE_GO_API_KEY, _2, _3) are rotated on 429/401. A key the client
+     * supplied is never rotated: it is sent alone, as before.
+     */
+    const serverKeys = resolved.clientBaseUrl || resolved.apiKey || apiKeys?.[this.name] ? [] : orderedKeys(env ?? {});
+    const rotatingFetch = serverKeys.length > 1 ? keyFallbackFetch(serverKeys, fetch) : undefined;
+
     const scope = sessionScope(model, providerSettings?.[this.name]?.sessionKey);
 
     const headers = {
@@ -280,11 +288,11 @@ export default class OpenCodeGoProvider extends BaseProvider {
     const protocol = opencodeGoProtocol(model);
 
     if (protocol === 'messages') {
-      return createAnthropic({ baseURL: baseUrl, apiKey, headers })(model);
+      return createAnthropic({ baseURL: baseUrl, apiKey, headers, fetch: rotatingFetch })(model);
     }
 
     if (protocol === 'responses') {
-      return createOpenAI({ baseURL: baseUrl, apiKey, headers }).responses(model);
+      return createOpenAI({ baseURL: baseUrl, apiKey, headers, fetch: rotatingFetch }).responses(model);
     }
 
     const disableThinking = shouldDisableThinking(model);
@@ -327,7 +335,8 @@ export default class OpenCodeGoProvider extends BaseProvider {
           }
         }
 
-        const response = await fetch(input, init);
+        const transport = rotatingFetch ?? fetch;
+        const response = await transport(input, init);
 
         /*
          * The gateway routes one model to different upstreams, and they disagree: the same
@@ -344,7 +353,7 @@ export default class OpenCodeGoProvider extends BaseProvider {
             .catch(() => '');
 
           if (isThinkingFieldRefusal(detail)) {
-            return fetch(input, original);
+            return (rotatingFetch ?? fetch)(input, original);
           }
         }
 

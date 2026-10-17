@@ -1,5 +1,5 @@
 import { generateText } from 'ai';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeAll, afterAll } from 'vitest';
 import { SUMMARY_MAX_OUTPUT_TOKENS, SUMMARY_TIMEOUT_MS, createSummary } from './create-summary';
 
 /*

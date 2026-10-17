@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { deleteHistory, getHistory, listHistory, pickNewest, putHistory } from './syncClient';
+import { deleteHistory, encodeSaveBody, getHistory, listHistory, pickNewest, putHistory } from './syncClient';
 
 /*
  * The sync client must never take the app down with it: if bolt-history is unreachable the
@@ -169,5 +169,84 @@ describe('pickNewest', () => {
   it('treats an unparseable timestamp as oldest rather than newest', () => {
     // A corrupt timestamp must never win over a valid one and wipe newer history.
     expect(pickNewest({ timestamp: 'not-a-date' }, { timestamp: '2026-01-01T00:00:00Z' })).toBe('remote');
+  });
+});
+
+/*
+ * Storage optimisation: a large save is gzipped and gets a long timeout. A ~1 MB Agent
+ * conversation was sent uncompressed and aborted after 8 s on a slow uplink (408 in nginx).
+ */
+describe('large saves', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('gzips a large body, and the server gets back the exact JSON', async () => {
+    const json = JSON.stringify({ id: 'big', messages: [{ text: 'répété '.repeat(20_000) }] });
+    const { body, headers } = await encodeSaveBody(json);
+
+    expect(headers['Content-Encoding']).toBe('gzip');
+    expect((body as ArrayBuffer).byteLength).toBeLessThan(json.length / 10);
+
+    const restored = await new Response(
+      new Response(body as ArrayBuffer).body!.pipeThrough(new DecompressionStream('gzip')),
+    ).text();
+    expect(restored).toBe(json);
+  });
+
+  it('sends a small body as plain JSON', async () => {
+    const { body, headers } = await encodeSaveBody('{"id":"a"}');
+
+    expect(headers).toEqual({});
+    expect(body).toBe('{"id":"a"}');
+  });
+
+  it('falls back to plain JSON without CompressionStream', async () => {
+    vi.stubGlobal('CompressionStream', undefined);
+
+    const json = 'x'.repeat(40_000);
+    const { body, headers } = await encodeSaveBody(json);
+
+    expect(headers).toEqual({});
+    expect(body).toBe(json);
+  });
+
+  it('does not abort a slow save after the 8 s read timeout', async () => {
+    vi.useFakeTimers();
+
+    let aborted = false;
+    mockFetch(
+      (_url: string, init?: RequestInit) =>
+        new Promise((resolve) => {
+          init?.signal?.addEventListener('abort', () => {
+            aborted = true;
+            resolve(jsonResponse({}, 499));
+          });
+          setTimeout(() => resolve(jsonResponse({ ok: true })), 20_000);
+        }),
+    );
+
+    const pending = putHistory({ id: 'slow', messages: [], timestamp: '2026-01-01T00:00:00Z' });
+    await vi.advanceTimersByTimeAsync(20_000);
+
+    const result = await pending;
+    vi.useRealTimers();
+
+    expect(aborted).toBe(false);
+    expect(result.ok).toBe(true);
+  });
+
+  it('sends the gzip header with a large PUT', async () => {
+    const spy = mockFetch(() => jsonResponse({ ok: true }));
+
+    await putHistory({
+      id: 'big',
+      messages: [{ id: 'm', role: 'user', content: 'x'.repeat(50_000) }] as never,
+      timestamp: '2026-01-01T00:00:00Z',
+    });
+
+    const [, init] = spy.mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>)['Content-Encoding']).toBe('gzip');
+    expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json');
   });
 });

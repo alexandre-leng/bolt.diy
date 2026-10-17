@@ -37,6 +37,70 @@
 
 ---
 
+## 2026-10-17 — L'onboarding se réaffichait et n'était pas partagé entre appareils
+
+- **Type** : feat + fix
+- **Contexte** : le wizard (profil, fournisseur, apparence) stockait tout dans le navigateur. Sur un
+  second appareil, tout était redemandé. Demande d'Alex : ce qui est saisi doit aller en base
+  PostgreSQL, par compte, et ne jamais être redemandé.
+- **Action** : `app/lib/accountSettings.ts` synchronise profil, drapeau d'onboarding et options
+  d'interface vers `/api/auth/preferences` ; les clés API vont vers `/api/auth/secrets`, chiffrées
+  côté serveur (AES-256-GCM, `BOLT_SECRETS_KEY` dans `/etc/bolt-accounts.env`). Le wizard consulte
+  le compte avant de s'ouvrir, sauvegarde à la fin, et se pré-remplit depuis le compte.
+- **Preuve** : sur un compte vierge, navigateur vierge : le wizard s'ouvre, les valeurs arrivent en
+  base (`profileName`, avatar, `interfaceOptions`, `onboardingCompleted`), puis un second navigateur
+  récupère le profil et l'apparence (accent 80, rayon round) sans rien redemander. 25/25 tests du
+  module ; suite complète : 1110/1112, les 2 échecs ne touchent pas ces fichiers.
+- **Piège n°1 (deux fois)** : l'application écrit ses propres défauts au démarrage. `mcp_settings` est
+  posé à chaque lancement, et le cookie `apiKeys` est réécrit `{"<fournisseur>":""}` au montage du
+  chat (`APIKeyManager` synchronise une valeur vide). Compter leur présence comme « setup existant »
+  faisait croire qu'un compte neuf était configuré : le wizard ne s'ouvrait jamais. Règle : seul un
+  signe saisi par l'utilisateur compte (profil non vide, clé non vide).
+- **Piège n°2** : forcer `onboardingCompleted=true` lors d'une synchronisation marque un compte vierge
+  comme configuré. Comme ce drapeau supprime le wizard partout, l'accès devient impossible. Le drapeau
+  n'est donc envoyé que si un profil réel existe.
+- **Piège n°3 (méthode)** : les diagnostics qui se connectaient avec le compte réel d'Alex ou
+  réutilisaient une IndexedDB polluée ont produit de fausses conclusions. Pour un test de premier
+  lancement, il faut un compte créé à l'instant et un contexte navigateur vierge.
+- **Reste ouvert** : `create-summary.spec.ts` échoue (assertion de délai, fichier d'un autre agent,
+  commit `f942ba8`) ; `pagiaRealReplay.spec.ts` ne charge pas (non suivi par git) ; test de perf
+  flaky sous charge (connu). Cross-Origin-Opener-Policy toujours absent de nginx.
+- **Commit** : `e82a868`
+
+## 2026-10-17 — Deux modes dans l'interface : generer un design, ou partir d'une image
+
+- **Type** : feat
+- **Contexte** : Alex veut deux entrees possibles et un choix VISIBLE dans l'UI (pas un menu
+  deroulant) : (1) decrire une page -> obtenir 3 maquettes -> en choisir une -> elle devient un
+  site ; (2) partir d'un screenshot existant. Et il veut pouvoir continuer a prompter Bolt
+  ensuite, comme d'habitude.
+- **Action** :
+  1. `app/lib/screenshot/designs.ts` : generation de maquettes par prompt. Chaque variante porte
+     une direction artistique DIFFERENTE (minimal / contraste / chaleureux / dense) pour que le
+     choix soit un vrai choix, et non N tirages de la meme idee.
+  2. `app/routes/api.screenshot.designs.ts` : route serveur qui appelle OpenAI Images. La cle
+     reste cote serveur (le navigateur n'envoie qu'un prompt et recoit du base64). Plafond par IP
+     (8 requetes / 10 min) car chaque appel coute de l'argent, et `dall-e-3` renvoie parfois une
+     URL : elle est telechargee pour ne renvoyer qu'une seule forme au client.
+  3. `ScreenshotToCode.tsx` : selecteur de mode en DEUX CARTES (icone + titre + description +
+     coche), pas une liste deroulante. Mode design = zone de prompt -> maquettes cliquables en
+     grille -> conversion. Mode image = upload direct. Les deux passent par `runGeneration`,
+     donc un pipeline unique et deux entrees.
+- **Preuve** : 41/41 tests verts sur le module (dont : les deux modes sont visibles et exclusifs,
+  le basculement change les entrees affichees, une maquette choisie passe par le MEME pipeline
+  qu'une image uploadee). `tsc --noEmit` 0. Cle OpenAI verifiee en direct : HTTP 200, base64
+  renvoye.
+- **Conséquence** : le workflow complet d'Alex est disponible : prompt -> maquettes -> choix ->
+  site -> puis on continue a prompter Bolt dans le chat.
+- **Commit** : a venir.
+- **Reste ouvert** : (a) le mode image de l'upstream (`inputMode: 'video'`, `generationType:
+  'update'`) est pret cote client mais sans ecran ; (b) les 6 stacks ne sont pas tous testes
+  jusqu'au rendu du projet genere dans Bolt ; (c) la cle OpenAI est facturee a l'usage : surveiller
+  le plafond par IP.
+- **Piège** : `isImageGenerationEnabled` cote backend upstream ne genere PAS les maquettes a
+  choisir ; il genere les images *dans* la page produite (heros, illustrations). Confondre les deux
+  fait chercher la fonctionnalite au mauvais endroit — celle d'Alex a du etre ecrite.
+
 ## 2026-10-16 (nuit) — Refacto client screenshot-to-code : variantes multiples et flux complet
 
 - **Type** : refactor

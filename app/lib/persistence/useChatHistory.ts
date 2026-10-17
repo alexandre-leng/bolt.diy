@@ -33,6 +33,7 @@ import { logStore } from '~/lib/stores/logs'; // Import logStore
 import { workbenchStore } from '~/lib/stores/workbench';
 import { toast } from '~/lib/toastify';
 import { webcontainer } from '~/lib/webcontainer';
+import { compatFileContent } from '~/lib/webcontainer/viteConfigCompat';
 import type { ContextAnnotation } from '~/types/context';
 import { detectProjectCommands, createCommandActionsString } from '~/utils/projectCommands';
 
@@ -934,7 +935,9 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
             const binaryContent = Uint8Array.from(atob(value.content), (character) => character.charCodeAt(0));
             await container.fs.writeFile(getContainerPath(filePath), binaryContent);
           } else {
-            await container.fs.writeFile(getContainerPath(filePath), value.content, { encoding: 'utf8' });
+            await container.fs.writeFile(getContainerPath(filePath), compatFileContent(filePath, value.content), {
+              encoding: 'utf8',
+            });
           }
 
           if (!isCurrentLoad()) {

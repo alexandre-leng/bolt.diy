@@ -53,6 +53,34 @@ describe('ActionRunner file actions', () => {
     expect(runner.actions.get()['action-2']).toMatchObject({ status: 'failed', error: 'Action failed' });
     expect(webcontainer.fs.writeFile).toHaveBeenCalledWith('src/App.tsx', 'export default function App() {}');
   });
+
+  /*
+   * Firefox/AdGuard blank preview: the starter's exclude makes Vite serve icons/fingerprint.js on
+   * its own, which tracking filters block. The container must get a config without it.
+   */
+  it('writes vite.config.ts without the lucide-react exclude', async () => {
+    const webcontainer = {
+      workdir: '/project',
+      fs: { mkdir: vi.fn().mockResolvedValue(undefined), writeFile: vi.fn().mockResolvedValue(undefined) },
+    } as unknown as WebContainer;
+
+    const runner = new ActionRunner(Promise.resolve(webcontainer), () => ({}) as BoltShell);
+    const content = `export default defineConfig({\n  plugins: [react()],\n  optimizeDeps: {\n    exclude: ['lucide-react'],\n  },\n});\n`;
+
+    const action = {
+      artifactId: 'artifact-1',
+      messageId: 'message-1',
+      actionId: 'action-3',
+      action: { type: 'file' as const, filePath: 'vite.config.ts', content },
+    };
+
+    runner.addAction(action);
+    await runner.runAction(action);
+
+    const written = vi.mocked(webcontainer.fs.writeFile).mock.calls[0][1] as string;
+    expect(written).not.toContain('lucide-react');
+    expect(written).toContain('plugins: [react()]');
+  });
 });
 
 describe('ActionRunner cancellation', () => {

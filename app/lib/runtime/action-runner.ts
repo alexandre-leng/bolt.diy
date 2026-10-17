@@ -1,6 +1,7 @@
 import type { WebContainer } from '@webcontainer/api';
 import { atom, map, type MapStore } from 'nanostores';
 import type { ActionCallbackData } from './message-parser';
+import { compatFileContent } from '~/lib/webcontainer/viteConfigCompat';
 import type { ActionAlert, BoltAction, DeployAlert, FileHistory, SupabaseAction, SupabaseAlert } from '~/types/actions';
 import { createScopedLogger } from '~/utils/logger';
 import { path as nodePath } from '~/utils/path';
@@ -463,7 +464,7 @@ export class ActionRunner {
     }
 
     try {
-      await webcontainer.fs.writeFile(relativePath, action.content);
+      await webcontainer.fs.writeFile(relativePath, compatFileContent(relativePath, action.content));
       logger.debug(`File written ${relativePath}`);
     } catch (error) {
       logger.error('Failed to write file\n\n', error);

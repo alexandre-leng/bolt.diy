@@ -22,6 +22,7 @@ import {
   clearCache,
   clearAllLocksForChat,
 } from '~/lib/persistence/lockedFiles';
+import { compatFileContent } from '~/lib/webcontainer/viteConfigCompat';
 import { bufferWatchEvents } from '~/utils/buffer';
 import { WORK_DIR } from '~/utils/constants';
 import { computeFileModifications } from '~/utils/diff';
@@ -661,7 +662,7 @@ export class FilesStore {
         await webcontainer.fs.mkdir(parentPath, { recursive: true });
       }
 
-      await webcontainer.fs.writeFile(relativePath, content);
+      await webcontainer.fs.writeFile(relativePath, compatFileContent(relativePath, content));
 
       if (!this.#modifiedFiles.has(filePath)) {
         this.#modifiedFiles.set(filePath, oldContent);
@@ -910,7 +911,7 @@ export class FilesStore {
 
         this.#modifiedFiles.set(filePath, base64Content);
       } else {
-        await webcontainer.fs.writeFile(relativePath, content as string);
+        await webcontainer.fs.writeFile(relativePath, compatFileContent(relativePath, content as string));
 
         this.files.setKey(filePath, {
           type: 'file',

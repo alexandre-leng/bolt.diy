@@ -1,21 +1,28 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { ScreenshotToCode } from './ScreenshotToCode';
 
-/** No variants: these tests only inspect the chrome, not a generation. */
+/** No variants/mockups: these tests only inspect the chrome, not a generation. */
 const nothing = async () => [];
 
+function renderPanel() {
+  return render(<ScreenshotToCode generate={nothing} designFor={nothing} importCode={async () => ''} />);
+}
+
 describe('ScreenshotToCode uses Bolt design tokens and primitives', () => {
-  it('renders the file input and actions with Bolt primitives, not bare elements', () => {
-    const { container } = render(<ScreenshotToCode generate={nothing} importCode={async () => ''} />);
+  it('renders the file input and action with Bolt primitives once the image mode is active', async () => {
+    const { container } = renderPanel();
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Use an image' }));
 
     const input = screen.getByLabelText('Screenshot image');
     expect(input.className).toContain('bg-bolt-elements-background');
     expect(input.className).toContain('border-bolt-elements-border');
 
-    const generate = screen.getByRole('button', { name: 'Generate design' });
-    expect(generate.className).toContain('inline-flex');
-    expect(generate.className).toContain('rounded-md');
+    const action = screen.getByRole('button', { name: 'Turn this image into code' });
+    expect(action.className).toContain('inline-flex');
+    expect(action.className).toContain('rounded-md');
 
     const label = container.querySelector('label[for="screenshot-image"]');
     expect(label?.className).toContain('text-sm');
@@ -23,23 +30,55 @@ describe('ScreenshotToCode uses Bolt design tokens and primitives', () => {
   });
 
   it('styles the output stack selector with the same tokens as the rest of the panel', () => {
-    render(<ScreenshotToCode generate={nothing} importCode={async () => ''} />);
+    renderPanel();
 
     const stack = screen.getByLabelText('Output stack');
     expect(stack.className).toContain('bg-bolt-elements-background-depth-1');
     expect(stack.className).toContain('border-bolt-elements-borderColor');
     expect(stack.className).toContain('text-bolt-elements-textPrimary');
   });
+
+  it('styles the prompt textarea with the panel tokens', () => {
+    renderPanel();
+
+    const prompt = screen.getByLabelText('Design description');
+    expect(prompt.className).toContain('bg-bolt-elements-background-depth-1');
+    expect(prompt.className).toContain('border-bolt-elements-borderColor');
+    expect(prompt.className).toContain('text-bolt-elements-textPrimary');
+  });
+});
+
+describe('the mode switch is visible, not hidden in a menu', () => {
+  it('renders both options as cards with an icon, a title and a hint', () => {
+    renderPanel();
+
+    const designMode = screen.getByRole('radio', { name: 'Generate a design' });
+    const imageMode = screen.getByRole('radio', { name: 'Use an image' });
+
+    // Icon + title + hint: the choice reads at a glance instead of needing a dropdown.
+    expect(designMode.querySelector('[class*="i-ph:"]')).toBeTruthy();
+    expect(designMode.textContent).toContain('Generate a design');
+    expect(designMode.textContent).toContain('pick one');
+
+    expect(imageMode.querySelector('[class*="i-ph:"]')).toBeTruthy();
+    expect(imageMode.textContent).toContain('Use an image');
+    expect(imageMode.textContent).toContain('screenshot');
+
+    // The active one is marked visually, not only semantically.
+    expect(designMode.className).toContain('border-bolt-elements-borderColorActive');
+  });
 });
 
 describe('ScreenshotToCode primary action follows the Bolt primary button tokens', () => {
-  it('uses the primary accent for Generate design and a styled file trigger', () => {
-    render(<ScreenshotToCode generate={nothing} importCode={async () => ''} />);
+  it('uses the primary accent for the main action and a styled file trigger', async () => {
+    renderPanel();
 
-    const generate = screen.getByRole('button', { name: 'Generate design' });
-    expect(generate.className).toContain('bg-bolt-elements-button-primary-background');
-    expect(generate.className).toContain('hover:bg-bolt-elements-button-primary-backgroundHover');
-    expect(generate.className).toContain('!rounded-full');
+    const designs = screen.getByRole('button', { name: /Generate 3 mockups/ });
+    expect(designs.className).toContain('bg-bolt-elements-button-primary-background');
+    expect(designs.className).toContain('hover:bg-bolt-elements-button-primary-backgroundHover');
+    expect(designs.className).toContain('!rounded-full');
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Use an image' }));
 
     const input = screen.getByLabelText('Screenshot image');
     expect(input.className).toContain('rounded-full');

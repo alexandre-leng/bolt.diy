@@ -1,6 +1,7 @@
 import { useStore } from '@nanostores/react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { ClientOnly } from 'remix-utils/client-only';
 import { APIKeyManager } from './APIKeyManager';
 import { AttachmentMenu } from './AttachmentMenu';
@@ -403,23 +404,30 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
               <SupabaseConnection />
             </div>
             <McpTools open={isMcpToolsOpen} onOpenChange={setIsMcpToolsOpen} />
-            {isScreenshotOpen && (
-              <Card
-                role="dialog"
-                aria-label="From a screenshot"
-                className="absolute bottom-full left-0 mb-3 w-full max-w-xl !bg-bolt-elements-background-depth-2 p-4 shadow-lg z-[1001]"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-semibold text-bolt-elements-textPrimary">From a screenshot</h2>
-                  <CloseButton
-                    aria-label="Close screenshot generator"
-                    onClick={() => setIsScreenshotOpen(false)}
-                    size="sm"
-                  />
-                </div>
-                <ScreenshotToCode />
-              </Card>
-            )}
+            <ClientOnly>
+              {() =>
+                isScreenshotOpen
+                  ? createPortal(
+                      <Card
+                        role="dialog"
+                        aria-label="From a screenshot"
+                        className="fixed left-1/2 -translate-x-1/2 top-[calc(var(--header-height)+0.75rem)] bottom-6 w-[min(36rem,calc(100vw-2rem))] overflow-y-auto !bg-bolt-elements-background-depth-2 p-4 shadow-lg z-[1001]"
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <h2 className="text-sm font-semibold text-bolt-elements-textPrimary">From a screenshot</h2>
+                          <CloseButton
+                            aria-label="Close screenshot generator"
+                            onClick={() => setIsScreenshotOpen(false)}
+                            size="sm"
+                          />
+                        </div>
+                        <ScreenshotToCode />
+                      </Card>,
+                      document.body,
+                    )
+                  : null
+              }
+            </ClientOnly>
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>
                 <button

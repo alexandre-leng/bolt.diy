@@ -20,6 +20,47 @@ const BASE = '/api/history';
 /** Short timeout: a slow sync must never delay rendering the local history. */
 const TIMEOUT_MS = 8000;
 
+/*
+ * A save is a background upload, not a read the UI waits on. With the read timeout, a 1 MB
+ * conversation on a slow uplink was aborted at 8 s on every save (nginx logged 408s) and only
+ * reached the server when a smaller turn happened to fit.
+ */
+const SAVE_TIMEOUT_MS = 45_000;
+
+/** Below this size compression costs more than it saves. */
+const GZIP_THRESHOLD_BYTES = 16 * 1024;
+
+/**
+ * Gzip a save body when the browser can (CompressionStream: every current browser).
+ *
+ * Conversation JSON is highly repetitive (tool calls, progress events, re-sent file
+ * contents): ~1 MB compresses to ~100 KB. Small bodies and older browsers send plain JSON;
+ * bolt-history accepts both.
+ */
+export async function encodeSaveBody(json: string): Promise<{ body: BodyInit; headers: Record<string, string> }> {
+  if (json.length < GZIP_THRESHOLD_BYTES || typeof CompressionStream === 'undefined') {
+    return { body: json, headers: {} };
+  }
+
+  try {
+    // Response(...).body rather than Blob.stream(): same stream in browsers, wider support.
+    const source = new Response(json).body;
+
+    if (!source) {
+      return { body: json, headers: {} };
+    }
+
+    const stream = source.pipeThrough(new CompressionStream('gzip'));
+    const compressed = await new Response(stream).arrayBuffer();
+
+    return { body: compressed, headers: { 'Content-Encoding': 'gzip' } };
+  } catch (error) {
+    logger.debug('gzip unavailable, sending plain JSON', error);
+
+    return { body: json, headers: {} };
+  }
+}
+
 export interface SyncResult<T> {
   ok: boolean;
   data?: T;
@@ -29,15 +70,15 @@ export interface SyncResult<T> {
   status?: number;
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<SyncResult<T>> {
+async function request<T>(path: string, init: RequestInit = {}, timeoutMs = TIMEOUT_MS): Promise<SyncResult<T>> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(path, {
       ...init,
       signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
+      headers: { 'Content-Type': 'application/json', ...((init.headers as Record<string, string>) ?? {}) },
     });
 
     if (!response.ok) {
@@ -95,10 +136,13 @@ export async function getHistory(id: string): Promise<SyncResult<ChatHistoryItem
 
 /** Create or replace a chat. Idempotent: replaying the same call never duplicates it. */
 export async function putHistory(chat: ChatHistoryItem): Promise<SyncResult<null>> {
-  const result = await request<{ ok: boolean }>(`${BASE}/${encodeURIComponent(chat.id)}`, {
-    method: 'PUT',
-    body: JSON.stringify(chat),
-  });
+  const { body, headers } = await encodeSaveBody(JSON.stringify(chat));
+
+  const result = await request<{ ok: boolean }>(
+    `${BASE}/${encodeURIComponent(chat.id)}`,
+    { method: 'PUT', body, headers },
+    SAVE_TIMEOUT_MS,
+  );
 
   return { ok: result.ok, error: result.error, status: result.status };
 }

@@ -363,6 +363,32 @@ async function pullNewerCopy(database: IDBDatabase, id: string, local: ChatHisto
 const pushChains = new Map<string, Promise<boolean>>();
 const pendingPush = new Map<string, ChatHistoryItem>();
 
+/*
+ * Fingerprint of the last state the server accepted, per chat. The same conversation was
+ * re-uploaded whole (≈1 MB for a long Agent project) by every save path — reconcile at
+ * startup, description edits, end-of-turn saves — even when nothing had changed.
+ */
+const lastPushedFingerprint = new Map<string, string>();
+
+/** Cheap, stable fingerprint (length + FNV-1a) of a serialized chat. */
+export function chatFingerprint(chat: ChatHistoryItem): string {
+  const json = JSON.stringify(chat);
+
+  let hash = 0x811c9dc5;
+
+  for (let index = 0; index < json.length; index++) {
+    hash ^= json.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+
+  return `${json.length}:${(hash >>> 0).toString(16)}`;
+}
+
+/** Test hook: forget what was pushed. */
+export function resetPushFingerprints() {
+  lastPushedFingerprint.clear();
+}
+
 /**
  * Push one conversation to the server after it changed locally.
  *
@@ -390,6 +416,12 @@ export function pushChat(chat: ChatHistoryItem, database?: IDBDatabase): Promise
 
     pendingPush.delete(key);
 
+    const fingerprint = chatFingerprint(latest);
+
+    if (lastPushedFingerprint.get(key) === fingerprint) {
+      return true;
+    }
+
     try {
       const response = await putHistory(latest);
 
@@ -403,6 +435,10 @@ export function pushChat(chat: ChatHistoryItem, database?: IDBDatabase): Promise
         }
 
         return false;
+      }
+
+      if (response.ok) {
+        lastPushedFingerprint.set(key, fingerprint);
       }
 
       return response.ok;

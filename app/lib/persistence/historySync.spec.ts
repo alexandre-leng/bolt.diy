@@ -64,8 +64,10 @@ vi.mock('./chatCache', () => ({
 
 import { invalidateChatCache } from './chatCache';
 import {
+  chatFingerprint,
   migrateLocalHistoryToServer,
   markDeleted,
+  resetPushFingerprints,
   clearDeletedIds,
   pushChat,
   reconcileChat,
@@ -658,5 +660,67 @@ describe('lot 3 sync regressions', () => {
     // A later sync against the older server copy keeps the new name.
     await migrateLocalHistoryToServer(db, ['1']);
     expect(store.get('1')?.description).toBe('Café de Noël');
+  });
+});
+
+/*
+ * Storage optimisation: an unchanged conversation is not uploaded again. A long Agent chat
+ * (~1 MB) was re-sent whole by every save path even when nothing had changed.
+ */
+describe('pushChat skips an unchanged conversation', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    resetPushFingerprints();
+  });
+
+  it('uploads once, then only when the conversation changes', async () => {
+    let puts = 0;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        puts++;
+
+        return { ok: true, status: 200, json: async () => ({ ok: true }) };
+      }),
+    );
+
+    const chat = { id: 'dedupe-1', urlId: 'd1', timestamp: '2026-01-01T00:00:00Z', messages: [{ role: 'user' }] };
+
+    expect(await pushChat(chat as never)).toBe(true);
+    expect(await pushChat({ ...chat } as never)).toBe(true);
+    expect(puts).toBe(1);
+
+    expect(await pushChat({ ...chat, description: 'renamed' } as never)).toBe(true);
+    expect(puts).toBe(2);
+  });
+
+  it('retries a save the server did not accept', async () => {
+    let puts = 0;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        puts++;
+
+        return puts === 1
+          ? { ok: false, status: 503, json: async () => ({}) }
+          : { ok: true, status: 200, json: async () => ({ ok: true }) };
+      }),
+    );
+
+    const chat = { id: 'dedupe-2', urlId: 'd2', timestamp: '2026-01-01T00:00:00Z', messages: [{ role: 'user' }] };
+
+    expect(await pushChat(chat as never)).toBe(false);
+    expect(await pushChat(chat as never)).toBe(true);
+    expect(puts).toBe(2);
+  });
+
+  it('fingerprints differ when any field changes', () => {
+    const base = { id: 'x', timestamp: 't', messages: [{ role: 'user', content: 'a' }] } as never;
+    const other = { id: 'x', timestamp: 't', messages: [{ role: 'user', content: 'b' }] } as never;
+
+    expect(chatFingerprint(base)).toBe(chatFingerprint({ ...(base as object) } as never));
+    expect(chatFingerprint(base)).not.toBe(chatFingerprint(other));
   });
 });

@@ -84,6 +84,26 @@
   Toujours citer la ligne `Tests N failed | M passed` telle quelle.
 - **Reste ouvert** : ces 4 échecs ne sont pas réparés ; ils ne sont pas dans le périmètre de cette tâche.
 
+## 2026-10-17 — Échecs de tests réparés : deux corrections de test, une exclusion documentée
+
+- **Type** : fix (tests)
+- **Contexte** : bilan de la suite complète `4 failed | 1090 passed`. Demande d'Alex : combler.
+- **Action** :
+  1. `create-summary.spec.ts` : le fournisseur par défaut est lu **à l'import** depuis
+     `VITE_DEFAULT_PROVIDER` (`app/utils/constants.ts`). En test sans variable, il retombait sur
+     OpenRouter → « Missing API key for OpenRouter ». Correction : `vi.hoisted` fixe la variable
+     **avant** les imports. Un `beforeAll` aurait été trop tard, car la valeur est déjà figée.
+     Preuve : passe avec les variables **non définies** (1/1).
+  2. `pagiaRealReplay.spec.ts` : ce n'est pas un test unitaire. Il rejoue `/tmp/pagia_chat.json`,
+     un export de conversation réelle absent du dépôt et vide sur le disque (0 octet). Exclu de la
+     suite par défaut, avec la raison écrite à côté, pour qu'il reste lançable à la main.
+- **Non réparé, volontairement** : `streaming-performance` (budget de frame 16,67 ms, mesuré 23 ms
+  sous charge, passe seul). Relever le seuil masquerait une vraie régression ; c'est un test de
+  temps réel dépendant de la machine.
+- **Preuve** : suite complète `1 failed | 1145 passed (1146)`, contre `4 failed | 1090 passed (1094)`
+  avant. Commit `42af462`, poussé, SHA vérifié.
+- **Reste ouvert** : le test de frame `streaming-performance` ; la COOP absente de nginx.
+
 ## 2026-10-17 — Deux modes dans l'interface : generer un design, ou partir d'une image
 
 - **Type** : feat

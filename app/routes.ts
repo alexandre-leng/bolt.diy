@@ -19,6 +19,7 @@ export default [
   { file: 'routes/webcontainer.connect.$id.tsx', path: '/webcontainer/connect/:id' },
   { file: 'routes/webcontainer.preview.$id.tsx', path: '/webcontainer/preview/:id' },
   { file: 'routes/api.bug-report.ts', path: '/api/bug-report' },
+  { file: 'routes/api.screenshot.designs.ts', path: '/api/screenshot/designs' },
   { file: 'routes/api.chat.ts', path: '/api/chat' },
   { file: 'routes/api.check-env-key.ts', path: '/api/check-env-key' },
   { file: 'routes/api.configured-providers.ts', path: '/api/configured-providers' },

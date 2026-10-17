@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '~/components/ui/Button';
 import { Input } from '~/components/ui/Input';
 import { Label } from '~/components/ui/Label';
+import { generateDesigns, validateDesignPrompt, DESIGN_COUNT, type Design } from '~/lib/screenshot/designs';
 import {
   generateScreenshotCode,
   STACKS,
@@ -10,7 +11,6 @@ import {
   type StreamEvent,
   type Variant,
 } from '~/lib/screenshot/generate';
-import { generateDesigns, validateDesignPrompt, DESIGN_COUNT, type Design } from '~/lib/screenshot/designs';
 import { importScreenshotHtml, validateImportableHtml } from '~/lib/screenshot/import';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
@@ -18,6 +18,7 @@ import { classNames } from '~/utils/classNames';
 type Props = {
   generate?: typeof generateScreenshotCode;
   importCode?: (code: string) => Promise<string>;
+
   /** Text-to-image step: a prompt becomes page mockups to choose from. */
   designFor?: typeof generateDesigns;
 };
@@ -208,7 +209,9 @@ export function ScreenshotToCode({
 
       if (mounted.current && !abort.signal.aborted) {
         setDesigns(result);
-        setStatus(`${result.length} mockup${result.length === 1 ? '' : 's'} generated. Pick the one to turn into code.`);
+        setStatus(
+          `${result.length} mockup${result.length === 1 ? '' : 's'} generated. Pick the one to turn into code.`,
+        );
       }
     } catch (cause) {
       if (mounted.current && !abort.signal.aborted) {

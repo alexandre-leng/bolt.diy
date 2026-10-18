@@ -5,6 +5,9 @@
 # Ignore Husky configuration files
 .husky/
 
+# Server-side Python services (versioned copies): they run on the host, never inside the app image
+services/
+
 # Ignore documentation and metadata files
 CONTRIBUTING.md
 LICENSE

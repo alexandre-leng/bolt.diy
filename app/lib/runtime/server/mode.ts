@@ -20,7 +20,11 @@ export function resolveRuntimeMode(cookie: string, buildDefault: string | undefi
     return 'webcontainer';
   }
 
-  return buildDefault === 'server' ? 'server' : 'webcontainer';
+  /*
+   * Default: the Bolt server's own sandboxes. `VITE_BOLT_RUNTIME=webcontainer` at build time (or
+   * the `bolt_runtime=wc` cookie) brings back StackBlitz WebContainer as a fallback.
+   */
+  return buildDefault === 'webcontainer' || buildDefault === 'wc' ? 'webcontainer' : 'server';
 }
 
 export function currentRuntimeMode(): RuntimeMode {

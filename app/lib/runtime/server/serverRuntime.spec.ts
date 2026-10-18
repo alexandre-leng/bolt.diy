@@ -96,7 +96,8 @@ function setup() {
 
 describe('runtime mode', () => {
   it('follows the build default and a per-browser cookie override', () => {
-    expect(resolveRuntimeMode('', undefined)).toBe('webcontainer');
+    expect(resolveRuntimeMode('', undefined)).toBe('server');
+    expect(resolveRuntimeMode('', 'webcontainer')).toBe('webcontainer');
     expect(resolveRuntimeMode('', 'server')).toBe('server');
     expect(resolveRuntimeMode('a=1; bolt_runtime=server', undefined)).toBe('server');
     expect(resolveRuntimeMode('bolt_runtime=wc', 'server')).toBe('webcontainer');

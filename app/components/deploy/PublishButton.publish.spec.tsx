@@ -40,9 +40,12 @@ describe('PublishButton: switching chats during the build (U5)', () => {
       return Promise.resolve(new Response('{}', { status: 200 }));
     });
 
+    // Only the publish flow's own requests: the runtime may fetch its preview cookie meanwhile.
+    const publishCalls = () => fetchMock.mock.calls.filter(([input]) => !String(input).startsWith('/api/runtime'));
+
     render(<PublishButton />);
     fireEvent.click(screen.getByTestId('publish-button'));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(publishCalls()).toHaveLength(1));
 
     // The user opens another conversation while the server builds.
     act(() => {
@@ -54,9 +57,9 @@ describe('PublishButton: switching chats during the build (U5)', () => {
       finishBuild(new Response(JSON.stringify({ ok: true, url: 'https://x/container/site-a/', slug: 'site-a' })));
     });
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(publishCalls()).toHaveLength(2));
 
-    const record = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+    const record = JSON.parse(String(publishCalls()[1][1]?.body));
     expect(record).toMatchObject({ name: 'Site A', chatId: 'chat-A' });
   });
 });

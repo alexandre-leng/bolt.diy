@@ -1,5 +1,19 @@
 # Mémoire Externe Partagée — bolt.diy (fork auto-hébergé)
 
+## 2026-10-18 — Audit personnel : transport runtime, import ZIP et frontière de publication
+
+- **Type** : fix / audit, première vague ; audit global non terminé.
+- **Isolation** : branche `audit/full-stack-review` dans `/opt/bolt/wt-full-audit` ; services copiés dans `/opt/bolt/wt-full-audit-services`. Deux agents encore actifs arrêtés à la demande d'Alex ; aucune nouvelle délégation.
+- **Runtime client** : les requêtes jamais envoyées survivent à une coupure ; `close()` rejette les attentes et la readiness au lieu de les laisser suspendues. Deux régressions rouges avant correction, vertes après ; changement de projet/reconnexion vérifié également (ce dernier chemin fonctionnait déjà).
+- **ZIP** : sérialisation base64 commune aux restaurations ; test passant par le vrai parseur prouve la préservation du contenu et des fins de fichier. L'import de binaires reste volontairement hors de cette correction.
+- **Mesure perf** : le test nommé streaming montait 100 racines React ; il utilise maintenant `rerender` sur une seule racine, garde le budget 16,67 ms et vérifie le DOM final. Aucun seuil relevé ni exclusion ajoutée.
+- **Publication** : patch versionné `patches/publish-artifact-boundary.patch`. Les copies de dist ne suivent plus les symlinks sur le host (descripteurs relatifs et O_NOFOLLOW) ; token indisponible = échec sandbox, pas de repli implicite sur le host. Régressions rouges puis vertes. Validations concurrentes `parse_publish_body` conservées par resynchronisation depuis le service live.
+- **Preuve** : `tsc --noEmit -p .` 0 ; `eslint app --quiet` 0 ; suite entière **1196/1196, 143 fichiers** ; `npm run build` 0. Patch appliqué sur copie fraîche des services : **64 tests, 2 ignorés, aucun échec** ; les tests live sont exclus de cette preuve.
+- **Non livré en production** : aucun remplacement de service ni redémarrage ; domaine cible historique `bolt.169-58-18-46.sslip.io`, IP constatée `169.58.18.46`, confirmation préalable de déploiement à obtenir.
+- **Reste ouvert** : audit complet des parcours réels/UI/IA, ownership/concurrence publication, import dossier, Electron/CI et autres constats statiques à reproduire. Ne pas traiter un rapport statique d'agent comme un bug confirmé : plusieurs pistes étaient fausses (messages déjà exclus des options, entrée DOM absente ne faisant pas échouer Vitest).
+- **Incident de vérification** : une assertion de mock subprocess a imprimé des variables d'environnement dans une sortie outil. Assertion remplacée par un booléen sans impression des arguments ; rotation préventive des clés concernées à prévoir, aucune valeur conservée ici.
+
+
 > **Cette mémoire est la seule continuité entre les sessions et les agents IA.**
 > Elle n'a aucune valeur si elle n'est pas lue avant d'agir et complétée après avoir agi.
 

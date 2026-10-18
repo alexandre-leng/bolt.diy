@@ -1,0 +1,188 @@
+--- a/bolt_publish.py
++++ b/bolt_publish.py
+@@ -20,6 +20,7 @@
+ import os
+ import re
+ import shutil
++from artifact_copy import copy_artifacts
+ import subprocess
+ 
+ import sandbox_build
+@@ -454,7 +455,7 @@
+             public = site_dir / "public"
+             if public.exists():
+                 shutil.rmtree(public)
+-            shutil.copytree(dist, public)
++            copy_artifacts(dist, public)
+             scrub_public(public)
+             rewrite_root_absolute_urls(public, base)
+             ensure_referenced_local_files(public, base)
+--- a/private_preview.py
++++ b/private_preview.py
+@@ -12,6 +12,7 @@
+ import re
+ import secrets
+ import shutil
++from artifact_copy import copy_artifacts
+ import subprocess
+ import threading
+ import time
+@@ -209,7 +210,7 @@
+             dist = work / "dist"
+             if not (dist / "index.html").exists():
+                 return {"ok": False, "error": "no dist/index.html produced", "url": None}
+-            shutil.copytree(dist, out)
++            copy_artifacts(dist, out)
+         else:
+             if not (work / "index.html").exists():
+                 return {"ok": False, "error": "no index.html", "url": None}
+--- a/sandbox_build.py
++++ b/sandbox_build.py
+@@ -33,7 +33,9 @@
+ 
+ 
+ def enabled() -> bool:
+-    return build_token() is not None
++    # Missing credentials are a configuration failure, never permission to run on
++    # the host. sandbox_run reports a bounded failure when the token is unavailable.
++    return os.environ.get("BOLT_BUILD_SANDBOX", "1") != "0"
+ 
+ 
+ def sandbox_run(directory: Path, argv: list[str], env: dict[str, str], timeout: int) -> tuple[int, str]:
+--- a/test_sandbox_build.py
++++ b/test_sandbox_build.py
+@@ -9,6 +9,8 @@
+ import unittest
+ import urllib.request
+ from pathlib import Path
++
++from unittest.mock import patch
+ 
+ import bolt_publish as bp
+ import sandbox_build
+@@ -32,6 +34,15 @@
+             bp.sandbox_argv(["/srv/bolt-sites/x/src-files/node_modules/.bin/vite", "build", "--base", "/container/x/"]),
+             ["vite", "build", "--base", "/container/x/"],
+         )
++
++    def test_missing_token_does_not_disable_sandbox_and_execute_on_host(self):
++        with patch.dict(os.environ, {"BOLT_BUILD_SANDBOX": "1"}):
++            with patch.object(sandbox_build, "build_token", return_value=None):
++                with patch.object(bp.subprocess, "run") as host_run:
++                    code, message = bp.run([bp.NPM, "install"], Path('/unused-test-path'), 1)
++                    self.assertFalse(host_run.called, 'untrusted build reached host subprocess')
++                    self.assertEqual(code, 125)
++                    self.assertIn('no token', message)
+ 
+     def test_disabled_without_token_or_when_switched_off(self):
+         saved = os.environ.get("BOLT_BUILD_SANDBOX")
+--- /dev/null
++++ b/artifact_copy.py
+@@ -0,0 +1,47 @@
++"""Copy untrusted static output without ever following host-side symlinks."""
++import os
++import shutil
++import stat
++from pathlib import Path
++
++
++def copy_artifacts(source: Path, destination: Path) -> None:
++    """Accept regular files/directories only, resolving each child relative to an open fd.
++
++    A build can leave absolute links in dist. copytree's default dereferences those
++    links on the host, outside the sandbox. O_NOFOLLOW also prevents swap races.
++    """
++    def copy_directory(source_fd: int, target: Path) -> None:
++        target.mkdir()
++        with os.scandir(source_fd) as entries:
++            for entry in entries:
++                mode = entry.stat(follow_symlinks=False).st_mode
++                if not (stat.S_ISDIR(mode) or stat.S_ISREG(mode)):
++                    raise ValueError('build output contains a symlink or special file')
++                flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
++                if stat.S_ISDIR(mode):
++                    flags |= os.O_DIRECTORY
++                child_fd = os.open(entry.name, flags, dir_fd=source_fd)
++                try:
++                    actual = os.fstat(child_fd).st_mode
++                    if stat.S_ISDIR(actual):
++                        copy_directory(child_fd, target / entry.name)
++                    elif stat.S_ISREG(actual):
++                        with os.fdopen(os.dup(child_fd), 'rb') as stream:
++                            with (target / entry.name).open('xb') as output:
++                                shutil.copyfileobj(stream, output)
++                    else:
++                        raise ValueError('build output contains a special file')
++                finally:
++                    os.close(child_fd)
++
++    if source.is_symlink():
++        raise ValueError('build output contains a symlink')
++    source_fd = os.open(source, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
++    try:
++        copy_directory(source_fd, destination)
++    except Exception:
++        shutil.rmtree(destination, ignore_errors=True)
++        raise
++    finally:
++        os.close(source_fd)
+--- /dev/null
++++ b/test_artifact_boundary.py
+@@ -0,0 +1,57 @@
++"""Untrusted build output must never cause host-side symlink dereferences."""
++import tempfile
++import unittest
++from pathlib import Path
++from unittest.mock import patch
++
++from artifact_copy import copy_artifacts
++import bolt_publish as bp
++import private_preview as pp
++
++
++class ArtifactBoundaryTests(unittest.TestCase):
++    def test_copies_nested_regular_files_byte_for_byte(self):
++        with tempfile.TemporaryDirectory() as directory:
++            root = Path(directory)
++            source = root / 'dist'
++            (source / 'assets').mkdir(parents=True)
++            data = bytes(range(256))
++            (source / 'assets' / 'image.bin').write_bytes(data)
++            copy_artifacts(source, root / 'published')
++            self.assertEqual((root / 'published' / 'assets' / 'image.bin').read_bytes(), data)
++
++    def test_publish_rejects_symlink_to_host_file_before_copying(self):
++        with tempfile.TemporaryDirectory() as directory:
++            root = Path(directory)
++            src = root / 'site' / 'src-files'
++            (src / 'node_modules' / '.bin').mkdir(parents=True)
++            (src / 'node_modules' / '.bin' / 'vite').touch()
++            (src / 'package.json').write_text('{}')
++            (src / 'dist').mkdir()
++            marker = root / 'host-private.txt'
++            marker.write_text('LOCAL_TEST_MARKER')
++            (src / 'dist' / 'index.html').write_text('<html>safe</html>')
++            (src / 'dist' / 'leaked.txt').symlink_to(marker)
++            with patch.object(bp, 'SITES_ROOT', root), patch.object(bp, 'run', return_value=(0, '')):
++                with self.assertRaisesRegex(ValueError, 'symlink'):
++                    bp.build_site('site')
++            self.assertFalse((root / 'site' / 'public' / 'leaked.txt').exists())
++
++    def test_preview_rejects_symlinked_dist_directory(self):
++        with tempfile.TemporaryDirectory() as directory:
++            root = Path(directory)
++            outside = root / 'host-data'
++            outside.mkdir()
++            (outside / 'index.html').write_text('LOCAL_TEST_MARKER')
++
++            def build(work):
++                (work / 'dist').symlink_to(outside, target_is_directory=True)
++                return True, ''
++
++            with patch.object(pp, 'PREVIEW_ROOT', root), patch.object(pp, '_build_with_vite', side_effect=build):
++                with self.assertRaisesRegex(ValueError, 'symlink'):
++                    pp._build_preview_locked({'index.html': '<html>test</html>'}, True)
++
++
++if __name__ == '__main__':
++    unittest.main()

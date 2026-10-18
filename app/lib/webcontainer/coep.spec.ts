@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { detectCoepMode } from './coep';
 import { parsePreviewId, previewOrigin } from './coep';
 
@@ -35,5 +35,34 @@ describe('preview host per isolation mode', () => {
   it('builds the host matching the mode', () => {
     expect(previewOrigin('abc', 'credentialless')).toBe('https://abc.local-credentialless.webcontainer-api.io');
     expect(previewOrigin('abc', 'require-corp')).toBe('https://abc.local-corp.webcontainer-api.io');
+  });
+});
+
+/* Server runtime (bolt-runtime) previews: p<N> next to the app host (set per test). */
+describe('server-runtime preview hosts', () => {
+  const withHost = (hostname: string, run: () => void) => {
+    vi.stubGlobal('location', { hostname });
+
+    try {
+      run();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  };
+
+  it('parses p<N> only on the app parent domain', () => {
+    withHost('bolt.169-58-18-46.sslip.io', () => {
+      expect(parsePreviewId('https://p3.169-58-18-46.sslip.io')).toBe('p3');
+      expect(parsePreviewId('https://p12.169-58-18-46.sslip.io/about?x=1')).toBe('p12');
+      expect(parsePreviewId('https://p3.evil.example/')).toBeNull();
+      expect(parsePreviewId('https://p3x.169-58-18-46.sslip.io')).toBeNull();
+    });
+  });
+
+  it('builds the origin of a server preview id', () => {
+    withHost('bolt.169-58-18-46.sslip.io', () => {
+      expect(previewOrigin('p7')).toBe('https://p7.169-58-18-46.sslip.io');
+      expect(previewOrigin('abc', 'credentialless')).toBe('https://abc.local-credentialless.webcontainer-api.io');
+    });
   });
 });

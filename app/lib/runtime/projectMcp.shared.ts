@@ -130,3 +130,20 @@ export const projectToolDefinitions: Record<ProjectToolName, { description: stri
     inputSchema: objectSchema({ url: { type: 'string', minLength: 1, maxLength: 2048 } }, ['url']),
   },
 };
+
+/*
+ * Commands that kill processes by PID or by name. On the Pagia project the model, convinced a
+ * "zombie" held port 5173, looped `kill -9` over PIDs 14..40 and took down the runtime's own
+ * processes (and its own shell, exit 137); the preview never came back in that tab. Processes the
+ * agent started are stopped with project_stop_process, which knows their real identity.
+ */
+const PROCESS_KILL_COMMAND =
+  /(?:^|[\s;&|(`$'"])(?:kill|killall|pkill|fuser\s+-k|xargs\s+kill)\b|process\.kill\s*\(|child_process[^;]*\bkill\b/i;
+
+export function refusedCommandReason(command: string): string | null {
+  if (PROCESS_KILL_COMMAND.test(command)) {
+    return 'Killing processes by PID or name is not allowed: it can stop the runtime itself. Use project_stop_process with the processId returned by project_run_command, then start the command again if needed.';
+  }
+
+  return null;
+}

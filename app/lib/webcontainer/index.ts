@@ -1,5 +1,6 @@
-import { WebContainer } from '@webcontainer/api';
+import type { WebContainer } from '@webcontainer/api';
 import { currentCoepMode } from './coep';
+import { currentRuntimeMode } from '~/lib/runtime/server/mode';
 import { WORK_DIR_NAME } from '~/utils/constants';
 import { cleanStackTrace } from '~/utils/stacktrace';
 
@@ -50,16 +51,30 @@ if (!import.meta.env.SSR) {
    * Instead, keep the failure in a variable and re-attempt the boot on the next
    * access, with the error surfaced to the caller rather than swallowed.
    */
+  /*
+   * Server runtime (default once rolled out): the project runs in a gVisor sandbox on the Bolt
+   * host and StackBlitz is never loaded. The legacy WebContainer stays behind a dynamic import
+   * so the server mode does not even download its code.
+   */
+  const bootRuntime = async (): Promise<WebContainer> => {
+    if (currentRuntimeMode() === 'server') {
+      const { bootServerContainer } = await import('~/lib/runtime/server/boot');
+      return (await bootServerContainer()) as unknown as WebContainer;
+    }
+
+    const stackblitz = await import('@webcontainer/api');
+
+    return stackblitz.WebContainer.boot({
+      // Same isolation mode as the page header (nginx): require-corp on Firefox Android.
+      coep: currentCoepMode(),
+      workdirName: WORK_DIR_NAME,
+      forwardPreviewErrors: true, // Enable error forwarding from iframes
+    });
+  };
+
   const bootWebContainer = (): Promise<WebContainer> =>
     Promise.resolve()
-      .then(() => {
-        return WebContainer.boot({
-          // Same isolation mode as the page header (nginx): require-corp on Firefox Android.
-          coep: currentCoepMode(),
-          workdirName: WORK_DIR_NAME,
-          forwardPreviewErrors: true, // Enable error forwarding from iframes
-        });
-      })
+      .then(bootRuntime)
       .then(async (webcontainer) => {
         webcontainerContext.loaded = true;
 

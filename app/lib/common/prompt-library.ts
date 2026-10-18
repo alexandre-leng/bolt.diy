@@ -10,6 +10,9 @@ export interface PromptOptions {
   modificationTagName: string;
   designScheme?: DesignScheme;
   projectTools?: boolean;
+
+  /** Where the project runs: a Linux sandbox on the Bolt host, or StackBlitz WebContainer. */
+  runtime?: 'server' | 'webcontainer';
   supabase?: {
     isConnected: boolean;
     hasSelectedProject: boolean;

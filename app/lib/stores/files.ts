@@ -631,6 +631,23 @@ export class FilesStore {
       return;
     }
 
+    /*
+     * Server runtime: every conversation keeps its own directory on the Bolt host. Emptying it
+     * would delete node_modules and force a full reinstall on every reopen (measured: about four
+     * minutes for a real project); the sandbox moves to the page's project instead.
+     */
+    const serverContainer = container as unknown as { followLocation?: () => Promise<void> };
+
+    if (typeof serverContainer.followLocation === 'function') {
+      try {
+        await serverContainer.followLocation();
+      } catch (error) {
+        logger.error('Failed to switch the server project', error);
+      }
+
+      return;
+    }
+
     try {
       for (const entry of await container.fs.readdir('.')) {
         await container.fs.rm(entry, { recursive: true });

@@ -3,7 +3,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { assertValidProjectSource, getFileRevision } from './projectFileValidation';
-import { PROJECT_TOOL_NAMES, projectToolDefinitions } from './projectMcp.shared';
+import { PROJECT_TOOL_NAMES, projectToolDefinitions, refusedCommandReason } from './projectMcp.shared';
 export { PROJECT_TOOL_NAMES, projectToolDefinitions } from './projectMcp.shared';
 import { searchWithRipgrep } from './ripgrepClient';
 import { chatId } from '~/lib/persistence/useChatHistory';
@@ -647,6 +647,12 @@ export async function createProjectMcpBridge() {
     },
     async ({ command, purpose = 'other' }, extra) => {
       try {
+        const refused = refusedCommandReason(command);
+
+        if (refused) {
+          throw new Error(refused);
+        }
+
         let reused = false;
 
         const processId = await queueMutation(async () => {

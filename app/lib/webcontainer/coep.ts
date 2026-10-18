@@ -47,10 +47,48 @@ export function currentCoepMode(): CoepMode {
  */
 const PREVIEW_HOST = /^https?:\/\/([^.]+)\.local-(?:credentialless|corp)\.webcontainer-api\.io/;
 
+/*
+ * Server runtime (bolt-runtime): previews live on a pool of hostnames next to the app,
+ * `https://p<N>.<parent of the app host>` (e.g. p3.169-58-18-46.sslip.io next to
+ * bolt.169-58-18-46.sslip.io). The preview id is the `p<N>` label.
+ */
+const SERVER_PREVIEW_HOST = /^https:\/\/(p\d{1,3})\.([a-z0-9.-]+?)(?::\d+)?(?:[/?#]|$)/i;
+
+function appParentDomain(): string | null {
+  if (typeof location === 'undefined') {
+    return null;
+  }
+
+  const parent = location.hostname.split('.').slice(1).join('.');
+
+  return parent || null;
+}
+
 export function parsePreviewId(url: string): string | null {
-  return PREVIEW_HOST.exec(url)?.[1] ?? null;
+  const legacy = PREVIEW_HOST.exec(url)?.[1];
+
+  if (legacy) {
+    return legacy;
+  }
+
+  const server = SERVER_PREVIEW_HOST.exec(url);
+  const parent = appParentDomain();
+
+  if (server && (!parent || server[2].toLowerCase() === parent.toLowerCase())) {
+    return server[1].toLowerCase();
+  }
+
+  return null;
 }
 
 export function previewOrigin(previewId: string, mode: CoepMode = currentCoepMode()): string {
+  if (/^p\d{1,3}$/i.test(previewId)) {
+    const parent = appParentDomain();
+
+    if (parent) {
+      return `https://${previewId.toLowerCase()}.${parent}`;
+    }
+  }
+
   return `https://${previewId}.local-${mode === 'require-corp' ? 'corp' : 'credentialless'}.webcontainer-api.io`;
 }

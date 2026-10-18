@@ -43,6 +43,7 @@ import { getStarterBuildProgress } from '~/lib/common/starterBuild';
 import { createMessage, getMessageText } from '~/lib/persistence/messageMigration';
 import { getPluginToolDescriptions, getPluginTools } from '~/lib/plugins/adapters';
 import { getProjectToolNames, projectToolDefinitions } from '~/lib/runtime/projectMcp.shared';
+import { resolveRuntimeMode } from '~/lib/runtime/server/mode';
 import { withSecurity } from '~/lib/security';
 import { MCPService } from '~/lib/services/mcpService';
 import type { ContextAnnotation, ProgressAnnotation, ToolCallAnnotation } from '~/types/context';
@@ -96,6 +97,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
   const designScheme = asDesignScheme(body.designScheme);
 
   const cookieHeader = request.headers.get('Cookie');
+  const runtime = resolveRuntimeMode(cookieHeader ?? '', import.meta.env.VITE_BOLT_RUNTIME as string | undefined);
   const apiKeys = getApiKeysFromCookie(cookieHeader);
   const providerSettings: Record<string, IProviderSetting> = getProviderSettingsFromCookie(cookieHeader);
 
@@ -630,6 +632,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               apiKeys,
               files,
               providerSettings,
+              runtime,
               promptId,
               contextOptimization,
               contextFiles: filteredFiles,
@@ -685,6 +688,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           apiKeys,
           files,
           providerSettings,
+          runtime,
           promptId,
           contextOptimization,
           contextFiles: filteredFiles,

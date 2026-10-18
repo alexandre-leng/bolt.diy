@@ -32,7 +32,7 @@ export class EditorStore {
     }
   }
 
-  setDocuments(files: FileMap) {
+  setDocuments(files: FileMap, unsavedFiles?: Set<string>) {
     const previousDocuments = this.documents.value;
 
     this.documents.set(
@@ -45,10 +45,20 @@ export class EditorStore {
 
             const previousDocument = previousDocuments?.[filePath];
 
+            /*
+             * A document rebuilt from the files store must not clobber the user's in-memory
+             * buffer. The files store changes on every AI-executed write and every container
+             * file-watcher event; if the file is dirty (has unsaved edits, tracked by
+             * workbenchStore.unsavedFiles), the freshly written `dirent.content` is older than
+             * what the user has typed. Keep the previous `value` in that case, exactly like
+             * `scroll` is preserved below.
+             */
+            const isDirty = unsavedFiles?.has(filePath) ?? false;
+
             return [
               filePath,
               {
-                value: dirent.content,
+                value: isDirty && previousDocument ? previousDocument.value : dirent.content,
                 filePath,
                 isBinary: dirent.isBinary, // Add this line
                 scroll: previousDocument?.scroll,

@@ -430,3 +430,58 @@ export async function webSearch(query: string, limit = 8): Promise<WebSearchResu
     clearTimeout(timeout);
   }
 }
+
+/**
+ * Fetch a caller-supplied public URL without ever following a redirect blindly.
+ *
+ * `fetch` defaults to `redirect: 'follow'`, so a public host can answer `302 Location:
+ * http://127.0.0.1:8199/...` and make the server reach an internal service — relaying its
+ * body back. The same class of bug leaks credentials: a caller's `Authorization` header is
+ * re-sent to whatever host the redirect names. Here every hop is re-validated with
+ * `validatePublicHttpUrl`, the redirect count is bounded, and the `Authorization` header is
+ * dropped whenever the redirect changes host.
+ */
+export async function fetchPublicUrlWithRedirects(
+  input: string,
+  init: RequestInit & { headers?: Record<string, string> } = {},
+): Promise<Response> {
+  let current = validatePublicHttpUrl(input);
+
+  const headers: Record<string, string> = { ...(init.headers ?? {}) };
+  const { headers: _ignoredHeaders, ...restInit } = init;
+
+  let response: Response | undefined;
+
+  for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects++) {
+    response = await fetch(current.href, { ...restInit, headers, redirect: 'manual' });
+
+    if (![301, 302, 303, 307, 308].includes(response.status)) {
+      break;
+    }
+
+    const location = response.headers.get('location');
+
+    if (!location || redirects === MAX_REDIRECTS) {
+      await response.body?.cancel();
+      throw new Error('The request redirected too many times or returned an invalid redirect');
+    }
+
+    await response.body?.cancel();
+
+    const next = validatePublicHttpUrl(new URL(location, current).href);
+
+    // Never carry the caller's credentials to another host.
+    if (next.hostname !== current.hostname) {
+      delete headers.Authorization;
+      delete headers.authorization;
+    }
+
+    current = next;
+  }
+
+  if (!response) {
+    throw new Error('Failed to fetch URL');
+  }
+
+  return response;
+}

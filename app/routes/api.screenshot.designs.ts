@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs } from 'react-router';
 import { z } from 'zod';
+import { getTrustedClientIP } from '~/lib/security';
 
 /*
  * Design mockup generation for the screenshot-to-code flow.
@@ -54,14 +55,14 @@ function allowed(ip: string): boolean {
   return true;
 }
 
-function clientIp(request: Request): string {
+function clientIp(request: Request, context: ActionFunctionArgs['context']): string {
   /*
-   * Behind nginx: the trusted hop sets these. Fall back to a constant so the throttle
-   * still applies globally rather than being bypassable by omitting headers.
+   * Only identities the app can prove are trustworthy count. `x-real-ip`/`x-forwarded-for`
+   * read directly are client-spoofable, so rotating a forged header bypassed the throttle on
+   * this PAID endpoint entirely. `getTrustedClientIP` trusts `x-real-ip` only when the request
+   * provably came through the local proxy; anything else shares one bucket.
    */
-  const forwarded = request.headers.get('x-real-ip') || request.headers.get('x-forwarded-for');
-
-  return (forwarded || 'unknown').split(',')[0].trim();
+  return getTrustedClientIP(request, context) ?? 'unknown';
 }
 
 function buildPrompt(userPrompt: string, index: number): string {
@@ -75,7 +76,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return Response.json({ error: 'Method not allowed' }, { status: 405 });
   }
 
-  if (!allowed(clientIp(request))) {
+  if (!allowed(clientIp(request, context))) {
     return Response.json(
       { error: 'Too many design requests. Wait a few minutes before trying again.' },
       { status: 429 },

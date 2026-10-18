@@ -815,10 +815,16 @@ export const Menu = () => {
                         type="danger"
                         onClick={() => {
                           /*
-                           * Pass the current selectedItems to the delete function.
-                           * This captures the state at the moment the user confirms.
+                           * Delete exactly what the dialog listed, not the live selection.
+                           *
+                           * The selection can shrink while the dialog is open (a chat is deleted
+                           * elsewhere, or a sync removes it), which would make the confirm button
+                           * delete fewer — or, as here, the user deselects an item after opening
+                           * the dialog and the count on screen no longer matches what gets
+                           * deleted. Deriving the ids from `dialogContent.items` makes the action
+                           * match the confirmation the user read.
                            */
-                          const itemsToDeleteNow = [...selectedItems];
+                          const itemsToDeleteNow = dialogContent.items.map((item) => item.id);
                           console.log('Bulk delete confirmed for', itemsToDeleteNow.length, 'items', itemsToDeleteNow);
                           deleteSelectedItems(itemsToDeleteNow);
                           closeDialog();

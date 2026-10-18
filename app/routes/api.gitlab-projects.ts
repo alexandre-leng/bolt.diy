@@ -1,5 +1,5 @@
 import { withSecurity } from '~/lib/security';
-import { validatePublicHttpUrl } from '~/lib/services/webTools.server';
+import { fetchPublicUrlWithRedirects, validatePublicHttpUrl } from '~/lib/services/webTools.server';
 import type { GitLabProjectInfo } from '~/types/GitLab';
 
 interface GitLabProject {
@@ -41,7 +41,7 @@ async function gitlabProjectsLoader({ request }: { request: Request }) {
     // Fetch user's projects from GitLab API
     const url = `${gitlabUrl}/api/v4/projects?membership=true&per_page=100&order_by=updated_at&sort=desc`;
 
-    const response = await fetch(url, {
+    const response = await fetchPublicUrlWithRedirects(url, {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'application/json',

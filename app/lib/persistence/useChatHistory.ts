@@ -981,6 +981,18 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
     storeMessageHistory: (messages: UIMessage[], isStreaming = false) => {
       const messageHistoryGeneration = messageHistoryGenerationRef.current;
 
+      /*
+       * The chat this save was requested for. Captured synchronously, before the body is
+       * queued behind any in-flight save, so it survives the user opening another chat in
+       * the meantime.
+       *
+       * `chatId.get()` used to be read inside the queued body (and again after several
+       * awaits). By then the atom can already point at the NEW chat, so the OLD chat's
+       * messages were written under the NEW chat's id — erasing the conversation the user
+       * just opened, on every device.
+       */
+      const targetChatId = chatId.get();
+
       const persistMessageHistory = async () => {
         if (!db || messages.length === 0 || messageHistoryGeneration !== messageHistoryGenerationRef.current) {
           return;
@@ -998,9 +1010,9 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
         let _urlId = urlIdRef.current;
 
         // Ensure chatId.get() is used here as well
-        const creatingNewChat = initialMessages.length === 0 && !chatId.get();
+        const creatingNewChat = initialMessages.length === 0 && !targetChatId;
 
-        if (conflictChatIdRef.current && conflictChatIdRef.current === chatId.get()) {
+        if (conflictChatIdRef.current && conflictChatIdRef.current === targetChatId) {
           return;
         }
 
@@ -1093,8 +1105,8 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
           }
         }
 
-        // Ensure chatId.get() is used for the final setMessages call
-        const finalChatId = createdChat?.id ?? chatId.get();
+        // Ensure the id captured at the top of the queued body is reused, not re-read from the live atom.
+        const finalChatId = createdChat?.id ?? targetChatId;
 
         if (!finalChatId) {
           console.error('Cannot save messages, chat ID is not set.');
@@ -1145,6 +1157,15 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
         const savedAt = new Date().toISOString();
 
         if (!createdChat || !ownsChatCreation) {
+          /*
+           * Re-check the generation immediately before the write: an `await` above (urlId
+           * lookup, lost-update read) may have let the user switch chats. Writing now would
+           * commit this turn under the wrong conversation.
+           */
+          if (messageHistoryGeneration !== messageHistoryGenerationRef.current) {
+            return;
+          }
+
           await setMessages(db, finalChatId, persistedMessages, _urlId, description.get(), savedAt, chatMetadata.get());
           knownTimestampRef.current = savedAt;
 

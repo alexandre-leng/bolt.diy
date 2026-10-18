@@ -68,6 +68,9 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
   const activePreview = previews[activePreviewIndex];
   const [displayPath, setDisplayPath] = useState('/');
   const [iframeUrl, setIframeUrl] = useState<string | undefined>();
+
+  /** Bumped by `reloadPreview`; part of the iframe key so a reload remounts it through state. */
+  const [reloadToken, setReloadToken] = useState(0);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [isInspectorMode, setIsInspectorMode] = useState(false);
   const [selectedInspectorElement, setSelectedInspectorElement] = useState<ElementInfo | null>(null);
@@ -126,10 +129,40 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
     }
   }, [previews, findMinPortIndex]);
 
+  /*
+   * Keep `activePreviewIndex` inside range whenever the preview list changes.
+   *
+   * The port the user picked can close (the dev server restarts on another port, or the
+   * container stops). The re-selection above only runs while `previews.length > 1` and only
+   * until the user first picks a port, so the index then points past the end. Everything
+   * below reads `previews[activePreviewIndex]`, so the preview went permanently blank. This
+   * clamp is unconditional: it never moves a still-valid selection, it only pulls an
+   * out-of-range index back to a real entry.
+   */
+  useEffect(() => {
+    setActivePreviewIndex((index) => {
+      if (previews.length === 0) {
+        return 0;
+      }
+
+      if (index < previews.length) {
+        return index;
+      }
+
+      return previews.length - 1;
+    });
+  }, [previews]);
+
   const reloadPreview = () => {
-    if (iframeRef.current) {
-      iframeRef.current.src = iframeRef.current.src;
-    }
+    /*
+     * Remount the iframe through state instead of assigning `iframeRef.current.src`.
+     *
+     * `src={iframeUrl}` is a controlled prop, so mutating the DOM's `src` directly was
+     * discarded by the next render — a route the user typed into the preview was lost.
+     * Bumping the token changes the `key`, which remounts the iframe and reloads the
+     * current `iframeUrl` without touching the DOM out of band.
+     */
+    setReloadToken((token) => token + 1);
   };
 
   const toggleFullscreen = async () => {
@@ -1154,6 +1187,7 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
 
                     <iframe
                       ref={iframeRef}
+                      key={`device-${reloadToken}`}
                       title="preview"
                       style={{
                         border: 'none',
@@ -1171,6 +1205,7 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
               ) : (
                 <iframe
                   ref={iframeRef}
+                  key={`full-${reloadToken}`}
                   title="preview"
                   className="border-none w-full h-full bg-bolt-elements-background-depth-1"
                   src={iframeUrl}

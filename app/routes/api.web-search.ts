@@ -118,9 +118,23 @@ function errorResponse(error: unknown): Response {
 
   const message = error instanceof Error ? error.message : 'Web operation failed';
   const status = /timed out/i.test(message) ? 504 : 502;
+
+  /*
+   * The internal message is kept in the server log only: it is built from upstream errors and
+   * can carry the resolved host/URL the server attempted (SSRF reconnaissance). The caller gets
+   * a generic, category-appropriate message, mirroring api.supabase.query.ts.
+   */
   console.error('Web tool error:', message);
 
-  return Response.json({ error: message }, { status });
+  return Response.json(
+    {
+      error:
+        status === 504
+          ? 'The upstream request timed out. Try again later.'
+          : 'The upstream request failed. Try again later.',
+    },
+    { status },
+  );
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {

@@ -99,10 +99,19 @@ interface DialogProps {
   showCloseButton?: boolean;
   onClose?: () => void;
   onBackdrop?: () => void;
+  onEscapeKeyDown?: (event: KeyboardEvent) => void;
 }
 
 export const Dialog = memo(
-  ({ children, className, backdropClassName, showCloseButton = true, onClose, onBackdrop }: DialogProps) => {
+  ({
+    children,
+    className,
+    backdropClassName,
+    showCloseButton = true,
+    onClose,
+    onBackdrop,
+    onEscapeKeyDown,
+  }: DialogProps) => {
     return (
       <RadixDialog.Portal>
         <RadixDialog.Overlay asChild>
@@ -118,10 +127,10 @@ export const Dialog = memo(
             onClick={onBackdrop}
           />
         </RadixDialog.Overlay>
-        <RadixDialog.Content asChild>
+        <RadixDialog.Content asChild onEscapeKeyDown={onEscapeKeyDown}>
           <motion.div
             className={classNames(
-              'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-950 rounded-lg shadow-xl border border-bolt-elements-borderColor z-[9999] w-[520px] focus:outline-none',
+              'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-950 rounded-lg shadow-xl border border-bolt-elements-borderColor z-[9999] w-[min(520px,calc(100vw-2rem))] max-h-[90vh] overflow-y-auto focus:outline-none',
               className,
             )}
             initial="closed"

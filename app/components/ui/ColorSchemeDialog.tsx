@@ -82,13 +82,12 @@ export const ColorSchemeDialog: React.FC<ColorSchemeDialogProps> = ({ setDesignS
             className="group flex items-center gap-4 p-4 rounded-xl bg-bolt-elements-bg-depth-3 hover:bg-bolt-elements-bg-depth-2 border border-transparent hover:border-bolt-elements-borderColor transition-all duration-200"
           >
             <div className="relative flex-shrink-0">
-              <div
-                className="w-12 h-12 rounded-xl shadow-md cursor-pointer transition-all duration-200 hover:scale-110 ring-2 ring-transparent hover:ring-bolt-elements-borderColorActive"
+              <button
+                type="button"
+                className="w-12 h-12 rounded-xl shadow-md cursor-pointer transition-all duration-200 hover:scale-110 ring-2 ring-transparent hover:ring-bolt-elements-borderColorActive focus-visible:ring-2 focus-visible:ring-bolt-elements-borderColorActive focus-visible:outline-none"
                 style={{ backgroundColor: palette[role.key] }}
                 onClick={() => document.getElementById(`color-input-${role.key}`)?.click()}
-                role="button"
-                tabIndex={0}
-                aria-label={`Change ${role.label} color`}
+                aria-label={`Changer la couleur : ${role.label}`}
               />
               <input
                 id={`color-input-${role.key}`}
@@ -278,7 +277,7 @@ export const ColorSchemeDialog: React.FC<ColorSchemeDialogProps> = ({ setDesignS
 
       <DialogRoot open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <Dialog>
-          <div className="py-4 px-4 min-w-[480px] max-w-[90vw] max-h-[85vh] flex flex-col gap-6 overflow-hidden">
+          <div className="py-4 px-4 w-[min(480px,calc(100vw-2rem))] max-h-[85vh] flex flex-col gap-6 overflow-y-auto">
             <div className="">
               <DialogTitle className="text-2xl font-bold text-bolt-elements-textPrimary">
                 Design Palette & Features

@@ -1,5 +1,8 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import type { KeyboardEvent } from 'react';
+import { useSettings } from '~/lib/hooks/useSettings';
+import type { ModelEffort } from '~/lib/modules/llm/providers/opencode-go';
+import { opencodeGoCanDisableThinking, opencodeGoEfforts } from '~/lib/modules/llm/providers/opencode-go';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import { LOCAL_PROVIDERS } from '~/lib/stores/settings';
 import type { ProviderInfo } from '~/types/model';
@@ -105,6 +108,22 @@ const isModelLikelyFree = (model: ModelInfo, providerName?: string): boolean => 
   return false;
 };
 
+/**
+ * Reasoning levels offered for the selected model, and the handler that stores the choice.
+ *
+ * The levels come from the generated catalog: a provider whose models publish none keeps the
+ * control hidden, and "Désactivée" is not offered for a model that refuses it (a 400 otherwise).
+ */
+const REASONING_LABELS: Record<string, string> = {
+  low: 'Faible',
+  minimal: 'Minimale',
+  medium: 'Moyenne',
+  high: 'Élevée',
+  xhigh: 'Très élevée',
+  max: 'Maximale',
+  none: 'Aucune',
+};
+
 export const ModelSelector = ({
   model,
   setModel,
@@ -114,6 +133,44 @@ export const ModelSelector = ({
   providerList,
   modelLoading,
 }: ModelSelectorProps) => {
+  const { providers: providerSettings, updateProviderSettings } = useSettings();
+
+  const effortForModel = (name?: string): { choices: { value: string; label: string }[]; current: ModelEffort } => {
+    const levels = name ? opencodeGoEfforts(name) : [];
+    const choices = [{ value: 'auto', label: 'Réflexion : automatique' }];
+
+    if (levels.length > 0) {
+      if (name && opencodeGoCanDisableThinking(name)) {
+        choices.push({ value: 'disabled', label: 'Réflexion : désactivée' });
+      }
+
+      choices.push({ value: 'model', label: 'Réflexion : décidée par le modèle' });
+
+      for (const level of levels) {
+        choices.push({ value: level, label: `Réflexion : ${REASONING_LABELS[level] ?? level}` });
+      }
+    }
+
+    const stored = provider?.name
+      ? (providerSettings?.[provider.name]?.settings?.effort as ModelEffort | undefined)
+      : undefined;
+
+    return { choices, current: stored ?? 'auto' };
+  };
+
+  const { choices: effortChoices, current: effort } = effortForModel(model);
+
+  const changeEffort = (value: ModelEffort) => {
+    if (!provider?.name) {
+      return;
+    }
+
+    updateProviderSettings(provider.name, {
+      ...(providerSettings?.[provider.name]?.settings ?? {}),
+      effort: value === 'auto' ? undefined : value,
+    });
+  };
+
   const [modelSearchQuery, setModelSearchQuery] = useState('');
   const [debouncedModelSearchQuery, setDebouncedModelSearchQuery] = useState('');
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
@@ -867,6 +924,36 @@ export const ModelSelector = ({
           </div>
         )}
       </div>
+
+      {/*
+       * Reasoning level, next to the model it applies to. The choices come from the generated
+       * catalog of the selected model, so a level the model refuses is never offered; providers
+       * whose models publish no levels keep the control hidden.
+       */}
+      {effortChoices.length > 1 && (
+        <div className="relative flex w-full min-w-[30%]">
+          <label className="w-full">
+            <span className="sr-only">Niveau de réflexion</span>
+            <select
+              aria-label="Niveau de réflexion"
+              value={effort}
+              onChange={(event) => changeEffort(event.target.value as ModelEffort)}
+              className={classNames(
+                'w-full p-2 rounded-lg border border-bolt-elements-borderColor',
+                'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary',
+                'focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus',
+                'transition-all cursor-pointer text-sm',
+              )}
+            >
+              {effortChoices.map((choice) => (
+                <option key={choice.value} value={choice.value}>
+                  {choice.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
     </div>
   );
 };

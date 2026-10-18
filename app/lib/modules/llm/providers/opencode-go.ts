@@ -4,6 +4,8 @@ import type { LanguageModel } from 'ai';
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
 import {
   OPENCODE_GO_CATALOG,
+  catalogCanDisableThinking,
+  catalogEfforts,
   catalogProtocol,
   catalogThinkingOnly,
 } from '~/lib/modules/llm/catalogs/opencode-go.catalog';
@@ -84,9 +86,83 @@ export function opencodeGoProtocol(model: string): 'chat' | 'responses' | 'messa
   return catalogProtocol(model);
 }
 
-/** Whether a chat-completions request for this model should carry `thinking: disabled`. */
-export function shouldDisableThinking(model: string): boolean {
+/**
+ * Whether a chat-completions request for this model should carry `thinking: disabled`.
+ *
+ * Whether the user asked for reasoning changes this: "Réflexion : désactivée" means disabled.
+ */
+export function shouldDisableThinking(model: string, effort?: ModelEffort): boolean {
+  if (effort === 'disabled') {
+    return true;
+  }
+
+  if (effort === 'model') {
+    // The model decides: reasoning is left to its own default, so the injection is skipped.
+    return false;
+  }
+
+  /*
+   * 'auto' and undefined keep reasoning off, which the agent loop needs to get tool calls.
+   * A NAMED level (low/high/max…) means the user asked for reasoning: the "disabled" injection
+   * must not be added on top of it, or it would cancel the level they chose.
+   */
+  if (effort && effort !== 'auto') {
+    return false;
+  }
+
   return !catalogThinkingOnly(model);
+}
+
+/** Reasoning level chosen in the settings screen. */
+export type ModelEffort = 'auto' | 'disabled' | 'model' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+/** Levels the model accepts, for the settings screen; empty when it takes none. */
+export function opencodeGoEfforts(model: string): string[] {
+  return catalogEfforts(model);
+}
+
+/** False when the model refuses `thinking: disabled`, so the UI does not offer it. */
+export function opencodeGoCanDisableThinking(model: string): boolean {
+  return catalogCanDisableThinking(model);
+}
+
+/**
+ * What to send for the chosen level, or null to send nothing.
+ *
+ * Measured against the gateway: DeepSeek and the GPT/Grok family read `thinking`, while GLM and
+ * the MiMo family read `reasoning_effort`; sending the wrong one is silently ignored. Models that
+ * accept no level keep their default. `max` is only sent where it is accepted.
+ */
+export function effortPayload(
+  model: string,
+  effort: ModelEffort | undefined,
+): { thinking?: { type: 'disabled' } | { type: 'enabled'; effort: string }; reasoning_effort?: string } | null {
+  if (!effort || effort === 'auto' || effort === 'model') {
+    return null;
+  }
+
+  const accepted = catalogEfforts(model);
+
+  if (effort === 'disabled') {
+    return catalogCanDisableThinking(model) ? { thinking: { type: 'disabled' } } : null;
+  }
+
+  if (!accepted.includes(effort)) {
+    return null;
+  }
+
+  if (/^(gpt-|grok-)/i.test(model)) {
+    return { reasoning_effort: effort };
+  }
+
+  if (
+    /^claude-/i.test(model) ||
+    /^(deepseek|kimi|minimax|qwen|glm|mimo|hy|longcat|step|beam|cat|space|muse|gemini)/i.test(model)
+  ) {
+    return { thinking: { type: 'enabled', effort } };
+  }
+
+  return null;
 }
 
 export default class OpenCodeGoProvider extends BaseProvider {
@@ -236,7 +312,13 @@ export default class OpenCodeGoProvider extends BaseProvider {
       return createOpenAI({ baseURL: baseUrl, apiKey, headers, fetch: rotatingFetch }).responses(model);
     }
 
-    const disableThinking = shouldDisableThinking(model);
+    /*
+     * The reasoning level comes from the settings screen (providerSettings.effort); with the
+     * default the model keeps the behaviour the agent loop needs (see the fetch below).
+     */
+    const effort = providerSettings?.[this.name]?.effort as ModelEffort | undefined;
+    const chosen = effortPayload(model, effort);
+    const disableThinking = shouldDisableThinking(model, effort);
 
     const openai = createOpenAI({
       baseURL: baseUrl,
@@ -263,12 +345,14 @@ export default class OpenCodeGoProvider extends BaseProvider {
       fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
         const original = init;
 
-        if (disableThinking && init?.body && typeof init.body === 'string') {
+        const wanted = chosen ?? (disableThinking ? { thinking: { type: 'disabled' as const } } : null);
+
+        if (wanted && init?.body && typeof init.body === 'string') {
           try {
             const body = JSON.parse(init.body);
 
-            if (body && typeof body === 'object' && !body.thinking) {
-              body.thinking = { type: 'disabled' };
+            if (body && typeof body === 'object' && !body.thinking && !body.reasoning_effort) {
+              Object.assign(body, wanted);
               init = { ...init, body: JSON.stringify(body) };
             }
           } catch {

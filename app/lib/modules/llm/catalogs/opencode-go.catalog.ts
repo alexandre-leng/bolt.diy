@@ -44,6 +44,12 @@ export interface CatalogModel {
 
   /** Where the entry comes from. */
   source: 'models.dev' | 'override';
+
+  /** False for a thinking-only model: it refuses `thinking: disabled` (a 400 when forced). */
+  canDisable: boolean;
+
+  /** Reasoning levels the model accepts, from models.dev (`reasoning_effort` values). */
+  efforts: string[];
 }
 
 /** Date of generation; the script rewrites it, so a stale file is visible at a glance. */
@@ -63,6 +69,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 0,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
   },
   {
     id: 'cat-jam-free',
@@ -77,6 +85,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 0,
     status: 'deprecated',
     source: 'models.dev',
+    canDisable: true,
+    efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
   },
   {
     id: 'claude-haiku-5-5',
@@ -91,6 +101,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 0.5,
     status: null,
     source: 'models.dev',
+    canDisable: false,
+    efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
   },
   {
     id: 'deepseek-v4-pro',
@@ -105,6 +117,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 1.98,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: ['high', 'max'],
   },
   {
     id: 'deepseek-v4.1-flash',
@@ -119,6 +133,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 0.6,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: ['low', 'high', 'max'],
   },
   {
     id: 'gemini-4-argon-contributor',
@@ -133,6 +149,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 20,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: ['low', 'medium', 'high'],
   },
   {
     id: 'glm-5.2',
@@ -147,6 +165,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 4.4,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: ['high', 'max'],
   },
   {
     id: 'glm-5.3',
@@ -161,6 +181,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 4.4,
     status: null,
     source: 'models.dev',
+    canDisable: false,
+    efforts: ['low', 'high', 'max'],
   },
   {
     id: 'glm-5.3-flash',
@@ -175,6 +197,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 0.5,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: ['low', 'high', 'max'],
   },
   {
     id: 'gpt-5.6-luna',
@@ -189,6 +213,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 1.2,
     status: null,
     source: 'models.dev',
+    canDisable: false,
+    efforts: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
   },
   {
     id: 'gpt-6-luna',
@@ -203,6 +229,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 0.5,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
   },
   {
     id: 'grok-4.7',
@@ -217,6 +245,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 6,
     status: null,
     source: 'models.dev',
+    canDisable: false,
+    efforts: ['low', 'medium', 'high', 'xhigh'],
   },
   {
     id: 'hy3',
@@ -231,6 +261,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 0.58,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: ['none', 'low', 'high'],
   },
   {
     id: 'hy4-preview',
@@ -245,6 +277,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 2.501,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: ['none', 'high'],
   },
   {
     id: 'kimi-k2.7-code',
@@ -259,6 +293,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 4,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: [],
   },
   {
     id: 'kimi-k3',
@@ -273,6 +309,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 15,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: ['max'],
   },
   {
     id: 'longcat-2.0',
@@ -287,6 +325,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 1.2,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: [],
   },
   {
     id: 'longcat-2.5-preview-free',
@@ -301,6 +341,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 0,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: [],
   },
   {
     id: 'mimo-v2.5',
@@ -315,6 +357,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 0.28,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: [],
   },
   {
     id: 'mimo-v2.5-pro',
@@ -329,6 +373,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 0.87,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: [],
   },
   {
     id: 'mimo-v2.6-flash',
@@ -343,6 +389,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 0.28,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: [],
   },
   {
     id: 'mimo-v2.6-pro',
@@ -357,6 +405,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 0.87,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: [],
   },
   {
     id: 'minimax-m2.7',
@@ -371,6 +421,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 1.2,
     status: 'deprecated',
     source: 'models.dev',
+    canDisable: true,
+    efforts: [],
   },
   {
     id: 'minimax-m3',
@@ -385,6 +437,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 1.2,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: [],
   },
   {
     id: 'muse-spark-1.2-contributor',
@@ -399,6 +453,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 0.2,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: ['minimal', 'low', 'medium', 'high', 'xhigh'],
   },
   {
     id: 'muse-spark-1.3-contributor',
@@ -413,6 +469,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 0.2,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: ['minimal', 'low', 'medium', 'high', 'xhigh'],
   },
   {
     id: 'qwen3.7-plus',
@@ -427,6 +485,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 1.6,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: [],
   },
   {
     id: 'qwen3.8-flash',
@@ -441,6 +501,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 0.47,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: ['low', 'medium', 'xhigh'],
   },
   {
     id: 'qwen3.8-max',
@@ -455,6 +517,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 6,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: ['low', 'medium', 'xhigh'],
   },
   {
     id: 'space-bunny',
@@ -469,6 +533,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 0.6,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
   },
   {
     id: 'step-5-preview',
@@ -483,6 +549,8 @@ export const OPENCODE_GO_CATALOG: CatalogModel[] = [
     costOutput: 2.7,
     status: null,
     source: 'models.dev',
+    canDisable: true,
+    efforts: ['low', 'medium', 'high'],
   },
 ];
 
@@ -500,4 +568,14 @@ export function catalogProtocol(model: string): 'chat' | 'responses' | 'messages
 /** True when the model cannot run with thinking disabled. */
 export function catalogThinkingOnly(model: string): boolean {
   return OPENCODE_GO_CATALOG.find((item) => item.id === model)?.thinkingOnly ?? false;
+}
+
+/** True when the model accepts `thinking: {type: 'disabled'}` at all. */
+export function catalogCanDisableThinking(model: string): boolean {
+  return OPENCODE_GO_CATALOG.find((item) => item.id === model)?.canDisable ?? true;
+}
+
+/** Reasoning levels the model accepts; empty when it takes no effort parameter. */
+export function catalogEfforts(model: string): string[] {
+  return OPENCODE_GO_CATALOG.find((item) => item.id === model)?.efforts ?? [];
 }

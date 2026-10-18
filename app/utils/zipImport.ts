@@ -1,7 +1,7 @@
 import type { UIMessage } from 'ai';
 import JSZip from 'jszip';
 import { generateId, shouldIncludeFile } from './fileUtils';
-import { escapeBoltTags } from './projectCommands';
+import { createEncodedFileActions } from '~/lib/persistence/agentFileReplay';
 import { createMessage } from '~/lib/persistence/messageMigration';
 
 /**
@@ -180,13 +180,7 @@ export const createChatFromZip = async (zipFile: File): Promise<ZipImportResult>
     text: `I've imported the contents of the "${folderName}" ZIP archive.${binaryFilesMessage}
 
 <boltArtifact id="imported-files" title="Imported Files" type="bundled">
-${fileArtifacts
-  .map(
-    (file) => `<boltAction type="file" filePath="${file.path}">
-${escapeBoltTags(file.content)}
-</boltAction>`,
-  )
-  .join('\n\n')}
+${createEncodedFileActions(Object.fromEntries(fileArtifacts.map((file) => [file.path, file.content])))}
 </boltArtifact>`,
   }) as UIMessage;
 

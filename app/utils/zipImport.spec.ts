@@ -2,6 +2,7 @@ import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
 import { createChatFromZip } from './zipImport';
 import { getMessageText } from '~/lib/persistence/messageMigration';
+import { StreamingMessageParser } from '~/lib/runtime/message-parser';
 
 async function zipFileFrom(entries: Record<string, string>): Promise<File> {
   const zip = new JSZip();
@@ -21,7 +22,44 @@ async function zipFileFrom(entries: Record<string, string>): Promise<File> {
   return new File([new Uint8Array(bytes)], 'demo.zip', { type: 'application/zip' }) as unknown as File;
 }
 
+function importedFiles(text: string): Record<string, string> {
+  const files: Record<string, string> = {};
+
+  const parser = new StreamingMessageParser({
+    callbacks: {
+      onActionClose: ({ action }) => {
+        if (action.type === 'file') {
+          files[action.filePath] = action.content;
+        }
+      },
+    },
+  });
+
+  parser.parse('import', text);
+
+  return files;
+}
+
 describe('createChatFromZip', () => {
+  it('preserves entities, file fences and trailing newlines through the real action parser', async () => {
+    const source = '```html\n<p>&lt;literal&gt; é</p>\n```\n\n';
+    const result = await createChatFromZip(await zipFileFrom({ 'README.md': source }));
+    const written: string[] = [];
+
+    const parser = new StreamingMessageParser({
+      callbacks: {
+        onActionClose: ({ action }) => {
+          if (action.type === 'file') {
+            written.push(action.content);
+          }
+        },
+      },
+    });
+
+    parser.parse('zip-import', getMessageText(result.messages[1]));
+    expect(written).toEqual([source]);
+  });
+
   it('produces messages whose text is readable by the model pipeline', async () => {
     const result = await createChatFromZip(await zipFileFrom({ 'src/index.ts': 'export const a = 1;' }));
 
@@ -44,8 +82,7 @@ describe('createChatFromZip', () => {
         .map((part) => part.text)
         .join(''),
     ).toContain('<boltArtifact id="imported-files"');
-    expect(getMessageText(filesMessage)).toContain('<boltAction type="file" filePath="index.ts">');
-    expect(getMessageText(filesMessage)).toContain('export const a = 1;');
+    expect(importedFiles(getMessageText(filesMessage))).toEqual({ 'index.ts': 'export const a = 1;' });
   });
 
   it('writes both the v4 content field and the parts array', async () => {
@@ -83,7 +120,7 @@ describe('createChatFromZip', () => {
     });
 
     const result = await createChatFromZip(await zipFileFrom({ 'package.json': pkg }));
-    const text = getMessageText(result.messages[1]);
+    const text = importedFiles(getMessageText(result.messages[1]))['package.json'];
 
     expect(result.hasExpoConfig).toBe(true);
 

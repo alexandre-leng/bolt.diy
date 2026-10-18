@@ -1,14 +1,17 @@
 import { atom } from 'nanostores';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { spawn, writeToBoltTerminal, toggleTerminal, readFile, saveFileContent, createFile } = vi.hoisted(() => ({
-  spawn: vi.fn(),
-  writeToBoltTerminal: vi.fn(),
-  toggleTerminal: vi.fn(),
-  readFile: vi.fn(),
-  saveFileContent: vi.fn(),
-  createFile: vi.fn(),
-}));
+const { spawn, writeToBoltTerminal, toggleTerminal, readFile, saveFileContent, createFile, stopShell } = vi.hoisted(
+  () => ({
+    spawn: vi.fn(),
+    writeToBoltTerminal: vi.fn(),
+    toggleTerminal: vi.fn(),
+    readFile: vi.fn(),
+    saveFileContent: vi.fn(),
+    createFile: vi.fn(),
+    stopShell: vi.fn().mockResolvedValue(undefined),
+  }),
+);
 
 vi.mock('~/lib/webcontainer', () => ({
   webcontainer: Promise.resolve({ spawn, workdir: '/home/project', fs: { readFile } }),
@@ -19,29 +22,33 @@ vi.mock('~/lib/stores/workbench', () => ({
     projectGeneration: atom(1),
     previews: atom([]),
     files: atom({}),
+    artifacts: atom({}),
+    boltTerminal: { stop: stopShell },
     saveFileContent,
     createFile,
     isFolderLocked: () => ({ isLocked: false }),
     isFileLocked: () => ({ locked: false }),
     queueProjectMutation: (operation: () => Promise<unknown>) => operation(),
-    waitForExecutionQueue: async () => undefined,
+    waitForExecutionQueue: vi.fn(async () => undefined),
     toggleTerminal,
     writeToBoltTerminal,
   },
 }));
 vi.mock('./ripgrepClient', () => ({ searchWithRipgrep: vi.fn() }));
 
-import { createProjectMcpBridge } from './projectMcp';
+import { createProjectMcpBridge, closeProjectMcpBridge, restartProjectPreview } from './projectMcp';
 import { workbenchStore } from '~/lib/stores/workbench';
 
 let bridge: Awaited<ReturnType<typeof createProjectMcpBridge>> | undefined;
 
 afterEach(async () => {
+  await closeProjectMcpBridge();
   await bridge?.close();
   bridge = undefined;
   workbenchStore.projectGeneration.set(workbenchStore.projectGeneration.get() + 1);
   workbenchStore.previews.set([]);
   workbenchStore.files.set({});
+  spawn.mockReset();
 });
 
 function processWithOutput(output: string, exitCode: number | Promise<number>) {
@@ -58,6 +65,89 @@ function processWithOutput(output: string, exitCode: number | Promise<number>) {
 }
 
 describe('project command tools', () => {
+  it('restarts the actual preview command instead of only clearing or reattaching a terminal', async () => {
+    let finish!: (code: number) => void;
+
+    const running = processWithOutput(
+      'old preview\n',
+      new Promise<number>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    running.kill.mockImplementation(() => finish(143));
+
+    const replacement = processWithOutput('new preview\n', new Promise<number>(() => undefined));
+    spawn.mockClear();
+    spawn.mockResolvedValueOnce(running).mockResolvedValueOnce(replacement);
+    bridge = await createProjectMcpBridge();
+    await bridge.callTool('project_run_command', { command: 'pnpm run dev -- --host 0.0.0.0', purpose: 'run' });
+
+    await restartProjectPreview();
+
+    expect(running.kill).toHaveBeenCalledOnce();
+    expect(stopShell).toHaveBeenCalled();
+    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(spawn).toHaveBeenLastCalledWith('/bin/jsh', ['-c', 'pnpm run dev -- --host 0.0.0.0']);
+  });
+
+  it('detects the preview script when no command is currently running', async () => {
+    workbenchStore.files.set({
+      '/home/project/package.json': {
+        type: 'file',
+        content: JSON.stringify({ scripts: { dev: 'vite' } }),
+        isBinary: false,
+      },
+    });
+    spawn.mockClear();
+    spawn.mockResolvedValueOnce(processWithOutput('ready\n', new Promise<number>(() => undefined)));
+
+    await restartProjectPreview();
+
+    expect(spawn).toHaveBeenCalledOnce();
+    expect(spawn).toHaveBeenCalledWith('/bin/jsh', ['-c', 'npm run dev']);
+  });
+
+  it('coalesces simultaneous restart requests and refuses to act after switching projects', async () => {
+    let resume!: () => void;
+    vi.mocked(workbenchStore.waitForExecutionQueue).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resume = resolve;
+        }),
+    );
+    spawn.mockClear();
+    stopShell.mockClear();
+
+    const first = restartProjectPreview();
+    const second = restartProjectPreview();
+    expect(second).toBe(first);
+    workbenchStore.projectGeneration.set(workbenchStore.projectGeneration.get() + 1);
+    resume();
+    await expect(first).rejects.toThrow('Le projet actif a changé');
+    expect(spawn).not.toHaveBeenCalled();
+    expect(stopShell).not.toHaveBeenCalled();
+  });
+
+  it('does not stop anything if no preview command exists', async () => {
+    stopShell.mockClear();
+    spawn.mockClear();
+    await expect(restartProjectPreview()).rejects.toThrow('Aucune commande de prévisualisation');
+    expect(stopShell).not.toHaveBeenCalled();
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it('propagates a failed launch so the button can report the actual error', async () => {
+    workbenchStore.files.set({
+      '/home/project/package.json': {
+        type: 'file',
+        content: JSON.stringify({ scripts: { dev: 'vite' } }),
+        isBinary: false,
+      },
+    });
+    spawn.mockRejectedValueOnce(new Error('runtime unavailable'));
+    await expect(restartProjectPreview()).rejects.toThrow('runtime unavailable');
+  });
+
   it('reuses the same running dev command instead of spawning another preview server', async () => {
     let finish!: (code: number) => void;
 

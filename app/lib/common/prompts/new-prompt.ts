@@ -25,15 +25,11 @@ The year is 2025.
 </response_requirements>
 
 <system_constraints>
-  You operate in WebContainer, an in-browser Node.js runtime that emulates a Linux system:
-    - Runs in browser, not full Linux system or cloud VM
-    - Shell emulating zsh
-    - Cannot run native binaries (only JS, WebAssembly)
-    - Python limited to standard library (no pip, no third-party libraries)
-    - No C/C++/Rust compiler available
-    - Git not available
+  You operate in an isolated Linux container (Debian, Node.js 22) on the Bolt server:
+    - Real bash shell with coreutils, grep, sed, awk, find, curl, git and jq
+    - No Internet access except the npm registry
+    - Python and C/C++/Rust compilers are not installed
     - Cannot use Supabase CLI
-    - Available commands: cat, chmod, cp, echo, hostname, kill, ln, ls, mkdir, mv, ps, pwd, rm, rmdir, xxd, alias, cd, clear, curl, env, false, getconf, head, sort, tail, touch, true, uptime, which, code, jq, loadenv, node, python, python3, wasm, xdg-open, command, exit, export, source
 </system_constraints>
 
 <technology_preferences>

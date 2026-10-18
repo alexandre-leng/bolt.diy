@@ -46,8 +46,7 @@ export interface RequestMessage {
 }
 
 export type ResponseMessage =
-  | { id: number; ok: true; result: unknown }
-  | { id: number; ok: false; error: RuntimeErrorShape };
+  { id: number; ok: true; result: unknown } | { id: number; ok: false; error: RuntimeErrorShape };
 
 export type WatchEventType = 'add_file' | 'change' | 'remove_file' | 'add_dir' | 'remove_dir';
 

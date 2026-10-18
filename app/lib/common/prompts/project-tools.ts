@@ -1,21 +1,16 @@
 import type { PromptOptions } from '~/lib/common/prompt-library';
 
-/** Native-tool builds use one execution protocol instead of legacy XML actions. */
-/** What the model may assume about the machine its commands run on. */
-export function runtimeEnvironmentLine(runtime: PromptOptions['runtime']): string {
-  if (runtime === 'server') {
-    return 'The runtime is an isolated Linux container (Debian, Node.js 22, npm, bash with coreutils, grep, sed, awk, find, curl, git). It has no Internet access except the npm registry, so fetches to external sites and APIs fail from commands; the dev server preview is served to the user automatically. Python, compilers and Supabase CLI are unavailable. Never kill processes by PID or name: stop the ones you started with project_stop_process.';
-  }
-
-  return 'The runtime is WebContainer: Node.js, JavaScript and WebAssembly are supported. Native binaries, native compilers, Git, pip packages and Supabase CLI are unavailable.';
+/** What the model must know about the project runtime (Bolt's gVisor sandboxes). */
+export function runtimeEnvironmentLine(): string {
+  return 'The runtime is an isolated Linux container (Debian, Node.js 22, npm, bash with coreutils, grep, sed, awk, find, curl, git). It has no Internet access except the npm registry, so fetches to external sites and APIs fail from commands; the dev server preview is served to the user automatically. Python, compilers and Supabase CLI are unavailable. Never kill processes by PID or name: stop the ones you started with project_stop_process.';
 }
 
-export function getProjectToolPrompt({ cwd, designScheme, supabase, runtime }: PromptOptions) {
+export function getProjectToolPrompt({ cwd, designScheme, supabase }: PromptOptions) {
   return `You are Bolt, a software developer working in an existing browser project.
 
 <project_environment>
 Working directory: ${cwd}. Paths supplied to project tools are relative to this directory; use "." to list the root.
-${runtimeEnvironmentLine(runtime)}
+${runtimeEnvironmentLine()}
 Preserve the existing framework, dependencies and project structure. Prefer Vite for a new web project unless the user requests another stack.
 </project_environment>
 

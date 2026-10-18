@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { isPreviewOrigin, projectIdFor } from './boot';
 import { RuntimeSocket, type SocketLike } from './client';
-import { resolveRuntimeMode } from './mode';
 import { base64ToBytes, bytesToBase64, ServerContainer } from './serverContainer';
 
 /** In-memory bolt-runtime: answers requests, can push events and drop the connection. */
@@ -93,17 +92,6 @@ function setup() {
 
   return { server, socket, container: new ServerContainer(socket) };
 }
-
-describe('runtime mode', () => {
-  it('follows the build default and a per-browser cookie override', () => {
-    expect(resolveRuntimeMode('', undefined)).toBe('server');
-    expect(resolveRuntimeMode('', 'webcontainer')).toBe('webcontainer');
-    expect(resolveRuntimeMode('', 'server')).toBe('server');
-    expect(resolveRuntimeMode('a=1; bolt_runtime=server', undefined)).toBe('server');
-    expect(resolveRuntimeMode('bolt_runtime=wc', 'server')).toBe('webcontainer');
-    expect(resolveRuntimeMode('bolt_runtime=evil', 'server')).toBe('server');
-  });
-});
 
 describe('RuntimeSocket', () => {
   it('opens the session with the tab id, then sends queued requests', async () => {

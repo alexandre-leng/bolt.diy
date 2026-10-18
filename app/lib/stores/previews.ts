@@ -1,6 +1,6 @@
-import type { WebContainer } from '@webcontainer/api';
 import { atom } from 'nanostores';
-import { parsePreviewId } from '~/lib/webcontainer/coep';
+import type { WebContainer } from '~/lib/runtime/container';
+import { parsePreviewId } from '~/lib/runtime/server/previewUrl';
 
 // Extend Window interface to include our custom property
 declare global {

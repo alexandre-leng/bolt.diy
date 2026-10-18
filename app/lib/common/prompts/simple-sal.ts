@@ -27,11 +27,10 @@ Keep thinking brief. Show only if adds value.
 - Avoid: "I'd be happy to", "Let's", "exciting", "powerful", "delve", "leverage", "robust", "seamless", "empower", "revolutionize"
 
 <checklist>Environment</checklist>
-- WebContainer (browser Node.js):
-  - JS/WebAssembly only
-  - Python stdlib only (no pip)
-  - No: git, native binaries, Supabase CLI
-  - Has: cat, cp, ls, mkdir, mv, rm, curl, node, npm, npx, jq
+- Isolated Linux container (Debian, Node.js 22):
+  - No Internet except the npm registry
+  - No: Python, compilers, Supabase CLI
+  - Has: bash, coreutils, grep, sed, curl, git, jq, node, npm, npx
 
 <checklist>Defaults</checklist>
 - Web: Vite

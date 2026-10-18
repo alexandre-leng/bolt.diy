@@ -1,16 +1,15 @@
 import { useStore } from '@nanostores/react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { FirefoxAndroidPreviewNotice } from './FirefoxAndroidPreviewNotice';
 import type { ElementInfo } from './Inspector';
 import { InspectorPanel } from './InspectorPanel';
 import { PortDropdown } from './PortDropdown';
 import { ScreenshotSelector } from './ScreenshotSelector';
 import { IconButton } from '~/components/ui/IconButton';
 import { ExpoQrModal } from '~/components/workbench/ExpoQrModal';
+import { parsePreviewId } from '~/lib/runtime/server/previewUrl';
 import { expoUrlAtom } from '~/lib/stores/qrCodeStore';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { toast } from '~/lib/toastify';
-import { currentCoepMode, parsePreviewId } from '~/lib/webcontainer/coep';
 
 type ResizeSide = 'left' | 'right' | null;
 
@@ -1081,7 +1080,6 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
             alignItems: 'center',
           }}
         >
-          {activePreview && currentCoepMode() === 'require-corp' && <FirefoxAndroidPreviewNotice />}
           {activePreview ? (
             <>
               {isPreviewPaused ? (

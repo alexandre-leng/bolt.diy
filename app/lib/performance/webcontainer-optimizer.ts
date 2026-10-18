@@ -1,4 +1,4 @@
-import type { WebContainer } from '@webcontainer/api';
+import type { WebContainer } from '~/lib/runtime/container';
 import { webcontainer } from '~/lib/webcontainer';
 
 let webContainerInstance: WebContainer | null = null;
@@ -35,9 +35,4 @@ export function isWebContainerReady(): boolean {
 /** Reset only the cached readiness state, primarily for tests. */
 export function resetWebContainer(): void {
   webContainerInstance = null;
-}
-
-/** Preconnect to WebContainer's package CDN. */
-export function getWebContainerPreconnect(): string {
-  return 'https://unpkg.com';
 }

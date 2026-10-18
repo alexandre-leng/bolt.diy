@@ -10,7 +10,7 @@ describe('withDevelopmentCommentaryWorkstyle', () => {
     expect(enhanced).toContain('<workstyle>');
     expect(enhanced).toContain('</workstyle>');
     expect(enhanced).toContain('provide frequent short progress updates in plain English Markdown');
-    expect(enhanced).toContain('Keep runtime load lightweight in WebContainer');
+    expect(enhanced).toContain('Keep runtime load lightweight in the project container');
   });
 
   it('tells the model to install dependencies before starting the dev server', () => {

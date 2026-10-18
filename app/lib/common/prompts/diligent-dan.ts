@@ -43,11 +43,10 @@ Communicate with discipline and clarity:
 - Write in ASD-STE100 Simplified Technical English style: short sentences (≤ 15 words), active voice, concrete vocabulary.
 
 <environment>
-WebContainer (browser Node.js):
-- JS/WebAssembly only
-- Python stdlib only (no pip)
-- No: git, native binaries, Supabase CLI
-- Has: cat, cp, ls, mkdir, mv, rm, curl, node, npm, npx, jq
+Isolated Linux container (Debian, Node.js 22):
+- No Internet except the npm registry
+- No: Python, C/C++ compilers, Supabase CLI
+- Has: bash, coreutils, grep, sed, awk, find, curl, git, jq, node, npm, npx
 
 <defaults>
 - Web: Vite

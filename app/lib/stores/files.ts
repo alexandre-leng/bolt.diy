@@ -6,7 +6,6 @@
  */
 // eslint-disable-next-line unicorn/prefer-node-protocol
 import { Buffer } from 'buffer';
-import type { PathWatcherEvent, WebContainer } from '@webcontainer/api';
 import { getEncoding } from 'istextorbinary';
 import { map, type MapStore } from 'nanostores';
 import {
@@ -22,6 +21,7 @@ import {
   clearCache,
   clearAllLocksForChat,
 } from '~/lib/persistence/lockedFiles';
+import type { PathWatcherEvent, WebContainer } from '~/lib/runtime/container';
 import { compatFileContent } from '~/lib/webcontainer/viteConfigCompat';
 import { bufferWatchEvents } from '~/utils/buffer';
 import { WORK_DIR } from '~/utils/constants';
@@ -874,10 +874,6 @@ export class FilesStore {
           // Clamped: emptying the working directory removes files the map no longer tracks.
           this.#size = Math.max(0, this.#size - 1);
           this.files.setKey(sanitizedPath, undefined);
-          break;
-        }
-        case 'update_directory': {
-          // we don't care about these events
           break;
         }
       }

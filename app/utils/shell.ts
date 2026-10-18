@@ -1,6 +1,6 @@
-import type { WebContainer, WebContainerProcess } from '@webcontainer/api';
 import { atom } from 'nanostores';
 import { withResolvers } from './promises';
+import type { WebContainer, WebContainerProcess } from '~/lib/runtime/container';
 import { expoUrlAtom } from '~/lib/stores/qrCodeStore';
 import type { ITerminal } from '~/types/terminal';
 

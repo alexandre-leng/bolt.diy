@@ -40,14 +40,6 @@ export const links: LinksFunction = () => [
     type: 'font/woff2',
     crossOrigin: 'anonymous',
   },
-  {
-    rel: 'preconnect',
-    href: 'https://unpkg.com',
-  },
-  {
-    rel: 'dns-prefetch',
-    href: 'https://unpkg.com',
-  },
 ];
 
 const inlineThemeCode = stripIndents`
@@ -170,7 +162,7 @@ export default function App() {
     // Start Web Vitals observation
     observeWebVitals();
 
-    // Pre-boot WebContainer in background
+    // Connect to the project runtime in the background
     prebootWebContainer();
 
     // Initialize debug logging with improved error handling

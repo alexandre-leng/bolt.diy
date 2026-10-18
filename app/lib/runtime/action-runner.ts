@@ -1,6 +1,6 @@
-import type { WebContainer } from '@webcontainer/api';
 import { atom, map, type MapStore } from 'nanostores';
 import type { ActionCallbackData } from './message-parser';
+import type { WebContainer } from '~/lib/runtime/container';
 import { compatFileContent } from '~/lib/webcontainer/viteConfigCompat';
 import type { ActionAlert, BoltAction, DeployAlert, FileHistory, SupabaseAction, SupabaseAlert } from '~/types/actions';
 import { createScopedLogger } from '~/utils/logger';

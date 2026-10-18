@@ -21,13 +21,7 @@ export {
 } from './streaming-optimizer';
 
 // WebContainer optimization
-export {
-  prebootWebContainer,
-  getWebContainer,
-  isWebContainerReady,
-  resetWebContainer,
-  getWebContainerPreconnect,
-} from './webcontainer-optimizer';
+export { prebootWebContainer, getWebContainer, isWebContainerReady, resetWebContainer } from './webcontainer-optimizer';
 
 // CodeMirror optimizations
 export {

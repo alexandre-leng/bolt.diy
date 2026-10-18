@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LoaderFunctionArgs } from 'react-router';
 import { useLoaderData } from 'react-router';
-import { previewOrigin } from '~/lib/webcontainer/coep';
+import { previewOrigin } from '~/lib/runtime/server/previewUrl';
 
 const PREVIEW_CHANNEL = 'preview-updates';
 
@@ -64,20 +64,20 @@ export default function WebContainerPreview() {
       broadcastChannelRef.current = undefined;
     }
 
-    /*
-     * Construct the WebContainer preview URL
-     * Same isolation mode as this page (nginx header): local-corp on Firefox Android.
-     */
+    // The project's preview host (pN.<app parent domain>); anything else is refused.
     const url = previewOrigin(previewId);
-    setPreviewUrl(url);
 
-    // Set the iframe src
-    if (iframeRef.current) {
-      iframeRef.current.src = url;
+    if (url) {
+      setPreviewUrl(url);
+
+      // Set the iframe src
+      if (iframeRef.current) {
+        iframeRef.current.src = url;
+      }
+
+      // Notify other tabs that this preview is ready
+      notifyPreviewReady();
     }
-
-    // Notify other tabs that this preview is ready
-    notifyPreviewReady();
 
     // Cleanup
     return () => {

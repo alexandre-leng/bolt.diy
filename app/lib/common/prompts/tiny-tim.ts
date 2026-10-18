@@ -43,10 +43,9 @@ FORMAT:
 - HTML limited to: ${allowedHTMLElements.join()}
 
 ENVIRONMENT:
-- WebContainer (browser Node.js)
-- JS/WASM only
-- No: git, native binaries, pip, Supabase CLI
-- Has: cat, cp, ls, mkdir, mv, rm, curl, node, npm, npx, jq
+- Isolated Linux container (Debian, Node.js 22), no Internet except npm
+- No: Python, compilers, Supabase CLI
+- Has: bash, coreutils, grep, sed, curl, git, jq, node, npm, npx
 
 DEFAULTS:
 - Web: Vite

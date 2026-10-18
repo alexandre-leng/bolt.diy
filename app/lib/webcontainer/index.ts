@@ -1,7 +1,4 @@
-import type { WebContainer } from '@webcontainer/api';
-import { currentCoepMode } from './coep';
-import { currentRuntimeMode } from '~/lib/runtime/server/mode';
-import { WORK_DIR_NAME } from '~/utils/constants';
+import type { WebContainer } from '~/lib/runtime/container';
 import { cleanStackTrace } from '~/utils/stacktrace';
 
 interface WebContainerContext {
@@ -52,24 +49,12 @@ if (!import.meta.env.SSR) {
    * access, with the error surfaced to the caller rather than swallowed.
    */
   /*
-   * Server runtime (default once rolled out): the project runs in a gVisor sandbox on the Bolt
-   * host and StackBlitz is never loaded. The legacy WebContainer stays behind a dynamic import
-   * so the server mode does not even download its code.
+   * Projects run in a gVisor sandbox on the Bolt host (bolt-runtime). StackBlitz WebContainer
+   * has been removed: nothing is loaded from stackblitz.com / webcontainer-api.io any more.
    */
   const bootRuntime = async (): Promise<WebContainer> => {
-    if (currentRuntimeMode() === 'server') {
-      const { bootServerContainer } = await import('~/lib/runtime/server/boot');
-      return (await bootServerContainer()) as unknown as WebContainer;
-    }
-
-    const stackblitz = await import('@webcontainer/api');
-
-    return stackblitz.WebContainer.boot({
-      // Same isolation mode as the page header (nginx): require-corp on Firefox Android.
-      coep: currentCoepMode(),
-      workdirName: WORK_DIR_NAME,
-      forwardPreviewErrors: true, // Enable error forwarding from iframes
-    });
+    const { bootServerContainer } = await import('~/lib/runtime/server/boot');
+    return bootServerContainer();
   };
 
   const bootWebContainer = (): Promise<WebContainer> =>
@@ -123,14 +108,8 @@ if (!import.meta.env.SSR) {
     (import.meta.hot?.data?.webcontainerBoot as Promise<WebContainer> | undefined) ?? bootWebContainer();
 
   /*
-   * DO NOT retry a failed boot.
-   *
-   * WebContainer is a per-tab singleton guarded by an internal `booted` flag
-   * that is set on the first `boot()` and NEVER cleared (stackblitz/webcontainer-core#1125).
-   * Re-calling `boot()` after any failure therefore throws
-   * "Unable to create more instances" — which masks the real, actionable error
-   * (network, crossOriginIsolated, blocked CDN) behind a message that looks like
-   * a resource leak. One boot per page lifetime, then surface whatever it says.
+   * One boot per page lifetime: the runtime socket reconnects on its own, so a boot that failed
+   * (server unreachable at first load) is surfaced to the caller rather than retried in a loop.
    */
   const getWebContainer = (): Promise<WebContainer> => Promise.resolve(bootPromise);
 

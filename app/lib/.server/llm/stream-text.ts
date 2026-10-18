@@ -119,9 +119,6 @@ export async function streamText(props: {
   agentMode?: boolean;
   designScheme?: DesignScheme;
 
-  /** Runtime the browser runs the project in (cookie bolt_runtime / build default). */
-  runtime?: 'server' | 'webcontainer';
-
   /*
    * v7 returns a single stream. Callers that used to iterate result.fullStream
    * alongside the merged UI stream must observe chunks here instead, otherwise
@@ -271,7 +268,6 @@ export async function streamText(props: {
       allowedHtmlElements: allowedHTMLElements,
       modificationTagName: MODIFICATIONS_TAG_NAME,
       designScheme,
-      runtime: props.runtime,
       projectTools: chatMode === 'build' && Boolean(options?.prepareStep),
       supabase: {
         isConnected: options?.supabaseConnection?.isConnected || false,

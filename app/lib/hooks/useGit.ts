@@ -1,8 +1,8 @@
-import type { WebContainer } from '@webcontainer/api';
 import git, { type GitAuth, type PromiseFsClient } from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
 import Cookies from 'js-cookie';
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
+import type { WebContainer } from '~/lib/runtime/container';
 import { toast } from '~/lib/toastify';
 import { webcontainer as webcontainerPromise } from '~/lib/webcontainer';
 
@@ -309,7 +309,10 @@ const getFs = (
         }
 
         const resp = await webcontainer.fs.readdir(dirPath, { withFileTypes: true });
-        const fileInfo = resp.find((x) => x.name === fileName);
+
+        const fileInfo = (resp as Array<{ name: string; isFile(): boolean; isDirectory(): boolean }>).find(
+          (x) => x.name === fileName,
+        );
 
         if (!fileInfo) {
           const err = new Error(`ENOENT: no such file or directory, stat '${path}'`) as NodeJS.ErrnoException;

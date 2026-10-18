@@ -1,6 +1,6 @@
-import type { WebContainer, WebContainerProcess } from '@webcontainer/api';
 import { describe, expect, it, vi } from 'vitest';
 import { BoltShell } from './shell';
+import type { WebContainer, WebContainerProcess } from '~/lib/runtime/container';
 import type { ITerminal } from '~/types/terminal';
 
 describe('BoltShell.stop', () => {

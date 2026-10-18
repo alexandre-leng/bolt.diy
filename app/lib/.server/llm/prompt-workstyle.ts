@@ -65,7 +65,7 @@ export function withDevelopmentCommentaryWorkstyle(systemPrompt: string): string
   - If the user asks for documentation study output, write the Markdown file with project_write_file.
   - When you create files, include the exact created file path(s) in your final response so users can find them immediately.
   - If the user asks to build/run an app, start it with project_run_command so the preview can run.
-  - Keep runtime load lightweight in WebContainer:
+  - Keep runtime load lightweight in the project container:
     - Avoid \`npm run build\` unless the user explicitly asks for a production build.
     - Only run install commands when dependencies changed or when \`node_modules\` is missing.
     - Prefer one install command per run and avoid repeated reinstall loops.

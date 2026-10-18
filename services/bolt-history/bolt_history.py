@@ -252,6 +252,16 @@ def json_bytes(payload, status=200):
     return status, json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
 
+def _log_database_error(context, exc):
+    """Record a DatabaseError server-side, keeping psql internals out of the HTTP body.
+
+    psql's stderr carries constraint names, column names and the failing SQL fragment. Returning
+    it verbatim ("%s" % exc) handed an attacker the schema and the query; the client only needs to
+    know the write failed. The detail is written to the journal, where the operator can read it.
+    """
+    sys.stderr.write("[bolt-history] %s: database error: %s\n" % (context, exc))
+
+
 def validate_chat(payload):
     """Return (chat, error). A chat must at least carry an id, a timestamp and messages."""
     if not isinstance(payload, dict):
@@ -501,7 +511,8 @@ class Handler(BaseHTTPRequestHandler):
                 rows = _run_sql("SELECT count(*)::text FROM chats;")
                 count = int(rows[0]) if rows else 0
             except DatabaseError as exc:
-                return self._error(500, "database error: %s" % exc)
+                _log_database_error("/health GET", exc)
+                return self._error(500, "database error")
 
             code, body = json_bytes({"ok": True, "chats": count, "backend": "postgresql", "database": PG_DB})
 
@@ -519,7 +530,8 @@ class Handler(BaseHTTPRequestHandler):
                 rows = _run_sql(CHAT_LIST_SQL, {"owner": owner})
                 tombstones = _run_sql(TOMBSTONES_SQL % TOMBSTONE_DAYS, {"owner": owner})
             except DatabaseError as exc:
-                return self._error(500, "database error: %s" % exc)
+                _log_database_error("/history GET", exc)
+                return self._error(500, "database error")
 
             chats = [row_to_chat(row, with_messages=False) for row in rows]
             deleted = []
@@ -543,7 +555,8 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 rows = _run_sql(PROJECTS_SQL, {"owner": owner})
             except DatabaseError as exc:
-                return self._error(500, "database error: %s" % exc)
+                _log_database_error("/projects GET", exc)
+                return self._error(500, "database error")
 
             projects = []
 
@@ -559,12 +572,20 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/profile":
             try:
+                # Every column goes through sql_escaped(), like CHAT_COLUMNS and PROJECTS_SQL:
+                # an unescaped bio holding the record separator cut the row in the middle and
+                # its tail surfaced in the avatar field, producing corrupt JSON.
                 rows = _run_sql(
-                    "SELECT coalesce(username,''), coalesce(bio,''), coalesce(avatar,'') "
-                    "FROM profile WHERE id = 'default';"
+                    "SELECT "
+                    + ", ".join(
+                        sql_escaped(column)
+                        for column in ("coalesce(username,'')", "coalesce(bio,'')", "coalesce(avatar,'')")
+                    )
+                    + " FROM profile WHERE id = 'default';"
                 )
             except DatabaseError as exc:
-                return self._error(500, "database error: %s" % exc)
+                _log_database_error("/profile GET", exc)
+                return self._error(500, "database error")
 
             if not rows:
                 # No profile stored yet: an empty one, never a 404, so the client can merge.
@@ -603,7 +624,8 @@ class Handler(BaseHTTPRequestHandler):
                 {"chat_id": chat_id, "owner": owner},
             )
         except DatabaseError as exc:
-            return self._error(500, "database error: %s" % exc)
+            _log_database_error("/history GET by id", exc)
+            return self._error(500, "database error")
 
         if not rows:
             return self._error(404, "chat not found")
@@ -636,6 +658,13 @@ class Handler(BaseHTTPRequestHandler):
 
         if error:
             return self._error(400, error)
+
+        if not isinstance(payload, dict):
+            # A JSON array or string body has no .get(): without this guard the AttributeError
+            # was raised OUTSIDE the try below, so the socket closed with no response and the
+            # client saw a dropped connection instead of a 400. Same guard as _put_project /
+            # _put_profile.
+            return self._error(400, "body must be a JSON object")
 
         if payload.get("id") != chat_id:
             return self._error(400, "body id does not match the URL")
@@ -675,9 +704,17 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 ON CONFLICT (id) DO UPDATE SET
                     url_id      = coalesce(nullif(EXCLUDED.url_id, ''), chats.url_id),
-                    description = EXCLUDED.description,
+                    -- HONEST LIMITATION: an omitted field and an explicit empty string are
+                    -- INDISTINGUISHABLE here. `chat.get("description")` is None for an omitted
+                    -- key, and _run_sql binds a None as the psql variable '' — the exact same
+                    -- literal an explicit "" binds. So the database cannot tell "the client
+                    -- cleared this title" from "this partial save never carried one", and
+                    -- coalesce() picks PRESERVE: a stale title is strictly less destructive than
+                    -- erasing a real one on every partial save. Same treatment as url_id above.
+                    -- (metadata avoids this only for an explicit JSON null, which binds to NULL.)
+                    description = coalesce(nullif(EXCLUDED.description, ''), chats.description),
                     timestamp   = EXCLUDED.timestamp,
-                    metadata    = EXCLUDED.metadata,
+                    metadata    = coalesce(EXCLUDED.metadata, chats.metadata),
                     messages    = EXCLUDED.messages,
                     user_id     = coalesce(EXCLUDED.user_id, chats.user_id),
                     updated_at  = now()
@@ -698,7 +735,8 @@ class Handler(BaseHTTPRequestHandler):
                 },
             )
         except DatabaseError as exc:
-            return self._error(500, "database error: %s" % exc)
+            _log_database_error("history PUT", exc)
+            return self._error(500, "database error")
 
         if not rows:
             # The id belongs to another account: refuse rather than overwrite it.
@@ -764,7 +802,8 @@ class Handler(BaseHTTPRequestHandler):
                 {"slug": slug, "name": name, "url": url, "chat_id": chat_id, "owner": owner},
             )
         except DatabaseError as exc:
-            return self._error(500, "database error: %s" % exc)
+            _log_database_error("projects PUT", exc)
+            return self._error(500, "database error")
 
         if not rows:
             return self._error(409, "slug already used")
@@ -808,7 +847,8 @@ class Handler(BaseHTTPRequestHandler):
                 fetch=False,
             )
         except DatabaseError as exc:
-            return self._error(500, "database error: %s" % exc)
+            _log_database_error("profile PUT", exc)
+            return self._error(500, "database error")
 
         code, body = json_bytes({"ok": True})
 
@@ -850,7 +890,8 @@ class Handler(BaseHTTPRequestHandler):
             )
             removed = int(rows[0]) if rows else 0
         except DatabaseError as exc:
-            return self._error(500, "database error: %s" % exc)
+            _log_database_error("history DELETE", exc)
+            return self._error(500, "database error")
 
         code, body = json_bytes({"ok": True, "removed": removed})
 

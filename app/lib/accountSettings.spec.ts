@@ -7,9 +7,10 @@
  *   - the account holds `onboardingCompleted` but the flag is not written locally
  *   - the first device never uploads, so the account stays empty and every device re-asks
  *
- * They also pin the rule that secrets are sent for encryption and that their values never
- * come back from the read endpoint.
+ * They also pin the rule that secrets are sent for encryption, that only the provider key can be
+ * read back (and merged, never overwritten), and that connection tokens stay write-only.
  */
+import Cookies from 'js-cookie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ACCOUNT_PREFERENCE_KEYS,
@@ -21,9 +22,12 @@ import {
   PROFILE_STORAGE_KEY,
   pushSecrets,
   readAccountPreferences,
+  restoreApiKeysFromAccount,
   saveOnboardingToAccount,
+  storeApiKeysOnAccount,
   syncAccountSettings,
 } from './accountSettings';
+import { API_KEYS_UPDATED_EVENT } from '~/lib/api/apiKeys';
 
 function jsonResponse(body: unknown, status = 200) {
   return {
@@ -307,6 +311,203 @@ describe('accountSettings', () => {
     it('makes no request when there is nothing to record', async () => {
       expect(await saveOnboardingToAccount()).toBe(true);
       expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('restoreApiKeysFromAccount', () => {
+    const ACCOUNT_KEYS = { OpenCodeGo: 'oc_sk_FROM-THE-ACCOUNT' };
+
+    function accountHolds(value: unknown, status = 200) {
+      fetchMock.mockResolvedValue(jsonResponse({ ok: true, name: 'provider_settings', value }, status));
+    }
+
+    function localKeys(): Record<string, string> {
+      const raw = Cookies.get('apiKeys');
+
+      return raw ? (JSON.parse(raw) as Record<string, string>) : {};
+    }
+
+    beforeEach(() => {
+      Cookies.remove('apiKeys');
+    });
+
+    it('puts the account key in the cookie of a second device that has none', async () => {
+      accountHolds(JSON.stringify(ACCOUNT_KEYS));
+
+      expect(await restoreApiKeysFromAccount()).toBe('restored');
+      expect(localKeys()).toEqual(ACCOUNT_KEYS);
+    });
+
+    it('asks the server for exactly the provider key, nothing else', async () => {
+      accountHolds(JSON.stringify(ACCOUNT_KEYS));
+
+      await restoreApiKeysFromAccount();
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(String(fetchMock.mock.calls[0][0])).toBe('/api/auth/secrets?name=provider_settings');
+    });
+
+    it('treats the empty cookie the chat writes on mount as "no key here"', async () => {
+      // The chat writes {"<provider>":""} on mount even when no key was ever entered.
+      Cookies.set('apiKeys', JSON.stringify({ OpenCodeGo: '' }));
+      accountHolds(JSON.stringify(ACCOUNT_KEYS));
+
+      expect(await restoreApiKeysFromAccount()).toBe('restored');
+      expect(localKeys().OpenCodeGo).toBe('oc_sk_FROM-THE-ACCOUNT');
+    });
+
+    it('never overwrites a key already typed on this device', async () => {
+      Cookies.set('apiKeys', JSON.stringify({ OpenCodeGo: 'oc_sk_TYPED-HERE' }));
+      accountHolds(JSON.stringify(ACCOUNT_KEYS));
+
+      expect(await restoreApiKeysFromAccount()).toBe('nothing');
+      expect(localKeys().OpenCodeGo).toBe('oc_sk_TYPED-HERE');
+    });
+
+    it('fills only the providers this device is missing and keeps the others', async () => {
+      Cookies.set('apiKeys', JSON.stringify({ Anthropic: 'sk-ant-LOCAL' }));
+      accountHolds(JSON.stringify({ Anthropic: 'sk-ant-ACCOUNT', OpenCodeGo: 'oc_sk_ACCOUNT' }));
+
+      expect(await restoreApiKeysFromAccount()).toBe('restored');
+      expect(localKeys()).toEqual({ Anthropic: 'sk-ant-LOCAL', OpenCodeGo: 'oc_sk_ACCOUNT' });
+    });
+
+    it('announces the restored keys so the open page picks them up', async () => {
+      const heard: unknown[] = [];
+      const listener = (event: Event) => heard.push((event as CustomEvent).detail);
+      window.addEventListener(API_KEYS_UPDATED_EVENT, listener);
+      accountHolds(JSON.stringify(ACCOUNT_KEYS));
+
+      await restoreApiKeysFromAccount();
+      window.removeEventListener(API_KEYS_UPDATED_EVENT, listener);
+
+      expect(heard).toHaveLength(1);
+      expect((heard[0] as { apiKeys: Record<string, string> }).apiKeys).toEqual(ACCOUNT_KEYS);
+    });
+
+    it('does nothing when the account holds no key', async () => {
+      accountHolds(null);
+
+      expect(await restoreApiKeysFromAccount()).toBe('nothing');
+      expect(localKeys()).toEqual({});
+    });
+
+    it('ignores empty values coming from the account', async () => {
+      accountHolds(JSON.stringify({ OpenCodeGo: '', Anthropic: '   ' }));
+
+      expect(await restoreApiKeysFromAccount()).toBe('nothing');
+      expect(localKeys()).toEqual({});
+    });
+
+    it.each([
+      ['not JSON', 'oc_sk_not-json'],
+      ['a JSON array', JSON.stringify(['oc_sk_x'])],
+      ['a JSON string', JSON.stringify('oc_sk_x')],
+      ['a JSON number', '42'],
+    ])('refuses a stored value that is %s without touching the cookie', async (_label, value) => {
+      accountHolds(value);
+
+      expect(await restoreApiKeysFromAccount()).toBe('nothing');
+      expect(localKeys()).toEqual({});
+    });
+
+    it('drops non-string entries instead of writing them as keys', async () => {
+      accountHolds(JSON.stringify({ OpenCodeGo: 'oc_sk_OK', Broken: { nested: 'x' }, Count: 3 }));
+
+      await restoreApiKeysFromAccount();
+
+      expect(localKeys()).toEqual({ OpenCodeGo: 'oc_sk_OK' });
+    });
+
+    it('fails soft when the server is unreachable', async () => {
+      fetchMock.mockRejectedValue(new Error('offline'));
+
+      expect(await restoreApiKeysFromAccount()).toBe('offline');
+      expect(localKeys()).toEqual({});
+    });
+
+    it.each([401, 403, 500])('fails soft on a %i answer and leaves the cookie alone', async (status) => {
+      Cookies.set('apiKeys', JSON.stringify({ OpenCodeGo: 'oc_sk_KEEP' }));
+      fetchMock.mockResolvedValue(jsonResponse({ ok: false, error: 'nope' }, status));
+
+      expect(await restoreApiKeysFromAccount()).toBe('offline');
+      expect(localKeys().OpenCodeGo).toBe('oc_sk_KEEP');
+    });
+
+    it('does not echo a key in its log output', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+      const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      accountHolds(JSON.stringify(ACCOUNT_KEYS));
+
+      await restoreApiKeysFromAccount();
+
+      const everything = [warn, error, info, log].flatMap((spy) => spy.mock.calls.flat()).join(' ');
+      expect(everything).not.toContain('FROM-THE-ACCOUNT');
+    });
+  });
+
+  describe('storeApiKeysOnAccount', () => {
+    function accountHolds(keys: Record<string, string> | null) {
+      fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+        if (init?.method === 'PUT') {
+          return jsonResponse({ ok: true, names: ['provider_settings'] });
+        }
+
+        return jsonResponse({ ok: true, name: 'provider_settings', value: keys ? JSON.stringify(keys) : null });
+      });
+    }
+
+    function sentBody(): Record<string, string> {
+      const put = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'PUT');
+
+      return JSON.parse((put?.[1] as RequestInit).body as string) as Record<string, string>;
+    }
+
+    it('keeps the keys another device already stored when this one adds its own', async () => {
+      accountHolds({ Anthropic: 'sk-ant-FROM-PHONE' });
+
+      await storeApiKeysOnAccount({ OpenCodeGo: 'oc_sk_FROM-DESKTOP' });
+
+      expect(JSON.parse(sentBody().provider_settings)).toEqual({
+        Anthropic: 'sk-ant-FROM-PHONE',
+        OpenCodeGo: 'oc_sk_FROM-DESKTOP',
+      });
+    });
+
+    it('lets the key typed on this device replace the account value for the same provider', async () => {
+      accountHolds({ OpenCodeGo: 'oc_sk_OLD' });
+
+      await storeApiKeysOnAccount({ OpenCodeGo: 'oc_sk_NEW' });
+
+      expect(JSON.parse(sentBody().provider_settings)).toEqual({ OpenCodeGo: 'oc_sk_NEW' });
+    });
+
+    it('never sends empty placeholders', async () => {
+      accountHolds(null);
+
+      await storeApiKeysOnAccount({ OpenCodeGo: 'oc_sk_REAL', Anthropic: '' });
+
+      expect(JSON.parse(sentBody().provider_settings)).toEqual({ OpenCodeGo: 'oc_sk_REAL' });
+    });
+
+    it('does not write over the account when it cannot read what the account holds', async () => {
+      /*
+       * An unreadable account must not be treated as an empty one: that would erase every key
+       * another device stored the moment this one saves.
+       */
+      fetchMock.mockRejectedValue(new Error('offline'));
+
+      expect(await storeApiKeysOnAccount({ OpenCodeGo: 'oc_sk_REAL' })).toBe(false);
+      expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'PUT')).toBe(false);
+    });
+
+    it('sends nothing when there is no key to store', async () => {
+      accountHolds({ Anthropic: 'sk-ant-KEEP' });
+
+      expect(await storeApiKeysOnAccount({ OpenCodeGo: '' })).toBe(true);
+      expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'PUT')).toBe(false);
     });
   });
 

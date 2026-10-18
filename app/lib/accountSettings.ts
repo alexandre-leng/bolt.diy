@@ -1,3 +1,5 @@
+import Cookies from 'js-cookie';
+import { API_KEYS_UPDATED_EVENT, type ApiKeysUpdatedDetail } from '~/lib/api/apiKeys';
 import { createScopedLogger } from '~/utils/logger';
 
 /*
@@ -9,8 +11,11 @@ import { createScopedLogger } from '~/utils/logger';
  * lost the keys for good. These functions move that state onto the account.
  *
  * API keys are the sensitive part: they are sent to `/api/auth/secrets` where the server
- * encrypts them (AES-256-GCM) before writing, and the read endpoint returns only the NAMES
- * that exist — never a value. The browser keeps its local copy so an offline start still
+ * encrypts them (AES-256-GCM) before writing. The listing returns only the NAMES that exist.
+ * Exactly one value can be read back, the model providers' keys (`provider_settings`), and only
+ * by the signed-in account that stored them: a second device needs them or it is told a key
+ * exists and can never use it. Every connection token (GitHub, GitLab, Netlify, Vercel, Supabase,
+ * MCP) stays write-only. The browser keeps its local copy so an offline start still
  * works, but the account is what makes a second device stop asking.
  *
  * Every call fails soft. An unreachable server must not block the UI, which keeps working
@@ -328,6 +333,138 @@ export async function fetchSecretNames(): Promise<string[] | null> {
   const names = result.data.names;
 
   return Array.isArray(names) ? names.filter((name): name is string => typeof name === 'string') : [];
+}
+
+/** What the browser has in the `apiKeys` cookie, minus the empty placeholders. */
+function readLocalApiKeys(): Record<string, string> {
+  const raw = Cookies.get('apiKeys');
+
+  if (!raw) {
+    return {};
+  }
+
+  try {
+    return keepNonEmptyStrings(JSON.parse(raw));
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Only string values that hold something. The chat writes `{"<provider>":""}` on mount even
+ * when no key was ever entered, so an empty string means "nothing here", not "a key".
+ */
+function keepNonEmptyStrings(value: unknown): Record<string, string> {
+  const kept: Record<string, string> = {};
+
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return kept;
+  }
+
+  for (const [provider, key] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof key === 'string' && key.trim()) {
+      kept[provider] = key.trim();
+    }
+  }
+
+  return kept;
+}
+
+/**
+ * Bring the account's provider keys to this device.
+ *
+ * The first device stores its key on the account, encrypted. Without this the second device
+ * learned that a key existed (the wizard even tells the user "they will be used automatically")
+ * yet had no way to obtain it, so the wizard stayed closed while every model request failed for
+ * want of a key.
+ *
+ * The rules are about not doing harm:
+ *   - a key already present on this device always wins; the account only fills the gaps, because
+ *     what was just typed here is the freshest intent;
+ *   - empty or malformed values from the account are ignored, never written;
+ *   - an unreachable or refusing server changes nothing (the app keeps working from this device);
+ *   - nothing is logged that could contain a key.
+ */
+export async function restoreApiKeysFromAccount(): Promise<'restored' | 'nothing' | 'offline'> {
+  const result = await requestJson(`${SECRETS_ENDPOINT}?name=provider_settings`);
+
+  if (!result.ok || !result.data) {
+    return 'offline';
+  }
+
+  const stored = result.data.value;
+
+  if (typeof stored !== 'string' || !stored) {
+    return 'nothing';
+  }
+
+  let fromAccount: Record<string, string>;
+
+  try {
+    fromAccount = keepNonEmptyStrings(JSON.parse(stored));
+  } catch {
+    // Not the JSON this module wrote. Leave the cookie alone and say nothing about the content.
+    logger.warn('the account holds a provider key in an unexpected format; ignored');
+
+    return 'nothing';
+  }
+
+  const local = readLocalApiKeys();
+  const merged = { ...fromAccount, ...local };
+  const added = Object.keys(merged).filter((provider) => local[provider] === undefined);
+
+  if (!added.length) {
+    return 'nothing';
+  }
+
+  Cookies.set('apiKeys', JSON.stringify(merged), { expires: 365 });
+  window.dispatchEvent(
+    new CustomEvent<ApiKeysUpdatedDetail>(API_KEYS_UPDATED_EVENT, {
+      detail: { apiKeys: merged, providerName: added[0] },
+    }),
+  );
+
+  return 'restored';
+}
+
+/**
+ * Store the keys typed on this device on the account, WITHOUT erasing what other devices put
+ * there.
+ *
+ * `provider_settings` is one value holding every provider's key, and the server replaces it as a
+ * whole. Sending only this device's cookie would therefore delete the keys a second device had
+ * stored, the moment the first one saved. So the account's current keys are read first and the
+ * ones typed here are laid over them (same provider: this device wins, it is the freshest).
+ *
+ * If the account cannot be read, nothing is written. An unreachable account is not an empty one,
+ * and treating it as empty is exactly how every other device's keys would be lost.
+ */
+export async function storeApiKeysOnAccount(typedHere: Record<string, string>): Promise<boolean> {
+  const mine = keepNonEmptyStrings(typedHere);
+
+  if (!Object.keys(mine).length) {
+    return true;
+  }
+
+  const current = await requestJson(`${SECRETS_ENDPOINT}?name=provider_settings`);
+
+  if (!current.ok || !current.data) {
+    logger.warn('could not read the account keys before saving; not writing over them');
+
+    return false;
+  }
+
+  let onAccount: Record<string, string> = {};
+
+  if (typeof current.data.value === 'string' && current.data.value) {
+    try {
+      onAccount = keepNonEmptyStrings(JSON.parse(current.data.value));
+    } catch {
+      onAccount = {};
+    }
+  }
+
+  return pushSecrets({ provider_settings: JSON.stringify({ ...onAccount, ...mine }) });
 }
 
 /**

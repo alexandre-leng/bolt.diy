@@ -5,8 +5,8 @@ import {
   applyAccountPreferences,
   fetchAccountPreferences,
   fetchSecretNames,
-  pushSecrets,
   saveOnboardingToAccount,
+  storeApiKeysOnAccount,
 } from '~/lib/accountSettings';
 import { API_KEYS_UPDATED_EVENT, type ApiKeysUpdatedDetail } from '~/lib/api/apiKeys';
 import { getAll, openDatabase } from '~/lib/persistence/db';
@@ -286,11 +286,12 @@ export function FirstRunOnboarding() {
 
     /*
      * Also store it on the account, encrypted server-side. The cookie above is what the
-     * running app reads (it keeps working offline and the server never hands a key back), so
-     * this is a second home rather than a replacement: a key entered on the desktop is then
-     * present when the phone signs in, instead of being asked for again.
+     * running app reads (it keeps working offline), so this is a second home rather than a
+     * replacement: a key entered on the desktop is then restored when the phone signs in
+     * (restoreApiKeysFromAccount), instead of being asked for again. Merged with what the
+     * account already holds, so saving here never erases a key another device stored.
      */
-    void pushSecrets({ provider_settings: JSON.stringify(apiKeys) });
+    void storeApiKeysOnAccount({ [providerName]: apiKey.trim() });
   };
 
   const next = async () => {

@@ -1,5 +1,42 @@
 # Mémoire Externe Partagée — bolt.diy (fork auto-hébergé)
 
+## 2026-10-18 — La clé API d'un compte n'arrivait jamais sur le second appareil
+
+- **Type** : fix (serveur + client) + tests + versionnement du code serveur.
+- **Symptôme mesuré** : deux navigateurs, même compte. Le premier enregistre sa clé (chiffrée en base) ;
+  le second apprend qu'elle existe (`GET /api/auth/secrets` → noms) mais ne l'obtient jamais, son cookie
+  `apiKeys` reste `{"OpenCodeGo":""}`. Le wizard affichait pourtant « Your account already stores API
+  keys… they will be used automatically » : faux. Résultat : wizard fermé, chaque requête au modèle en échec.
+- **Correctif serveur** (`bolt-accounts`) : `GET /api/auth/secrets?name=provider_settings` renvoie la valeur
+  déchiffrée de CE seul secret (`READABLE_SECRET_NAMES`) pour le compte connecté ; tout autre nom → 403 ;
+  les jetons GitHub/GitLab/Netlify/Vercel/Supabase/MCP restent en écriture seule. `no-store` déjà posé par `_json`.
+- **Correctif client** (`accountSettings.ts`) : `restoreApiKeysFromAccount` au démarrage (une clé saisie sur
+  cet appareil gagne, le compte ne comble que les trous, valeurs vides/mal formées ignorées, échec réseau
+  sans effet, aucune clé journalisée) ; `storeApiKeysOnAccount` fusionne avec le compte avant d'écrire, et
+  n'écrit RIEN si le compte est illisible (un compte illisible n'est pas un compte vide : sinon les clés
+  d'un autre appareil étaient écrasées).
+- **Deux bugs voisins trouvés en cherchant** : `DELETE /api/auth/secrets` plantait sur un corps JSON non
+  objet (`AttributeError`), et répondait `removed: 1` pour un secret jamais stocké (compteur incrémenté
+  sans regarder la base ; `RETURNING` désormais).
+- **Preuves** : rouge puis vert à chaque étape. Serveur lecture 10/10 (rouge : 3 échecs), serveur hostile
+  8/8 (rouge : 1 échec + 4 erreurs), client 48/48 (rouge : 18 puis 5). Mutation : ne plus doubler
+  l'antislash côté SQL fait échouer 4 cas de mon test d'échappement (`C:\new\notes` serait corrompu).
+  Python : accounts 29 + 23, history 65, sur une base privée. tsc 0, eslint 0.
+- **Rectification** : j'avais écrit que l'échappement de `bolt-history` n'avait « aucun test » — faux, un
+  `grep` sur des noms de fonctions ne voit pas des tests qui passent par l'API. `TestHostileTextInTitles`
+  existait. Mes 3 tests couvrent l'autre sens (un titre qui RESSEMBLE à un échappement).
+- **Piège de méthode** : mes premiers « 404 » sur `/api/history/2` venaient de mon chemin d'URL — le
+  service attend `/history/<id>` (nginx retire `/api`). Et `psql -c` n'interpole pas `:'v'` (seul stdin le fait).
+- **Écart sans effet noté** : le SQL laisse la tabulation brute, le Python l'échappe en `\t`. Le trajet de
+  lecture reste exact (11/11 aller-retours) ; non modifié.
+- **Code serveur versionné pour la première fois** : `services/bolt-accounts/` et `services/bolt-history/`
+  (copie, vérifiée identique octet pour octet au VPS ; scan des valeurs réelles de la clé de chiffrement,
+  du mot de passe PostgreSQL et de la clé Resend : aucune fuite). Exclus : `set_admin_email.py`,
+  `verify_admin_login.py` (adresses réelles), `__pycache__`. Le déploiement reste `/opt/bolt/accounts`.
+- **Reste ouvert** : `tests/performance/*` échoue sous charge (2 échecs à load 12, passent seuls) ;
+  l'écart tabulation ci-dessus.
+- **Commit** : voir `git log` (message « fix(account): a second device now receives the account's API key »).
+
 ## 2026-10-18 — Relecture post-commit du lot documentation
 
 - **Type** : verification.

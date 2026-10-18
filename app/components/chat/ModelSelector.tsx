@@ -498,7 +498,9 @@ export const ModelSelector = ({
   }
 
   return (
-    <div className="flex gap-2 flex-col sm:flex-row">
+    // `flex-wrap` so the three fields (provider, model, reasoning) each keep their own line on a
+    // narrow chat pane: without it the reasoning label was cut down to a single letter.
+    <div className="flex gap-2 flex-wrap flex-col sm:flex-row">
       {/* Provider Combobox */}
       <div className="relative flex w-full" onKeyDown={handleProviderKeyDown} ref={providerDropdownRef}>
         <div
@@ -931,7 +933,7 @@ export const ModelSelector = ({
        * whose models publish no levels keep the control hidden.
        */}
       {effortChoices.length > 1 && (
-        <div className="relative flex w-full min-w-[30%]">
+        <div className="relative flex w-full min-w-[70%] sm:min-w-[60%]">
           <label className="w-full">
             <span className="sr-only">Niveau de réflexion</span>
             <select

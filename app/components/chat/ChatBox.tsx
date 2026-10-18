@@ -219,10 +219,19 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
         <rect className={classNames(styles.PromptEffectLine)} pathLength="100" strokeLinecap="round"></rect>
         <rect className={classNames(styles.PromptShine)} x="48" y="24" width="70" height="1"></rect>
       </svg>
-      <div>
+      {/*
+       * This wrapper needs an explicit display: it is a plain block box inside a flex parent, and
+       * without `w-full`/`flex` it collapses to zero height, which made BOTH the model picker and
+       * the reasoning selector invisible in the composer (measured on the live host: the row was
+       * 494x0 and every control inside it had a 0x0 box).
+       */}
+      <div className="w-full flex flex-col gap-2">
         <ClientOnly>
           {() => (
-            <div className={props.isModelSettingsCollapsed ? 'hidden' : ''}>
+            // `contents` is required: this wrapper must not be a box. As a box it got a 0-height
+            // line in the composer and every control inside (model picker, reasoning selector)
+            // collapsed to 0x0 — measured on the live host, the row stayed 494x0.
+            <div className={props.isModelSettingsCollapsed ? 'hidden' : 'contents'}>
               <ModelSelector
                 key={props.provider?.name}
                 model={props.model}

@@ -2,6 +2,11 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import type { LanguageModel } from 'ai';
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
+import {
+  OPENCODE_GO_CATALOG,
+  catalogProtocol,
+  catalogThinkingOnly,
+} from '~/lib/modules/llm/catalogs/opencode-go.catalog';
 import { keyFallbackFetch, orderedKeys } from '~/lib/modules/llm/providers/opencode-go-key-fallback';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
@@ -54,13 +59,11 @@ function fnv1a(value: string): string {
 }
 
 /*
- * Models the gateway serves only with thinking ON. Forcing `thinking: disabled` on them is a
- * 400 ("GLM-5.3 is a thinking-only model; disabling thinking ... is not supported") — every
- * turn failed. Verified live against the gateway, model by model.
- */
-const THINKING_ONLY_MODELS = new Set(['glm-5.3']);
-
-/**
+ * Thinking-only models come from the generated catalog (catalogThinkingOnly), which records what
+ * was measured against the gateway: a model listed there refuses `thinking: disabled` with a 400
+ * ("GLM-5.3 is a thinking-only model; disabling thinking ... is not supported").
+ *
+ * /**
  * A 400 that refuses the `thinking` field we injected — not any 400 that merely mentions
  * "thinking" (a prompt echo or an unrelated validation message used to match).
  */
@@ -78,20 +81,12 @@ export function isThinkingFieldRefusal(detail: string): boolean {
  * never answer. Verified live: GPT and Grok answer on `/responses`, Claude on `/messages`.
  */
 export function opencodeGoProtocol(model: string): 'chat' | 'responses' | 'messages' {
-  if (/^claude-/i.test(model)) {
-    return 'messages';
-  }
-
-  if (/^(gpt-|grok-)/i.test(model)) {
-    return 'responses';
-  }
-
-  return 'chat';
+  return catalogProtocol(model);
 }
 
 /** Whether a chat-completions request for this model should carry `thinking: disabled`. */
 export function shouldDisableThinking(model: string): boolean {
-  return !THINKING_ONLY_MODELS.has(model);
+  return !catalogThinkingOnly(model);
 }
 
 export default class OpenCodeGoProvider extends BaseProvider {
@@ -106,85 +101,23 @@ export default class OpenCodeGoProvider extends BaseProvider {
     baseUrl: OPENCODE_GO_BASE_URL,
   };
 
-  staticModels: ModelInfo[] = [
-    {
-      name: 'deepseek-v4.1-flash',
-      label: 'DeepSeek V4.1 Flash',
+  /**
+   * Models this provider offers, built from the generated catalog.
+   *
+   * The previous list was written by hand with `maxTokenAllowed: 128000` and
+   * `maxCompletionTokens: 8192` on every entry: deepseek-v4.1-flash runs a 1,000,000-token
+   * context with 384,000 output tokens, so Bolt was capping its own models at 13% of their
+   * capacity, and 21 models the gateway serves were missing from the picker.
+   */
+  staticModels: ModelInfo[] = OPENCODE_GO_CATALOG.filter((entry) => entry.tools && entry.status !== 'deprecated').map(
+    (entry) => ({
+      name: entry.id,
+      label: entry.label,
       provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'deepseek-v4-pro',
-      label: 'DeepSeek V4 Pro',
-      provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'kimi-k3',
-      label: 'Kimi K3',
-      provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'minimax-m3',
-      label: 'MiniMax M3',
-      provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'qwen3.8-max',
-      label: 'Qwen3.8 Max',
-      provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'qwen3.8-flash',
-      label: 'Qwen3.8 Flash',
-      provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'glm-5.3',
-      label: 'GLM 5.3',
-      provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'glm-5.3-flash',
-      label: 'GLM 5.3 Flash',
-      provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'grok-4.7',
-      label: 'Grok 4.7',
-      provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'claude-haiku-5-5',
-      label: 'Claude Haiku 5.5',
-      provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'gpt-5.6-luna',
-      label: 'GPT 5.6 Luna',
-      provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-  ];
+      maxTokenAllowed: entry.context,
+      maxCompletionTokens: entry.maxOutput,
+    }),
+  );
 
   async getDynamicModels(
     apiKeys?: Record<string, string>,
@@ -224,13 +157,21 @@ export default class OpenCodeGoProvider extends BaseProvider {
 
       return res.data
         .filter((model) => !known.has(model.id))
-        .map((model) => ({
-          name: model.id,
-          label: model.id,
-          provider: this.name,
-          maxTokenAllowed: 128000,
-          maxCompletionTokens: 8192,
-        }));
+        .map((model) => {
+          /*
+           * A model the catalog knows keeps its real limits; an unknown one gets the previous
+           * conservative default and is labelled as such.
+           */
+          const entry = OPENCODE_GO_CATALOG.find((item) => item.id === model.id);
+
+          return {
+            name: model.id,
+            label: entry ? entry.label : `${model.id} (non répertorié)`,
+            provider: this.name,
+            maxTokenAllowed: entry?.context ?? 128000,
+            maxCompletionTokens: entry?.maxOutput ?? 8192,
+          };
+        });
     } catch {
       // Model listing is optional; static models remain usable.
       return [];
@@ -303,7 +244,7 @@ export default class OpenCodeGoProvider extends BaseProvider {
       headers,
 
       /*
-       * Turn thinking OFF (except for thinking-only models, see THINKING_ONLY_MODELS).
+       * Turn thinking OFF (except for thinking-only models, see the generated catalog).
        *
        * bolt.diy's agent loop always sends `tool_choice: 'required'` and a tight
        * token cap. With thinking left on (the gateway's default), deepseek-v4.1-flash

@@ -1,4 +1,5 @@
 import { withSecurity } from '~/lib/security';
+import { validatePublicHttpUrl } from '~/lib/services/webTools.server';
 
 interface GitLabBranch {
   name: string;
@@ -30,6 +31,16 @@ async function gitlabBranchesLoader({ request }: { request: Request }) {
 
     if (!projectId) {
       return Response.json({ error: 'Project ID is required' }, { status: 400 });
+    }
+
+    // Reject private/loopback/reserved hosts before any server-side fetch of gitlabUrl.
+    try {
+      validatePublicHttpUrl(gitlabUrl);
+    } catch (error) {
+      return Response.json(
+        { error: error instanceof Error ? error.message : 'GitLab URL is not allowed' },
+        { status: 400 },
+      );
     }
 
     // Fetch branches from GitLab API

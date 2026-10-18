@@ -194,12 +194,14 @@ async function githubUserAction({ request, context }: { request: Request; contex
       });
     }
 
-    if (action === 'get_token') {
-      // Return the GitHub token for git authentication
-      return Response.json({
-        token: githubToken,
-      });
-    }
+    /*
+     * NOTE: a `get_token` action used to return `githubToken` verbatim here. It had no
+     * caller in the codebase, yet was reachable by a direct POST, and `githubToken`
+     * falls back to the deployment's own GITHUB_TOKEN/VITE_GITHUB_ACCESS_TOKEN when the
+     * caller has no cookie key. That handed the operator's PAT to any signed-in user.
+     * Removed: credentials stay server-side. If git auth ever needs a token, mint a
+     * short-lived, scoped one server-side instead of echoing this value.
+     */
 
     if (action === 'search_repos') {
       if (!searchQuery) {

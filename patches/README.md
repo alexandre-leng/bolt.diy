@@ -28,3 +28,16 @@ ownership, concurrent builds of one slug, or atomic promotion after a failed bui
 
 Production replacement/restart and authenticated browser verification remain
 separate delivery steps; neither is implied by the presence of this patch.
+
+## Runtime WebSocket envelope
+
+`runtime-websocket-envelope.patch` targets the separate `/opt/bolt/runtime`
+repository at base `4653b46`. It prevents a JSON `null` frame from throwing before
+the request error handler and terminating Node. The new tests validate malformed
+envelopes and use an ephemeral real HTTP/WebSocket server (no Docker or live
+service) to prove that a valid operation still receives an answer after `null`.
+
+Verified: runtime build succeeds; 27 unit tests pass. Commit `19e42fe` is on the
+local `audit/runtime-personal` branch; this separate repository has no configured
+remote. The patch here provides a GitHub-backed copy. Apply only after comparing
+the current runtime sources and run its build plus unit tests before deployment.

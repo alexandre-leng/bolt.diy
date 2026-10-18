@@ -1,5 +1,15 @@
 # Mémoire Externe Partagée — bolt.diy (fork auto-hébergé)
 
+## 2026-10-18 — Suite personnelle : une trame null faisait tomber bolt-runtime
+
+- **Type** : fix.
+- **Reproduction** : instance HTTP/WS isolée sur port éphémère, même handler `createApiHandler`, trame `null` : Node quittait en code 1 (`Cannot read properties of null (reading id)`). Aucun appel au service live ni accès Docker.
+- **Correction** : validation d'enveloppe avant accès aux propriétés ; refus de null, tableaux, scalaires et id non fini. Module `src/requestValidation.ts` et vrai test WebSocket qui envoie null puis vérifie la réponse à l'opération suivante.
+- **Preuve** : build runtime 0 ; 27/27 tests unitaires dont le socket réel ; sonde de crash relancée : code 0 et `RUNTIME_SURVIVED_MALFORMED_FRAME`.
+- **Livraison** : commit local runtime `19e42fe` dans `/opt/bolt/wt-full-audit-runtime` (dépôt sans remote). Patch distribué dans le fork : `patches/runtime-websocket-envelope.patch`. Pas déployé : la confirmation d'IP est restée sans réponse, donc aucune mutation live.
+- **Reste ouvert** : audit global non terminé ; UI/IA/ownership et courses de publication restent à vérifier. Les changements parallèles dans `/opt/bolt/src` ne sont pas intégrés ni écrasés.
+
+
 ## 2026-10-18 — Audit personnel : transport runtime, import ZIP et frontière de publication
 
 - **Type** : fix / audit, première vague ; audit global non terminé.

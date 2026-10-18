@@ -24,11 +24,9 @@ export default async function handleRequest(
   responseHeaders.set('Content-Type', 'text/html');
 
   /*
-   * WebContainer requires a cross-origin-isolated document.
-   * `credentialless` is used because the preview iframe and the
-   * COEP header would otherwise block every third-party subresource.
+   * No cross-origin isolation (COEP): projects run on the Bolt server, not in a browser
+   * WebContainer, and COEP would break the pN preview iframes. COOP stays as hardening.
    */
-  responseHeaders.set('Cross-Origin-Embedder-Policy', 'credentialless');
   responseHeaders.set('Cross-Origin-Opener-Policy', 'same-origin');
 
   return new Response(body, {

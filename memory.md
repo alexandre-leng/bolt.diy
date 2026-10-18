@@ -1,5 +1,24 @@
 # Mémoire Externe Partagée — bolt.diy (fork auto-hébergé)
 
+## 2026-10-18 — Relecture post-commit du lot documentation
+
+- **Type** : verification.
+- **Preuve distincte** : après le run complet 1201/1201, la relecture post-commit a donné 1200 verts / 1 échec sur `streaming-performance.perf.test.tsx`, mixed content (30,49 ms contre 16,67). Relance du fichier seul : 9/9 verts. Aucun seuil changé ni test exclu ; ce résultat est documenté séparément dans le guide, pas confondu avec le premier run.
+
+
+## 2026-10-18 — Documentation du runtime réel et publication du lot validé
+
+- **Type** : docs / fix / delivery.
+- **Périmètre validé par Alex** : correctifs de l'audit, documentation, et les six fichiers UI/connecteurs non commités présentés avant la validation. Relecture et intégration dans le worktree isolé ; aucune modification des fichiers source de l'autre session.
+- **Correction avant inclusion** : les callbacks Échap ajoutés dans ConfirmationDialog/SelectionDialog doublaient la fermeture Radix. Test rouge (`2` appels), correction supprimant les callbacks redondants, test vert (`1` appel). La palette utilise un vrai bouton clavier plutôt qu'un div role=button.
+- **Connecteurs** : quatre tests supplémentaires vérifient le refus de get_token GitHub, les URLs GitLab littérales privées et l'absence de stack Supabase côté réponse. La validation GitLab seule ne prouve pas une protection SSRF complète contre DNS/redirects.
+- **Documentation** : README aligné sur le runtime Docker/gVisor, suppression des affirmations WebContainer courantes, guide `docs/docs/self-hosted-bolt.md`, index `docs/README.md`. Séparation app/services externes, commandes réelles, tests, patches non appliqués automatiquement, reste de l'audit et absence de déploiement explicités. Les liens locaux ont été vérifiés.
+- **Preuve finale** : types 0, lint 0, **1201 tests verts dans 145 fichiers**, build app 0. Contrôle de secrets sur le diff et les nouvelles docs/tests sans correspondance de valeurs de clés configurées.
+- **Limite documentaire** : une tentative de mise à jour d'AGENTS.md a été refusée par le garde-fou (approbation expirée) ; fichier laissé intact, pas de contournement. Les versions effectives restent celles de package.json et du nouveau guide.
+- **Travail parallèle apparu après le périmètre initial** : catalogue modèles OpenCode Go / générateur en cours dans `/opt/bolt/src` ; non intégré dans ce lot sans validation de son état fini. Le snapshot original des six fichiers est conservé hors dépôt pour traçabilité.
+- **Déploiement** : aucun redémarrage de service ni application des patches ; un push GitHub ne vaut pas déploiement. L'audit complet reste ouvert.
+
+
 ## 2026-10-18 — Suite personnelle : une trame null faisait tomber bolt-runtime
 
 - **Type** : fix.

@@ -129,6 +129,20 @@ export class RuntimeSocket {
 
   close(): void {
     this.#closed = true;
+    this.#sessionOpen = false;
+
+    const error = new RuntimeOperationError({ code: 'ESESSION', message: 'runtime closed' }, 'session.close');
+
+    if (!this.#everOpened) {
+      this.#rejectOpened(error);
+    }
+
+    for (const pending of this.#pending.values()) {
+      pending.reject(error);
+    }
+
+    this.#pending.clear();
+    this.#queue = [];
     this.#socket?.close();
   }
 
@@ -146,6 +160,10 @@ export class RuntimeSocket {
     this.#sessionOpen = false;
 
     socket.onopen = () => {
+      if (this.#closed || this.#socket !== socket || socket.readyState !== OPEN) {
+        return;
+      }
+
       const id = this.#nextId++;
 
       this.#pending.set(id, {
@@ -228,7 +246,13 @@ export class RuntimeSocket {
        * Requests already sent on the dead socket will never be answered: fail them so callers do
        * not hang (queued ones are kept and sent after the reconnect).
        */
+      const queuedIds = new Set(this.#queue.map((frame) => (JSON.parse(frame) as { id: number }).id));
+
       for (const [id, pending] of [...this.#pending]) {
+        if (queuedIds.has(id)) {
+          continue;
+        }
+
         if (pending.op !== 'session.open') {
           this.#pending.delete(id);
           pending.reject(

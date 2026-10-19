@@ -20,6 +20,12 @@ from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 
 TEST_DB = os.environ.get("BOLT_HISTORY_TEST_DB", "bolt_history_test_autoedit")
+
+# Same guard as the main suite: this file deletes chats and projects, so it must never run
+# against the production database. See test_db_guard.py.
+from test_db_guard import require_test_database
+
+require_test_database()
 os.environ["BOLT_HISTORY_PG_DB"] = TEST_DB
 os.environ.setdefault("BOLT_HISTORY_MIGRATIONS", "/opt/bolt/history/migrations")
 sys.path.insert(0, "/opt/bolt/history")

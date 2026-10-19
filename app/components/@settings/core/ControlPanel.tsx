@@ -23,6 +23,7 @@ import LocalProvidersTab from '~/components/@settings/tabs/providers/local/Local
 import SettingsTab from '~/components/@settings/tabs/settings/SettingsTab';
 import SupabaseTab from '~/components/@settings/tabs/supabase/SupabaseTab';
 import VercelTab from '~/components/@settings/tabs/vercel/VercelTab';
+import VoiceTab from '~/components/@settings/tabs/voice/VoiceTab';
 import { DialogTitle } from '~/components/ui/Dialog';
 import { DocumentationPanel } from '~/components/ui/DocumentationPanel';
 import { useConnectionStatus } from '~/lib/hooks/useConnectionStatus';
@@ -48,7 +49,7 @@ const BetaLabel = () => (
 );
 
 const NAV_GROUPS: { label: string; tabs: TabType[] }[] = [
-  { label: 'Préférences', tabs: ['settings'] },
+  { label: 'Préférences', tabs: ['settings', 'voice'] },
   { label: 'Compte', tabs: ['profile', 'notifications'] },
   { label: 'Espace de travail', tabs: ['features', 'data', 'event-logs'] },
   { label: 'Fournisseurs IA', tabs: ['cloud-providers', 'local-providers'] },
@@ -210,6 +211,8 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
         return <EventLogsTab />;
       case 'mcp':
         return <McpTab />;
+      case 'voice':
+        return <VoiceTab />;
       case 'plugins':
         return <PluginTab />;
 

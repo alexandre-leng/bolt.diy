@@ -80,6 +80,19 @@ describe('security middleware', () => {
       expect(headers['X-Content-Type-Options']).toBe('nosniff');
       expect(headers['Content-Security-Policy']).toBeDefined();
     });
+
+    it('allows the microphone on this origin only, because dictation needs it', () => {
+      /*
+       * `microphone=()` reached the live app and disabled dictation for the whole document: a
+       * Permissions-Policy is not overridden by a user gesture. `(self)` is the narrowest value
+       * that lets the composer record, and it still excludes every iframe origin.
+       */
+      const policy = createSecurityHeaders()['Permissions-Policy'];
+
+      expect(policy).toContain('microphone=(self)');
+      expect(policy).not.toContain('microphone=()');
+      expect(policy).toContain('camera=()');
+    });
   });
 
   describe('withSecurity error handling', () => {

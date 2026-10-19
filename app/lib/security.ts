@@ -195,7 +195,14 @@ export function createSecurityHeaders() {
     'Referrer-Policy': 'strict-origin-when-cross-origin',
 
     // Permissions Policy (formerly Feature Policy)
-    'Permissions-Policy': ['camera=()', 'microphone=()', 'geolocation=()', 'payment=()'].join(', '),
+    /*
+     * `microphone=(self)`: dictation asks the user for the microphone from this origin, and the
+     * previous `microphone=()` disables it for the whole document in any browser that enforces
+     * the policy (a user gesture does not override a Permissions-Policy). It stays closed to
+     * every other origin, and preview iframes send their own header, so a generated project
+     * cannot open the host's microphone without consent.
+     */
+    'Permissions-Policy': ['camera=()', 'microphone=(self)', 'geolocation=()', 'payment=()'].join(', '),
 
     // HSTS (HTTP Strict Transport Security) - only in production
     ...(process.env.NODE_ENV === 'production'

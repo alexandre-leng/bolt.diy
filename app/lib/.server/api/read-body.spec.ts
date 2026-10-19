@@ -155,8 +155,22 @@ describe('readBodyText', () => {
 
     it('reports a client disconnect as 499 rather than a server error', async () => {
       const controller = new AbortController();
-      const request = requestFrom('ignored', { signal: controller.signal });
 
+      /*
+       * A body that stays open: `readBodyText` only meets the abort on a `read()` that has not
+       * resumed yet. A string body is drained by the first read, so whether the abort is seen
+       * at all depended on how fast the microtask queue ran (it passed on the old
+       * implementation and failed on an equivalent one, on timing alone).
+       */
+      const stream = new ReadableStream<Uint8Array>({
+        start(streamController) {
+          streamController.enqueue(new TextEncoder().encode('{"partial":'));
+
+          /* Never closed, never enqueued again: the read stays pending. */
+        },
+      });
+
+      const request = requestFrom(stream, { signal: controller.signal });
       const promise = readBodyText(request, { maxBytes: 1024, timeoutMs: 1000 });
 
       controller.abort();

@@ -165,6 +165,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const {
       supported: speechSupported,
       isListening,
+      isTranscribing: speechTranscribing,
+      engine: speechEngine,
+      errorMessage: speechError,
+      clearError: clearSpeechError,
+      settings: dictationSettings,
+      updateSettings: updateDictationSettings,
       startListening,
       stopListening,
       abortListening,
@@ -455,6 +461,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   enhancePrompt={enhancePrompt}
                   isListening={isListening}
                   speechSupported={speechSupported}
+                  speechEngine={speechEngine}
+                  speechTranscribing={speechTranscribing}
+                  speechError={speechError}
+                  clearSpeechError={clearSpeechError}
+                  dictationSettings={dictationSettings}
+                  updateDictationSettings={updateDictationSettings}
                   startListening={startListening}
                   stopListening={stopListening}
                   chatStarted={chatStarted}

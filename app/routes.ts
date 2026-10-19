@@ -37,6 +37,7 @@ export default [
   { file: 'routes/api.mcp-check.ts', path: '/api/mcp-check' },
   { file: 'routes/api.mcp-update-config.ts', path: '/api/mcp-update-config' },
   { file: 'routes/api.models.ts', path: '/api/models' },
+
   // Before '/api/models/:provider', or "reasoning" is read as a provider name.
   { file: 'routes/api.models.reasoning.ts', path: '/api/models/reasoning' },
   { file: 'routes/api.models.$provider.ts', path: '/api/models/:provider' },
@@ -49,6 +50,7 @@ export default [
   { file: 'routes/api.system.diagnostics.ts', path: '/api/system/diagnostics' },
   { file: 'routes/api.system.disk-info.ts', path: '/api/system/disk-info' },
   { file: 'routes/api.system.git-info.ts', path: '/api/system/git-info' },
+  { file: 'routes/api.transcribe.ts', path: '/api/transcribe' },
   { file: 'routes/api.update.ts', path: '/api/update' },
   { file: 'routes/api.vercel-deploy.ts', path: '/api/vercel-deploy' },
   { file: 'routes/api.vercel-user.ts', path: '/api/vercel-user' },

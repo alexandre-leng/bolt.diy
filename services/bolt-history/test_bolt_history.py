@@ -184,12 +184,12 @@ class TestCreateAndRead(HistoryTestBase):
         self.assertEqual(status, 200, "the chat is no longer reachable by its urlId")
         self.assertEqual(body["chat"]["id"], "abc-1")
 
-    def test_an_empty_url_id_is_treated_as_absent(self):
+    def test_an_explicitly_emptied_url_id_clears_the_link(self):
         """
-        `coalesce()` does not skip an empty string, and an absent JSON field arrives at the
-        SQL layer as ''. Passing '' therefore defeated the guard above: coalesce('', stored)
-        returns '', so the link was cleared anyway. '' must mean "unchanged", like a
-        missing field.
+        PATCH semantics, as decided: a field that is ABSENT keeps its stored value, while an
+        explicit '' clears it. This used to be impossible to express — an absent field and an
+        empty one both arrived at SQL as '' — so '' was treated as "unchanged" out of safety.
+        The write now branches on whether the key was present, so '' is honoured as a clear.
         """
         self.request("PUT", "/history/abc-1", chat("abc-1"))
 
@@ -198,7 +198,18 @@ class TestCreateAndRead(HistoryTestBase):
         self.request("PUT", "/history/abc-1", payload)
 
         status, body = self.request("GET", "/history/abc-1")
-        self.assertEqual(body["chat"]["urlId"], "abc-1-slug")
+        self.assertIsNone(body["chat"]["urlId"], "an explicit '' must clear the link")
+
+    def test_an_omitted_url_id_keeps_the_stored_link(self):
+        """The complement: not sending the key at all must not touch what is stored."""
+        self.request("PUT", "/history/abc-2", chat("abc-2"))
+
+        payload = chat("abc-2", description="sans urlId")
+        payload.pop("urlId")
+        self.request("PUT", "/history/abc-2", payload)
+
+        status, body = self.request("GET", "/history/abc-2")
+        self.assertEqual(body["chat"]["urlId"], "abc-2-slug")
 
     def test_list_omits_messages_to_keep_the_payload_small(self):
         self.request("PUT", "/history/abc-1", chat("abc-1"))
@@ -543,16 +554,28 @@ class TestProjectOwnership(HistoryTestBase):
         self.assertEqual(status, 401)
         self.assertNotIn("mon-site", json.dumps(body))
 
-    def test_another_user_cannot_take_over_a_project(self):
+    def test_another_user_may_record_the_same_slug_separately(self):
+        """A slug belongs to a user, not to the installation.
+
+        This asserted 409 before: `slug` was the sole PRIMARY KEY, so a second account whose
+        title slugified the same was refused and its legitimate publish silently never
+        appeared in its history. Each account now keeps its own row for the same slug, and
+        neither can take over the other's.
+        """
         self.request("PUT", "/projects/mon-site", {"name": "A", "url": "/container/mon-site/"})
 
         status, _ = self.request(
-            "PUT", "/projects/mon-site", {"name": "Intrus", "url": "/container/mon-site/"},
+            "PUT", "/projects/mon-site", {"name": "B", "url": "/container/mon-site/"},
             owner=self.other_user_id,
         )
-        self.assertEqual(status, 409)
-        rows = _psql("SELECT name || '|' || user_id FROM projects WHERE slug = 'mon-site'")
-        self.assertEqual(rows, ["A|%s" % self.user_id])
+        self.assertEqual(status, 200, "a second account must not be refused the same slug")
+
+        rows = _psql(
+            "SELECT name || '|' || user_id FROM projects WHERE slug = 'mon-site' ORDER BY name"
+        )
+        self.assertEqual(len(rows), 2, "each account keeps its own row")
+        self.assertIn("A|%s" % self.user_id, rows)
+        self.assertIn("B|%s" % self.other_user_id, rows)
 
     def test_recording_a_project_requires_an_identity(self):
         status, _ = self.request("PUT", "/projects/anon", {"name": "x", "url": "/container/anon/"}, owner=False)

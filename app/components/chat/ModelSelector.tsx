@@ -1,5 +1,8 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import type { KeyboardEvent } from 'react';
+import { useSettings } from '~/lib/hooks/useSettings';
+import type { ModelEffort } from '~/lib/modules/llm/providers/opencode-go';
+import { opencodeGoCanDisableThinking, opencodeGoEfforts } from '~/lib/modules/llm/providers/opencode-go';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import { LOCAL_PROVIDERS } from '~/lib/stores/settings';
 import type { ProviderInfo } from '~/types/model';
@@ -111,6 +114,15 @@ const isModelLikelyFree = (model: ModelInfo, providerName?: string): boolean => 
  * The levels come from the generated catalog: a provider whose models publish none keeps the
  * control hidden, and "Désactivée" is not offered for a model that refuses it (a 400 otherwise).
  */
+const REASONING_LABELS: Record<string, string> = {
+  low: 'Faible',
+  minimal: 'Minimale',
+  medium: 'Moyenne',
+  high: 'Élevée',
+  xhigh: 'Très élevée',
+  max: 'Maximale',
+  none: 'Aucune',
+};
 
 export const ModelSelector = ({
   model,
@@ -119,8 +131,125 @@ export const ModelSelector = ({
   setProvider,
   modelList,
   providerList,
+  apiKeys,
   modelLoading,
 }: ModelSelectorProps) => {
+  const { providers: providerSettings, updateProviderSettings } = useSettings();
+
+  /*
+   * Reasoning levels per model.
+   *
+   * The local catalog only knows the models of THIS build: a provider whose levels live on the
+   * server publishes nothing here, so the row stayed hidden while the model itself did answer with
+   * levels. The server resolves the provider key (an env key is never sent to the client) and it is
+   * the only party that can fetch /models, so its answer is asked on demand and cached per model.
+   */
+  const [publishedEfforts, setPublishedEfforts] = useState<Record<string, string[]>>({});
+  const [publishedCanDisable, setPublishedCanDisable] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!provider?.name || !model || publishedEfforts[model] !== undefined) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const parameters = new URLSearchParams({ model, provider: provider.name });
+
+    if (apiKeys[provider.name]) {
+      parameters.set('hasKey', 'true');
+    }
+
+    fetch(`/api/models/reasoning?${parameters.toString()}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: unknown) => {
+        const data = (payload ?? null) as { efforts?: string[]; canDisable?: boolean } | null;
+
+        if (cancelled || !data) {
+          return;
+        }
+
+        setPublishedEfforts((current) => ({ ...current, [model]: Array.isArray(data.efforts) ? data.efforts : [] }));
+
+        setPublishedCanDisable((current) => ({
+          ...current,
+          [model]: data.canDisable !== false,
+        }));
+      })
+      .catch(() => {
+        // The row stays as the local catalog describes it.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [provider?.name, model, apiKeys, publishedEfforts]);
+
+  const effortsFor = (name: string): string[] => {
+    const published = publishedEfforts[name];
+
+    return published && published.length > 0 ? published : opencodeGoEfforts(name);
+  };
+
+  const canDisableFor = (name: string): boolean =>
+    publishedEfforts[name] !== undefined ? publishedCanDisable[name] !== false : opencodeGoCanDisableThinking(name);
+
+  const effortForModel = (name?: string): { choices: { value: string; label: string }[]; current: ModelEffort } => {
+    const levels = name ? effortsFor(name) : [];
+    const choices = [{ value: 'auto', label: 'Réflexion : automatique' }];
+
+    if (levels.length > 0) {
+      if (name && canDisableFor(name)) {
+        choices.push({ value: 'disabled', label: 'Réflexion : désactivée' });
+      }
+
+      choices.push({ value: 'model', label: 'Réflexion : décidée par le modèle' });
+
+      for (const level of levels) {
+        choices.push({ value: level, label: `Réflexion : ${REASONING_LABELS[level] ?? level}` });
+      }
+    }
+
+    const stored = provider?.name
+      ? (providerSettings?.[provider.name]?.settings?.effort as ModelEffort | undefined)
+      : undefined;
+
+    return { choices, current: stored ?? 'auto' };
+  };
+
+  const { choices: effortChoices, current: effort } = effortForModel(model);
+
+  /*
+   * Keep the selected model inside what the server says is available. `model` starts as the build
+   * default (or a cookie naming a model the key cannot reach), the picker then renders "Select
+   * model" because the value belongs to no entry, and the effort row silently disappears with it.
+   */
+  useEffect(() => {
+    if (modelList.length === 0 || !provider?.name) {
+      return;
+    }
+
+    const available = modelList.filter((entry) => entry.provider === provider.name);
+
+    if (available.length === 0 || available.some((entry) => entry.name === model)) {
+      return;
+    }
+
+    const fallback = available.find((entry) => isModelLikelyFree(entry, provider.name)) ?? available[0];
+    setModel?.(fallback.name);
+  }, [modelList, provider?.name, model, setModel]);
+
+  const changeEffort = (value: ModelEffort) => {
+    if (!provider?.name) {
+      return;
+    }
+
+    updateProviderSettings(provider.name, {
+      ...(providerSettings?.[provider.name]?.settings ?? {}),
+      effort: value === 'auto' ? undefined : value,
+    });
+  };
+
   const [modelSearchQuery, setModelSearchQuery] = useState('');
   const [debouncedModelSearchQuery, setDebouncedModelSearchQuery] = useState('');
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
@@ -464,7 +593,9 @@ export const ModelSelector = ({
   }
 
   return (
-    <div className="flex gap-2 flex-col sm:flex-row">
+    // `flex-wrap` so the three fields (provider, model, reasoning) each keep their own line on a
+    // narrow chat pane: without it the reasoning label was cut down to a single letter.
+    <div className="flex gap-2 flex-wrap flex-col sm:flex-row">
       {/* Provider Combobox */}
       <div className="relative flex w-full" onKeyDown={handleProviderKeyDown} ref={providerDropdownRef}>
         <div
@@ -916,6 +1047,30 @@ export const ModelSelector = ({
        * catalog of the selected model, so a level the model refuses is never offered; providers
        * whose models publish no levels keep the control hidden.
        */}
+      {(effortChoices.length > 1 || effortsFor(model ?? '').length > 0) && (
+        <div className="relative flex w-full min-w-[70%] sm:min-w-[60%]">
+          <label className="w-full">
+            <span className="sr-only">Niveau de réflexion</span>
+            <select
+              aria-label="Niveau de réflexion"
+              value={effort}
+              onChange={(event) => changeEffort(event.target.value as ModelEffort)}
+              className={classNames(
+                'w-full p-2 rounded-lg border border-bolt-elements-borderColor',
+                'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary',
+                'focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus',
+                'transition-all cursor-pointer text-sm',
+              )}
+            >
+              {effortChoices.map((choice) => (
+                <option key={choice.value} value={choice.value}>
+                  {choice.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
     </div>
   );
 };

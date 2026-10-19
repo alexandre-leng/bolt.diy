@@ -2,6 +2,13 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import type { LanguageModel } from 'ai';
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
+import {
+  OPENCODE_GO_CATALOG,
+  catalogCanDisableThinking,
+  catalogEfforts,
+  catalogProtocol,
+  catalogThinkingOnly,
+} from '~/lib/modules/llm/catalogs/opencode-go.catalog';
 import { keyFallbackFetch, orderedKeys } from '~/lib/modules/llm/providers/opencode-go-key-fallback';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
@@ -54,13 +61,11 @@ function fnv1a(value: string): string {
 }
 
 /*
- * Models the gateway serves only with thinking ON. Forcing `thinking: disabled` on them is a
- * 400 ("GLM-5.3 is a thinking-only model; disabling thinking ... is not supported") — every
- * turn failed. Verified live against the gateway, model by model.
- */
-const THINKING_ONLY_MODELS = new Set(['glm-5.3']);
-
-/**
+ * Thinking-only models come from the generated catalog (catalogThinkingOnly), which records what
+ * was measured against the gateway: a model listed there refuses `thinking: disabled` with a 400
+ * ("GLM-5.3 is a thinking-only model; disabling thinking ... is not supported").
+ *
+ * /**
  * A 400 that refuses the `thinking` field we injected — not any 400 that merely mentions
  * "thinking" (a prompt echo or an unrelated validation message used to match).
  */
@@ -78,20 +83,86 @@ export function isThinkingFieldRefusal(detail: string): boolean {
  * never answer. Verified live: GPT and Grok answer on `/responses`, Claude on `/messages`.
  */
 export function opencodeGoProtocol(model: string): 'chat' | 'responses' | 'messages' {
-  if (/^claude-/i.test(model)) {
-    return 'messages';
+  return catalogProtocol(model);
+}
+
+/**
+ * Whether a chat-completions request for this model should carry `thinking: disabled`.
+ *
+ * Whether the user asked for reasoning changes this: "Réflexion : désactivée" means disabled.
+ */
+export function shouldDisableThinking(model: string, effort?: ModelEffort): boolean {
+  if (effort === 'disabled') {
+    return true;
+  }
+
+  if (effort === 'model') {
+    // The model decides: reasoning is left to its own default, so the injection is skipped.
+    return false;
+  }
+
+  /*
+   * 'auto' and undefined keep reasoning off, which the agent loop needs to get tool calls.
+   * A NAMED level (low/high/max…) means the user asked for reasoning: the "disabled" injection
+   * must not be added on top of it, or it would cancel the level they chose.
+   */
+  if (effort && effort !== 'auto') {
+    return false;
+  }
+
+  return !catalogThinkingOnly(model);
+}
+
+/** Reasoning level chosen in the settings screen. */
+export type ModelEffort = 'auto' | 'disabled' | 'model' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+/** Levels the model accepts, for the settings screen; empty when it takes none. */
+export function opencodeGoEfforts(model: string): string[] {
+  return catalogEfforts(model);
+}
+
+/** False when the model refuses `thinking: disabled`, so the UI does not offer it. */
+export function opencodeGoCanDisableThinking(model: string): boolean {
+  return catalogCanDisableThinking(model);
+}
+
+/**
+ * What to send for the chosen level, or null to send nothing.
+ *
+ * Measured against the gateway: DeepSeek and the GPT/Grok family read `thinking`, while GLM and
+ * the MiMo family read `reasoning_effort`; sending the wrong one is silently ignored. Models that
+ * accept no level keep their default. `max` is only sent where it is accepted.
+ */
+export function effortPayload(
+  model: string,
+  effort: ModelEffort | undefined,
+): { thinking?: { type: 'disabled' } | { type: 'enabled'; effort: string }; reasoning_effort?: string } | null {
+  if (!effort || effort === 'auto' || effort === 'model') {
+    return null;
+  }
+
+  const accepted = catalogEfforts(model);
+
+  if (effort === 'disabled') {
+    return catalogCanDisableThinking(model) ? { thinking: { type: 'disabled' } } : null;
+  }
+
+  if (!accepted.includes(effort)) {
+    return null;
   }
 
   if (/^(gpt-|grok-)/i.test(model)) {
-    return 'responses';
+    return { reasoning_effort: effort };
   }
 
-  return 'chat';
-}
+  if (
+    /^claude-/i.test(model) ||
+    /^(deepseek|kimi|minimax|qwen|glm|mimo|hy|longcat|step|beam|cat|space|muse|gemini)/i.test(model)
+  ) {
+    return { thinking: { type: 'enabled', effort } };
+  }
 
-/** Whether a chat-completions request for this model should carry `thinking: disabled`. */
-export function shouldDisableThinking(model: string): boolean {
-  return !THINKING_ONLY_MODELS.has(model);
+  return null;
 }
 
 export default class OpenCodeGoProvider extends BaseProvider {
@@ -106,85 +177,23 @@ export default class OpenCodeGoProvider extends BaseProvider {
     baseUrl: OPENCODE_GO_BASE_URL,
   };
 
-  staticModels: ModelInfo[] = [
-    {
-      name: 'deepseek-v4.1-flash',
-      label: 'DeepSeek V4.1 Flash',
+  /**
+   * Models this provider offers, built from the generated catalog.
+   *
+   * The previous list was written by hand with `maxTokenAllowed: 128000` and
+   * `maxCompletionTokens: 8192` on every entry: deepseek-v4.1-flash runs a 1,000,000-token
+   * context with 384,000 output tokens, so Bolt was capping its own models at 13% of their
+   * capacity, and 21 models the gateway serves were missing from the picker.
+   */
+  staticModels: ModelInfo[] = OPENCODE_GO_CATALOG.filter((entry) => entry.tools && entry.status !== 'deprecated').map(
+    (entry) => ({
+      name: entry.id,
+      label: entry.label,
       provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'deepseek-v4-pro',
-      label: 'DeepSeek V4 Pro',
-      provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'kimi-k3',
-      label: 'Kimi K3',
-      provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'minimax-m3',
-      label: 'MiniMax M3',
-      provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'qwen3.8-max',
-      label: 'Qwen3.8 Max',
-      provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'qwen3.8-flash',
-      label: 'Qwen3.8 Flash',
-      provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'glm-5.3',
-      label: 'GLM 5.3',
-      provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'glm-5.3-flash',
-      label: 'GLM 5.3 Flash',
-      provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'grok-4.7',
-      label: 'Grok 4.7',
-      provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'claude-haiku-5-5',
-      label: 'Claude Haiku 5.5',
-      provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'gpt-5.6-luna',
-      label: 'GPT 5.6 Luna',
-      provider: 'OpenCodeGo',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-  ];
+      maxTokenAllowed: entry.context,
+      maxCompletionTokens: entry.maxOutput,
+    }),
+  );
 
   async getDynamicModels(
     apiKeys?: Record<string, string>,
@@ -224,13 +233,21 @@ export default class OpenCodeGoProvider extends BaseProvider {
 
       return res.data
         .filter((model) => !known.has(model.id))
-        .map((model) => ({
-          name: model.id,
-          label: model.id,
-          provider: this.name,
-          maxTokenAllowed: 128000,
-          maxCompletionTokens: 8192,
-        }));
+        .map((model) => {
+          /*
+           * A model the catalog knows keeps its real limits; an unknown one gets the previous
+           * conservative default and is labelled as such.
+           */
+          const entry = OPENCODE_GO_CATALOG.find((item) => item.id === model.id);
+
+          return {
+            name: model.id,
+            label: entry ? entry.label : `${model.id} (non répertorié)`,
+            provider: this.name,
+            maxTokenAllowed: entry?.context ?? 128000,
+            maxCompletionTokens: entry?.maxOutput ?? 8192,
+          };
+        });
     } catch {
       // Model listing is optional; static models remain usable.
       return [];
@@ -295,7 +312,13 @@ export default class OpenCodeGoProvider extends BaseProvider {
       return createOpenAI({ baseURL: baseUrl, apiKey, headers, fetch: rotatingFetch }).responses(model);
     }
 
-    const disableThinking = shouldDisableThinking(model);
+    /*
+     * The reasoning level comes from the settings screen (providerSettings.effort); with the
+     * default the model keeps the behaviour the agent loop needs (see the fetch below).
+     */
+    const effort = providerSettings?.[this.name]?.effort as ModelEffort | undefined;
+    const chosen = effortPayload(model, effort);
+    const disableThinking = shouldDisableThinking(model, effort);
 
     const openai = createOpenAI({
       baseURL: baseUrl,
@@ -303,7 +326,7 @@ export default class OpenCodeGoProvider extends BaseProvider {
       headers,
 
       /*
-       * Turn thinking OFF (except for thinking-only models, see THINKING_ONLY_MODELS).
+       * Turn thinking OFF (except for thinking-only models, see the generated catalog).
        *
        * bolt.diy's agent loop always sends `tool_choice: 'required'` and a tight
        * token cap. With thinking left on (the gateway's default), deepseek-v4.1-flash
@@ -322,12 +345,14 @@ export default class OpenCodeGoProvider extends BaseProvider {
       fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
         const original = init;
 
-        if (disableThinking && init?.body && typeof init.body === 'string') {
+        const wanted = chosen ?? (disableThinking ? { thinking: { type: 'disabled' as const } } : null);
+
+        if (wanted && init?.body && typeof init.body === 'string') {
           try {
             const body = JSON.parse(init.body);
 
-            if (body && typeof body === 'object' && !body.thinking) {
-              body.thinking = { type: 'disabled' };
+            if (body && typeof body === 'object' && !body.thinking && !body.reasoning_effort) {
+              Object.assign(body, wanted);
               init = { ...init, body: JSON.stringify(body) };
             }
           } catch {

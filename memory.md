@@ -1,5 +1,34 @@
 # Mémoire Externe Partagée — bolt.diy (fork auto-hébergé)
 
+## 2026-10-19 — Traque de bugs : six pistes mesurées, aucun défaut confirmé
+
+- **Type** : audit sans correctif. Rien à corriger = rien de modifié ; pas de commit de code.
+- **Pistes éliminées** (à ne pas re-vérifier) :
+  1. **Dépôt vs VPS** : `services/` identique au VPS, seul `test_bolt_history_audit2.py` est dans le dépôt
+     et pas sur le VPS (tests d'un autre agent). Ses 7 tests passent contre le code qui tourne : le correctif
+     `9cd1b60` est bien déployé.
+  2. **`restart-proof` introuvable (nginx, 10 h 38)** : conversation de test d'un autre agent
+     (`restart-proof-1792400135`, créée puis supprimée à 10 h 56), jamais un site publié. Pas un défaut.
+  3. **Course restauration / cookie vide** : le chat écrit `{"OpenCodeGo":""}` à ~+2 s pendant que la
+     restauration attend ; la réponse, même tardive (+4 s), écrase le vide par la vraie clé (mesuré :
+     écriture 1 ms après la réponse) et le chat recharge la liste de modèles du fournisseur. Le code tient.
+  4. **`urlId` hostile** (slash, `../..`, 200 Ko, unicode, antislash) : accepté et relu sans erreur. Un `urlId`
+     avec `/` est stocké mais pas atteignable par l'URL ; inatteignable en pratique, car le parseur ignore l'`id`
+     que le modèle écrit et fabrique `${messageId}-${compteur}`. Non corrigé volontairement.
+  5. **Isolation entre comptes** : même `urlId` chez deux comptes, chacun lit le sien ; même `id` de chat,
+     le second reçoit 409 et le premier garde ses données.
+  6. **Wizard sur petit écran** (320×568, 390×844, 844×390) : aucun débordement horizontal, tout est
+     atteignable en défilant. L'`INPUT` « non cliquable » est le `<input type=file class=sr-only>` du bouton
+     d'upload d'avatar, masqué volontairement derrière son `<label>`.
+- **Deux fausses alertes de ma part, retirées** : (a) « la restauration se perd si le serveur répond tard » :
+  mon retard était un `time.sleep` dans le gestionnaire de route Playwright, qui gelait son propre thread ;
+  (b) « on ne peut pas terminer l'onboarding sur 320 px » : `elementFromPoint` sur un bouton hors de la zone
+  visible d'un dialogue qui défile renvoie un autre élément ; il faut faire défiler avant de tester.
+- **Pièges de méthode** : retarder une réponse réseau se fait dans la page (envelopper `fetch`), pas avec un
+  `sleep` dans une route ; tester un contrôle d'un conteneur défilant impose `scrollIntoView` d'abord ; un
+  compte déjà passé par le wizard ne le rouvre plus, donc un compte neuf par taille d'écran.
+- **Reste ouvert** : aucun nouveau point. `tests/performance/*` reste sensible à la charge.
+
 ## 2026-10-18 — La clé API d'un compte n'arrivait jamais sur le second appareil
 
 - **Type** : fix (serveur + client) + tests + versionnement du code serveur.

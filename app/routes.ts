@@ -37,6 +37,8 @@ export default [
   { file: 'routes/api.mcp-check.ts', path: '/api/mcp-check' },
   { file: 'routes/api.mcp-update-config.ts', path: '/api/mcp-update-config' },
   { file: 'routes/api.models.ts', path: '/api/models' },
+  // Before '/api/models/:provider', or "reasoning" is read as a provider name.
+  { file: 'routes/api.models.reasoning.ts', path: '/api/models/reasoning' },
   { file: 'routes/api.models.$provider.ts', path: '/api/models/:provider' },
   { file: 'routes/api.netlify-deploy.ts', path: '/api/netlify-deploy' },
   { file: 'routes/api.netlify-user.ts', path: '/api/netlify-user' },

@@ -41,10 +41,10 @@ describe('Preview active port clamp', () => {
   it('falls back to a live preview when the selected port closes', async () => {
     const { rerender } = render(<Preview />);
 
-    // Two ports open; the smallest-port one is auto-selected.
+    // The latest announced port is auto-selected; explicitly pick the other one below.
     setPreviews([
-      { port: 3000, baseUrl: 'https://3000--preview.localhost' },
       { port: 5173, baseUrl: 'https://5173--preview.localhost' },
+      { port: 3000, baseUrl: 'https://3000--preview.localhost' },
     ]);
     rerender(<Preview />);
 

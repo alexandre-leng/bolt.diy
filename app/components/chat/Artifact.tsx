@@ -63,6 +63,8 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
     setShowActions(!showActions);
   };
 
+  const actionsPanelId = `artifact-actions-${artifactId}`;
+
   useEffect(() => {
     if (actions.length && !showActions && !userToggledActions.current) {
       setShowActions(true);
@@ -141,11 +143,15 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
                 animate={{ width: 'auto' }}
                 exit={{ width: 0 }}
                 transition={{ duration: 0.15, ease: cubicEasingFn }}
+                type="button"
                 className="bg-bolt-elements-artifacts-background hover:bg-bolt-elements-artifacts-backgroundHover"
                 onClick={toggleActions}
+                aria-expanded={showActions}
+                aria-controls={actionsPanelId}
+                aria-label={showActions ? 'Masquer les actions' : 'Afficher les actions'}
               >
                 <div className="p-4">
-                  <div className={showActions ? 'i-ph:caret-up-bold' : 'i-ph:caret-down-bold'}></div>
+                  <div aria-hidden="true" className={showActions ? 'i-ph:caret-up-bold' : 'i-ph:caret-down-bold'}></div>
                 </div>
               </motion.button>
             )}
@@ -168,6 +174,7 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
         <AnimatePresence>
           {artifact.type !== 'bundled' && showActions && actions.length > 0 && (
             <motion.div
+              id={actionsPanelId}
               className="actions"
               initial={{ height: 0 }}
               animate={{ height: 'auto' }}
@@ -263,27 +270,28 @@ const ActionList = memo(({ actions }: ActionListProps) => {
                 {type === 'file' ? (
                   <div>
                     Create{' '}
-                    <code
+                    <button
+                      type="button"
                       className="bg-bolt-elements-artifacts-inlineCode-background text-bolt-elements-artifacts-inlineCode-text px-1.5 py-1 rounded-md text-bolt-elements-item-contentAccent hover:underline cursor-pointer"
                       onClick={() => openArtifactInWorkbench(action.filePath)}
                     >
-                      {action.filePath}
-                    </code>
+                      <code>{action.filePath}</code>
+                    </button>
                   </div>
                 ) : type === 'shell' ? (
                   <div className="flex items-center w-full min-h-[28px]">
                     <span className="flex-1">Run command</span>
                   </div>
                 ) : type === 'start' ? (
-                  <a
-                    onClick={(e) => {
-                      e.preventDefault();
+                  <button
+                    type="button"
+                    onClick={() => {
                       workbenchStore.currentView.set('preview');
                     }}
-                    className="flex items-center w-full min-h-[28px]"
+                    className="flex items-center w-full min-h-[28px] text-left"
                   >
                     <span className="flex-1">Start Application</span>
-                  </a>
+                  </button>
                 ) : null}
               </div>
               {(type === 'shell' || type === 'start') && (

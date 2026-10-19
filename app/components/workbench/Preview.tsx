@@ -7,6 +7,7 @@ import { ScreenshotSelector } from './ScreenshotSelector';
 import { IconButton } from '~/components/ui/IconButton';
 import { ExpoQrModal } from '~/components/workbench/ExpoQrModal';
 import { parsePreviewId } from '~/lib/runtime/server/previewUrl';
+import { selectPreview } from '~/lib/stores/previewSelection';
 import { expoUrlAtom } from '~/lib/stores/qrCodeStore';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { toast } from '~/lib/toastify';
@@ -60,12 +61,11 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [activePreviewIndex, setActivePreviewIndex] = useState(0);
+  const [manualPort, setManualPort] = useState<number | null>(null);
   const [isPortDropdownOpen, setIsPortDropdownOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const hasSelectedPreview = useRef(false);
   const previews = useStore(workbenchStore.previews);
-  const activePreview = previews[activePreviewIndex];
+  const activePreview = selectPreview(previews, manualPort);
   const [displayPath, setDisplayPath] = useState('/');
   const [iframeUrl, setIframeUrl] = useState<string | undefined>();
 
@@ -115,43 +115,17 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
     setDisplayPath('/');
   }, [activePreview]);
 
-  const findMinPortIndex = useCallback(
-    (minIndex: number, preview: { port: number }, index: number, array: { port: number }[]) => {
-      return preview.port < array[minIndex].port ? index : minIndex;
-    },
-    [],
-  );
-
-  useEffect(() => {
-    if (previews.length > 1 && !hasSelectedPreview.current) {
-      const minPortIndex = previews.reduce(findMinPortIndex, 0);
-      setActivePreviewIndex(minPortIndex);
-    }
-  }, [previews, findMinPortIndex]);
-
   /*
-   * Keep `activePreviewIndex` inside range whenever the preview list changes.
-   *
-   * The port the user picked can close (the dev server restarts on another port, or the
-   * container stops). The re-selection above only runs while `previews.length > 1` and only
-   * until the user first picks a port, so the index then points past the end. Everything
-   * below reads `previews[activePreviewIndex]`, so the preview went permanently blank. This
-   * clamp is unconditional: it never moves a still-valid selection, it only pulls an
-   * out-of-range index back to a real entry.
+   * Automatic selection is the latest announced port (store insertion order), tracked by port
+   * identity, not array index or numeric value. A manual choice sticks until that port closes.
    */
   useEffect(() => {
-    setActivePreviewIndex((index) => {
-      if (previews.length === 0) {
-        return 0;
-      }
+    if (manualPort !== null && !previews.some((preview) => preview.port === manualPort)) {
+      setManualPort(null);
+    }
+  }, [previews, manualPort]);
 
-      if (index < previews.length) {
-        return index;
-      }
-
-      return previews.length - 1;
-    });
-  }, [previews]);
+  const selectPort = useCallback((port: number | null) => setManualPort(port), []);
 
   const reloadPreview = () => {
     /*
@@ -883,10 +857,9 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
 
         <div className="flex-grow flex items-center gap-1 bg-bolt-elements-preview-addressBar-background border border-bolt-elements-borderColor text-bolt-elements-preview-addressBar-text rounded-full px-1 py-1 text-sm hover:bg-bolt-elements-preview-addressBar-backgroundHover hover:focus-within:bg-bolt-elements-preview-addressBar-backgroundActive focus-within:bg-bolt-elements-preview-addressBar-backgroundActive focus-within-border-bolt-elements-borderColorActive focus-within:text-bolt-elements-preview-addressBar-textActive">
           <PortDropdown
-            activePreviewIndex={activePreviewIndex}
-            setActivePreviewIndex={setActivePreviewIndex}
+            activePort={activePreview?.port ?? null}
+            onSelectPort={selectPort}
             isDropdownOpen={isPortDropdownOpen}
-            setHasSelectedPreview={(value) => (hasSelectedPreview.current = value)}
             setIsDropdownOpen={setIsPortDropdownOpen}
             previews={previews}
           />

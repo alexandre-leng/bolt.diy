@@ -1,6 +1,6 @@
 import { useStore } from '@nanostores/react';
 import { motion } from 'framer-motion';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import type { UserProfile } from '~/components/@settings/core/types';
 import { Card, CardContent } from '~/components/ui/Card';
 import { Switch } from '~/components/ui/Switch';
@@ -28,6 +28,7 @@ const getModifierSymbol = (modifier: string): string => {
 
 export default function SettingsTab() {
   const activeTheme = useStore(themeStore);
+  const fieldId = useId();
 
   const [interfaceOptions, setInterfaceOptions] = useState(() => {
     const saved = JSON.parse(localStorage.getItem('bolt_interface_options') || '{}');
@@ -183,9 +184,12 @@ export default function SettingsTab() {
         <div>
           <div className="flex items-center gap-2 mb-2">
             <div className="i-ph:translate-fill w-4 h-4 text-bolt-elements-textSecondary" />
-            <label className="block text-sm text-bolt-elements-textSecondary">Language</label>
+            <label htmlFor={`${fieldId}-language`} className="block text-sm text-bolt-elements-textSecondary">
+              Langue
+            </label>
           </div>
           <select
+            id={`${fieldId}-language`}
             value={settings.language}
             onChange={(e) => setSettings((prev) => ({ ...prev, language: e.target.value }))}
             className={classNames(
@@ -213,13 +217,14 @@ export default function SettingsTab() {
         <div>
           <div className="flex items-center gap-2 mb-2">
             <div className="i-ph:bell-fill w-4 h-4 text-bolt-elements-textSecondary" />
-            <label className="block text-sm text-bolt-elements-textSecondary">Notifications</label>
+            <span className="block text-sm text-bolt-elements-textSecondary">Notifications</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm text-bolt-elements-textSecondary">
-              {settings.notifications ? 'Notifications are enabled' : 'Notifications are disabled'}
+              {settings.notifications ? 'Notifications activées' : 'Notifications désactivées'}
             </span>
             <Switch
+              aria-label="Notifications"
               checked={settings.notifications}
               onCheckedChange={(checked) => {
                 // Update local state
@@ -264,9 +269,12 @@ export default function SettingsTab() {
         <div>
           <div className="flex items-center gap-2 mb-2">
             <div className="i-ph:globe-fill w-4 h-4 text-bolt-elements-textSecondary" />
-            <label className="block text-sm text-bolt-elements-textSecondary">Timezone</label>
+            <label htmlFor={`${fieldId}-timezone`} className="block text-sm text-bolt-elements-textSecondary">
+              Fuseau horaire
+            </label>
           </div>
           <select
+            id={`${fieldId}-timezone`}
             value={settings.timezone}
             onChange={(e) => setSettings((prev) => ({ ...prev, timezone: e.target.value }))}
             className={classNames(

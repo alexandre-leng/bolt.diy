@@ -5,6 +5,7 @@ import {
   applyAccountPreferences,
   fetchAccountPreferences,
   fetchSecretNames,
+  pushAccountPreferences,
   saveOnboardingToAccount,
   storeApiKeysOnAccount,
 } from '~/lib/accountSettings';
@@ -243,6 +244,13 @@ export function FirstRunOnboarding() {
     }
   }, [open, mcpInitialized, initializeMcp]);
 
+  const skip = () => {
+    // Dismissal is not completion: never flush draft fields or the full local profile.
+    localStorage.setItem(COMPLETED_KEY, 'true');
+    setOpen(false);
+    void pushAccountPreferences({ onboardingCompleted: true });
+  };
+
   const finish = () => {
     localStorage.setItem(COMPLETED_KEY, 'true');
     setOpen(false);
@@ -382,6 +390,10 @@ export function FirstRunOnboarding() {
         backdropClassName="!bg-[#09080f]/80 !backdrop-blur-md bg-[radial-gradient(ellipse_at_top,_rgba(91,33,182,0.18),_transparent_55%)]"
         className="w-[min(560px,calc(100vw-2rem))] max-h-[90vh] overflow-y-auto !rounded-xl !border-[#302e39] !bg-[#1b1a22] p-6 !text-[#f4f1fa]"
         showCloseButton={false}
+        onEscapeKeyDown={(event) => {
+          event.preventDefault();
+          skip();
+        }}
       >
         <div className="mb-5">
           <div className="mb-2 text-xs font-medium text-[#a09baa]">
@@ -636,7 +648,14 @@ export function FirstRunOnboarding() {
           </div>
         )}
 
-        <div className="mt-6 flex items-center justify-end gap-3">
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={skip}
+            className="appearance-none rounded-md px-4 py-2 text-sm text-[#b8b3c2] hover:bg-[#302e39] hover:text-[#f4f1fa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8b5cf6]"
+          >
+            Passer
+          </button>
           <div className="flex gap-2">
             {step > 0 && (
               <button

@@ -76,6 +76,18 @@ const DOM_TESTS = [
   'app/components/workbench/EditorPanel.spec.tsx',
   'app/components/header/Header.spec.tsx',
 
+  // UX/a11y regression specs (render React)
+  'app/components/@settings/core/ControlPanel.spec.tsx',
+  'app/components/@settings/shared/service-integration/ConnectionForm.spec.tsx',
+  'app/components/@settings/tabs/profile/ProfileTab.spec.tsx',
+  'app/components/@settings/tabs/settings/SettingsTab.spec.tsx',
+  'app/components/chat/ChatBox.screenshotDialog.spec.tsx',
+  'app/components/chat/ChatControls.a11y.spec.tsx',
+  'app/components/chat/ModelSelector.a11y.spec.tsx',
+  'app/components/ui/ColorSchemeDialog.spec.tsx',
+  'app/components/ui/SelectionDialog.spec.tsx',
+  'app/components/workbench/PortDropdown.spec.tsx',
+
   // Browser storage / globals
   'app/lib/api/cookies.spec.ts',
   'app/lib/auth/session.spec.ts',

@@ -214,6 +214,17 @@
   --modern-scrollbar-thumb-backgroundHover: rgba(190, 190, 190, 0.7);
 }
 
+/* Accessible colors used only by the settings connection forms. */
+:root {
+  --bolt-elements-settings-gitlabButtonBg: #b83f0b;
+  --bolt-elements-settings-gitlabButtonBgHover: #8f3008;
+  --bolt-elements-settings-linkText: #1a6aa6;
+}
+
+:root[data-theme='dark'] {
+  --bolt-elements-settings-linkText: #79b8e8;
+}
+
 /* User-selectable color palettes */
 :root[data-color-theme='light-solarized'] {
   --bolt-elements-bg-depth-1: #fdf6e3;

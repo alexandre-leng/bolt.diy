@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import React from 'react';
+import React, { useId } from 'react';
 import { classNames } from '~/utils/classNames';
 
 interface TokenTypeOption {
@@ -47,6 +47,15 @@ export function ConnectionForm({
   connectedMessage = `Connected to ${serviceName}`,
   children,
 }: ConnectionFormProps) {
+  const id = useId();
+  const tokenId = `${id}-token`;
+  const tokenTypeId = `${id}-token-type`;
+  const errorId = `${id}-error`;
+  const tokenHelpId = `${id}-token-help`;
+  const tokenTypeDescId = `${id}-token-type-desc`;
+  const describedBy = [tokenHelpId, error ? errorId : undefined].filter(Boolean).join(' ');
+  const selectedTypeDescription = tokenTypes?.find((t) => t.value === selectedTokenType)?.description;
+
   return (
     <motion.div
       className="bg-bolt-elements-background dark:bg-bolt-elements-background border border-bolt-elements-borderColor dark:border-bolt-elements-borderColor rounded-lg"
@@ -73,10 +82,15 @@ export function ConnectionForm({
             <form onSubmit={onConnect} className="space-y-4">
               {tokenTypes && tokenTypes.length > 1 && onTokenTypeChange && (
                 <div>
-                  <label className="block text-sm text-bolt-elements-textSecondary dark:text-bolt-elements-textSecondary mb-2">
+                  <label
+                    htmlFor={tokenTypeId}
+                    className="block text-sm text-bolt-elements-textSecondary dark:text-bolt-elements-textSecondary mb-2"
+                  >
                     Token Type
                   </label>
                   <select
+                    id={tokenTypeId}
+                    aria-describedby={selectedTypeDescription ? tokenTypeDescId : undefined}
                     value={selectedTokenType}
                     onChange={(e) => onTokenTypeChange(e.target.value)}
                     disabled={isConnecting}
@@ -96,17 +110,22 @@ export function ConnectionForm({
                     ))}
                   </select>
                   {selectedTokenType && tokenTypes.find((t) => t.value === selectedTokenType)?.description && (
-                    <p className="mt-1 text-xs text-bolt-elements-textTertiary">
-                      {tokenTypes.find((t) => t.value === selectedTokenType)?.description}
+                    <p id={tokenTypeDescId} className="mt-1 text-xs text-bolt-elements-textTertiary">
+                      {selectedTypeDescription}
                     </p>
                   )}
                 </div>
               )}
 
               <div>
-                <label className="block text-sm text-bolt-elements-textSecondary mb-2">{tokenLabel}</label>
+                <label htmlFor={tokenId} className="block text-sm text-bolt-elements-textSecondary mb-2">
+                  {tokenLabel}
+                </label>
                 <input
+                  id={tokenId}
                   type="password"
+                  aria-invalid={error ? true : undefined}
+                  aria-describedby={describedBy || undefined}
                   value={token}
                   onChange={(e) => onTokenChange(e.target.value)}
                   disabled={isConnecting}
@@ -120,12 +139,12 @@ export function ConnectionForm({
                     'disabled:opacity-50',
                   )}
                 />
-                <div className="mt-2 text-sm text-bolt-elements-textSecondary">
+                <div id={tokenHelpId} className="mt-2 text-sm text-bolt-elements-textSecondary">
                   <a
                     href={getTokenUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-bolt-elements-borderColorActive hover:underline inline-flex items-center gap-1"
+                    className="text-bolt-elements-settings-linkText hover:underline inline-flex items-center gap-1"
                   >
                     Get your token
                     <div className="i-ph:arrow-square-out w-4 h-4" />
@@ -136,7 +155,11 @@ export function ConnectionForm({
               {children}
 
               {error && (
-                <div className="p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-700">
+                <div
+                  id={errorId}
+                  role="alert"
+                  className="p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-700"
+                >
                   <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
                 </div>
               )}

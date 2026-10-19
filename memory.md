@@ -146,6 +146,62 @@
 
 ---
 
+## 2026-10-19 — Dictée au micro réellement fonctionnelle (deux moteurs) et onglet Voix
+
+**Constat mesuré :** le bouton micro était câblé et cliquable (Chromium : `hasSR: true`, bouton
+`disabled: false`), mais il reposait uniquement sur la Web Speech API : rien sur Firefox/iOS, aucune
+erreur affichée (`console.error` seulement), arrêt silencieux après un silence, langue figée au
+chargement, aucune borne de durée ni de taille.
+
+**Livré :**
+- `app/lib/dictation.ts` — contrat unique : langues, limites (5 min, 12 Mo, 8000 caractères),
+  messages utilisateur par code d'erreur, choix de moteur, formats d'enregistrement.
+- `app/lib/hooks/useSpeechRecognition.ts` — deux moteurs (Web Speech, puis `MediaRecorder` +
+  `/api/transcribe`), reprise après silence, langue modifiable à chaud, erreurs remontées en état.
+- `app/routes/api.transcribe.ts` — OpenAI (`whisper-1`) prioritaire, Groq (`whisper-large-v3-turbo`)
+  ensuite ; corps borné, secrets jamais renvoyés, `code` machine dans le corps d'erreur.
+- `SpeechRecognition.tsx` — trois états distincts (repos, écoute, transcription), puce de langue,
+  ligne de statut `aria-live` avec « Réessayer ».
+- `app/components/@settings/tabs/voice/VoiceTab.tsx` — onglet **Voix** : langue, bouton micro,
+  secours serveur, relecture, capacités détectées, et synthèse vocale (voix/ vitesse/ hauteur +
+  test), persistés sous `bolt_dictation_settings`.
+- `Permissions-Policy` : `microphone=(self)` (l'ancien `microphone=()` interdisait le micro au
+  document entier dans tout navigateur qui applique la politique).
+
+**Pièges payés (à ne pas repayer) :**
+- `readBodyText` décode en UTF-8 : un clip WebM est corrompu avant l'envoi. `readBodyBytes` a été
+  ajouté, testé octet pour octet.
+- `toApiErrorResponse` n'émettait pas `error.code` : ajouté (champ additif) sans quoi le client
+  lisait `undefined`.
+- React Router refuse le build si une route important du code serveur exporte autre chose que
+  `action`/`loader` : `transcribeAction` et `TRANSCRIBE_LIMITS` ne doivent pas être exportés.
+- Un WAV silencieux en fausse entrée micro ne produit aucun mot (ni Web Speech ni Whisper) : la
+  preuve E2E exige un vrai fichier parlé.
+- Chromium headless n'a pas le service de reconnaissance Google : le moteur navigateur n'y produit
+  jamais de texte. Preuve du moteur serveur = `delete window.SpeechRecognition` en
+  `add_init_script`, ce qui reproduit le chemin Firefox/Safari.
+- `IconButton` n'avait pas de `aria-pressed` : ajouté en passthrough explicite.
+
+**Preuves (site déployé, image `bolt-diy:mic-dictee`) :**
+- `/api/transcribe` réel, session authentifiée : 200 + « Bonjour, ceci est un test de dictée
+  vocale… » ; sans fichier : 400 `provider-refused` ; sans session : 401.
+- Moteur serveur (Chromium sans Web Speech, chemin Firefox) : un appel `POST /api/transcribe` 200,
+  texte français injecté dans le composeur, `RESULT: OK`.
+- Firefox (Gecko réel) : le clic micro produit du texte dans le composeur (l'audio de test est un
+  clip vidéo, d'où un texte hors marqueurs attendus) : la chaîne ne peut fonctionner que via
+  `/api/transcribe`.
+- Unitaires : `dictation.spec.ts`, `useSpeechRecognition.spec.ts` (dont reprise après silence et
+  message de micro refusé), `api.transcribe.spec.ts` (octets intacts, bascule OpenAI→Groq, aucun
+  secret renvoyé), `SpeechRecognition.spec.tsx`, `security.spec.ts` (politique micro).
+  `tsc` 0 erreur, `eslint --quiet` 0 erreur, suite complète 1234/1237 (3 tests de performance
+  rouges sous charge : load average 80-100 pendant la vérification).
+
+**Limite connue :** la Web Speech API en Chromium demande le service vocal de Google, absent d'un
+conteneur headless : l'absence de texte ne prouve pas un bug du moteur navigateur, elle est une
+limite du harnais.
+
+---
+
 ## 2026-10-17 — L'onboarding se réaffichait et n'était pas partagé entre appareils
 
 - **Type** : feat + fix

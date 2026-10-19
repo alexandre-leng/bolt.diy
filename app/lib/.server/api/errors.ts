@@ -18,6 +18,12 @@ export interface ApiErrorBody {
   statusCode: number;
   isRetryable: boolean;
   provider: string;
+
+  /**
+   * Machine-readable reason, when the route has one (dictation: `key-missing`, `too-long`…).
+   * Additive: the chat alert reader ignores fields it does not know.
+   */
+  code?: string;
 }
 
 /**
@@ -368,6 +374,7 @@ export function toApiErrorResponse(error: unknown, fallbackProvider = 'unknown')
         statusCode: error.status,
         isRetryable: error.isRetryable,
         provider: error.provider ?? fallbackProvider,
+        code: error.code,
       } satisfies ApiErrorBody,
       { status: error.status, headers: { 'Content-Type': 'application/json' } },
     );

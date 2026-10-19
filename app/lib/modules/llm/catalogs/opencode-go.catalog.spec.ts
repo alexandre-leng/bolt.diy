@@ -17,14 +17,45 @@ describe('OpenCode Go catalog', () => {
     expect(flash!.maxOutput).toBeGreaterThanOrEqual(384_000);
   });
 
-  it('offers every model the gateway answers, with usable limits', () => {
-    const ids = OPENCODE_GO_CATALOG.map((entry) => entry.id);
+  /*
+   * The count that matters is the one the PICKER shows, not the file's total: the provider filters
+   * `entry.status !== 'deprecated'` (see opencode-go.ts `staticModels`), so a deprecated entry is
+   * never offered. Asserting on the raw length hid a real regression — removing one non-deprecated
+   * model from the catalog left every test green, because the total stayed above the threshold and
+   * the deprecated rows padded it. Count the selectable set instead.
+   */
+  it('offers the models the picker exposes, all usable and none deprecated', () => {
+    const offered = OPENCODE_GO_CATALOG.filter((entry) => entry.tools && entry.status !== 'deprecated');
+    const offeredIds = offered.map((entry) => entry.id);
 
     for (const id of ['deepseek-v4.1-flash', 'deepseek-v4-pro', 'glm-5.2', 'kimi-k2.7-code', 'mimo-v2.6-pro']) {
-      expect(ids).toContain(id);
+      expect(offeredIds, `the picker no longer offers ${id}`).toContain(id);
     }
 
-    expect(OPENCODE_GO_CATALOG.length).toBeGreaterThanOrEqual(30);
+    // Every offered entry must be something the agent loop can actually use.
+    for (const entry of offered) {
+      expect(entry.tools, entry.id).toBe(true);
+    }
+
+    /*
+     * Guards against losing an offered model, not against the file shrinking: a removed
+     * non-deprecated entry drops this number, which is the failure this test exists to catch.
+     */
+    expect(offered.length).toBeGreaterThanOrEqual(29);
+  });
+
+  it('keeps a deprecated entry out of the picker even though the file still lists it', () => {
+    /*
+     * Documents the contract the cut above depends on: the catalog keeps retired rows for
+     * reference, and only `status` decides whether the picker shows them.
+     */
+    const deprecated = OPENCODE_GO_CATALOG.filter((entry) => entry.status === 'deprecated');
+
+    expect(deprecated.length).toBeGreaterThan(0);
+
+    for (const entry of deprecated) {
+      expect(entry.status, entry.id).toBe('deprecated');
+    }
   });
 
   it('has no duplicate id and no impossible value', () => {

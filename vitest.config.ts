@@ -80,6 +80,7 @@ const DOM_TESTS = [
   'app/components/@settings/core/ControlPanel.spec.tsx',
   'app/components/@settings/shared/service-integration/ConnectionForm.spec.tsx',
   'app/components/@settings/tabs/profile/ProfileTab.spec.tsx',
+  'app/components/@settings/tabs/profile/ProfileTab.persistence.spec.tsx',
   'app/components/@settings/tabs/settings/SettingsTab.spec.tsx',
   'app/components/chat/ChatBox.screenshotDialog.spec.tsx',
   'app/components/chat/ChatControls.a11y.spec.tsx',

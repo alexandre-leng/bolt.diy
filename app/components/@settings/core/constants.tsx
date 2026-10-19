@@ -11,6 +11,7 @@ import {
   List,
   Plug,
   Blocks,
+  Mic,
 } from 'lucide-react';
 import type { TabType } from './types';
 
@@ -67,6 +68,7 @@ export const TAB_ICONS: Record<TabType, React.ComponentType<{ className?: string
   supabase: () => <SupabaseIcon />,
   'event-logs': List,
   mcp: Wrench,
+  voice: Mic,
   plugins: Blocks,
 };
 
@@ -86,6 +88,7 @@ export const TAB_LABELS: Record<TabType, string> = {
   supabase: 'Supabase',
   'event-logs': 'Event Logs',
   mcp: 'MCP Servers',
+  voice: 'Voix',
   plugins: 'Plugins',
 };
 
@@ -105,6 +108,7 @@ export const TAB_DESCRIPTIONS: Record<TabType, string> = {
   supabase: 'Setup Supabase database connection',
   'event-logs': 'View system events and logs',
   mcp: 'Configure MCP (Model Context Protocol) servers',
+  voice: 'Dictée au micro et synthèse vocale',
   plugins: 'Discover, install, and manage plugins',
 };
 
@@ -119,7 +123,8 @@ export const DEFAULT_TAB_CONFIG = [
   { id: 'notifications', visible: true, window: 'user' as const, order: 6 },
   { id: 'event-logs', visible: true, window: 'user' as const, order: 7 },
   { id: 'mcp', visible: true, window: 'user' as const, order: 8 },
-  { id: 'plugins', visible: true, window: 'user' as const, order: 9 },
+  { id: 'voice', visible: true, window: 'user' as const, order: 9 },
+  { id: 'plugins', visible: true, window: 'user' as const, order: 10 },
 
   // Legacy individual connector tabs (hidden by default, kept for backward compatibility)
   { id: 'github', visible: false, window: 'user' as const, order: 10 },

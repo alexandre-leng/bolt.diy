@@ -187,8 +187,13 @@ export const TerminalTabs = memo(() => {
                     </button>
                   ) : (
                     <React.Fragment>
-                      <button
-                        key={index}
+                      {/*
+                        Two sibling buttons, never a button inside a button: the nested shape is
+                        invalid HTML and its accessible name was empty, so a screen reader announced
+                        an unnamed button and a click could both select and close the tab. The
+                        container carries the pill styling; each button owns one action.
+                      */}
+                      <div
                         className={classNames(
                           'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 h-full whitespace-nowrap rounded-full',
                           {
@@ -197,12 +202,22 @@ export const TerminalTabs = memo(() => {
                               !isActive,
                           },
                         )}
-                        onClick={() => setActiveTerminal(index)}
                       >
-                        <div className="i-ph:terminal-window-duotone text-lg" />
-                        Terminal {terminalCount > 1 && index}
                         <button
-                          className="bg-transparent text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary hover:bg-transparent rounded"
+                          type="button"
+                          role="tab"
+                          aria-selected={isActive}
+                          className="flex items-center gap-1.5 cursor-pointer"
+                          onClick={() => setActiveTerminal(index)}
+                        >
+                          <div className="i-ph:terminal-window-duotone text-lg" />
+                          Terminal {terminalCount > 1 && index}
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Fermer le terminal ${index}`}
+                          title={`Fermer le terminal ${index}`}
+                          className="bg-transparent text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary hover:bg-transparent rounded cursor-pointer"
                           onClick={(e) => {
                             e.stopPropagation();
                             closeTerminal(index);
@@ -210,7 +225,7 @@ export const TerminalTabs = memo(() => {
                         >
                           <div className="i-ph:x text-xs" />
                         </button>
-                      </button>
+                      </div>
                     </React.Fragment>
                   )}
                 </React.Fragment>

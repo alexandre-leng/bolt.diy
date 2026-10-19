@@ -7,6 +7,7 @@ import {
   catalogCanDisableThinking,
   catalogEfforts,
   catalogProtocol,
+  catalogStatus,
   catalogThinkingOnly,
 } from '~/lib/modules/llm/catalogs/opencode-go.catalog';
 import { keyFallbackFetch, orderedKeys } from '~/lib/modules/llm/providers/opencode-go-key-fallback';
@@ -231,23 +232,34 @@ export default class OpenCodeGoProvider extends BaseProvider {
       const res = (await response.json()) as { data: Array<{ id: string }> };
       const known = new Set(this.staticModels.map((m) => m.name));
 
-      return res.data
-        .filter((model) => !known.has(model.id))
-        .map((model) => {
-          /*
-           * A model the catalog knows keeps its real limits; an unknown one gets the previous
-           * conservative default and is labelled as such.
-           */
-          const entry = OPENCODE_GO_CATALOG.find((item) => item.id === model.id);
+      return (
+        res.data
 
-          return {
-            name: model.id,
-            label: entry ? entry.label : `${model.id} (non répertorié)`,
-            provider: this.name,
-            maxTokenAllowed: entry?.context ?? 128000,
-            maxCompletionTokens: entry?.maxOutput ?? 8192,
-          };
-        });
+          /*
+           * `known` is built from `staticModels`, which already dropped the deprecated entries, so a
+           * retired model the gateway still serves is NOT in `known` and would be re-added here with
+           * no status check — the picker offered a model the catalog marks as retired (minimax-m2.7
+           * was selectable while `cat-jam-free` stayed out by luck, because the gateway happened to
+           * stop serving it). Exclude by catalog status as well, so the filter cannot be defeated by
+           * the very list that applied it.
+           */
+          .filter((model) => !known.has(model.id) && catalogStatus(model.id) !== 'deprecated')
+          .map((model) => {
+            /*
+             * A model the catalog knows keeps its real limits; an unknown one gets the previous
+             * conservative default and is labelled as such.
+             */
+            const entry = OPENCODE_GO_CATALOG.find((item) => item.id === model.id);
+
+            return {
+              name: model.id,
+              label: entry ? entry.label : `${model.id} (non répertorié)`,
+              provider: this.name,
+              maxTokenAllowed: entry?.context ?? 128000,
+              maxCompletionTokens: entry?.maxOutput ?? 8192,
+            };
+          })
+      );
     } catch {
       // Model listing is optional; static models remain usable.
       return [];

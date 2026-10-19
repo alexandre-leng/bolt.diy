@@ -1,6 +1,7 @@
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import { diffLines, type Change } from 'diff';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { ConfirmationDialog } from '~/components/ui/Dialog';
 import type { FileMap } from '~/lib/stores/files';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { toast } from '~/lib/toastify';
@@ -436,12 +437,19 @@ function FileContextMenu({
     setIsCreatingFolder(false);
   };
 
-  const handleDelete = async () => {
-    try {
-      if (!confirm(`Are you sure you want to delete ${isFolder ? 'folder' : 'file'}: ${fileName}?`)) {
-        return;
-      }
+  /*
+   * Deletion asks through the app's own dialog, not the browser's native confirm().
+   *
+   * `confirm()` blocked the whole tab, was not styled, and was hard-coded in English in an otherwise
+   * French interface, on a destructive action. The confirmation is now a state the render owns, and
+   * the dialog is where the user can actually read what is about to be deleted.
+   */
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
+  const handleDelete = async () => {
+    setIsDeleteDialogOpen(false);
+
+    try {
       let success;
 
       if (isFolder) {
@@ -616,7 +624,7 @@ function FileContextMenu({
             </ContextMenu.Group>
             {/* Add delete option in a new group */}
             <ContextMenu.Group className="p-1 border-t-px border-solid border-bolt-elements-borderColor">
-              <ContextMenuItem onSelect={handleDelete}>
+              <ContextMenuItem onSelect={() => setIsDeleteDialogOpen(true)}>
                 <div className="flex items-center gap-2 text-red-500">
                   <div className="i-ph:trash" />
                   Delete {isFolder ? 'Folder' : 'File'}
@@ -625,6 +633,16 @@ function FileContextMenu({
             </ContextMenu.Group>
           </ContextMenu.Content>
         </ContextMenu.Portal>
+        <ConfirmationDialog
+          isOpen={isDeleteDialogOpen}
+          onClose={() => setIsDeleteDialogOpen(false)}
+          onConfirm={handleDelete}
+          title={isFolder ? 'Supprimer le dossier' : 'Supprimer le fichier'}
+          description={`Confirmer la suppression de « ${fileName} » ? Cette action est irréversible.`}
+          confirmLabel="Supprimer"
+          cancelLabel="Annuler"
+          variant="destructive"
+        />
       </ContextMenu.Root>
       {isCreatingFile && (
         <InlineInput

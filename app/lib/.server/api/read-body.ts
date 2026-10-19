@@ -22,6 +22,23 @@ export async function readBodyText(
   request: Request,
   options: { maxBytes: number; timeoutMs?: number } = { maxBytes: 1024 * 1024 },
 ): Promise<string> {
+  const bytes = await readBodyBytes(request, options);
+
+  return new TextDecoder().decode(bytes);
+}
+
+/**
+ * Reads a raw body under a byte budget, without decoding it.
+ *
+ * Same bounds as `readBodyText` (streaming cap, deadline, cancellation) but binary-safe: a
+ * dictation clip is a WebM/Opus stream, and decoding it as UTF-8 first would corrupt every
+ * byte above 0x7f before it reached the transcription service. Malformed audio, not mangled
+ * audio, is what the provider should be asked to judge.
+ */
+export async function readBodyBytes(
+  request: Request,
+  options: { maxBytes: number; timeoutMs?: number } = { maxBytes: 1024 * 1024 },
+): Promise<Uint8Array> {
   const { maxBytes, timeoutMs = 15_000 } = options;
 
   /*
@@ -36,11 +53,10 @@ export async function readBodyText(
   }
 
   if (!request.body) {
-    return '';
+    return new Uint8Array();
   }
 
   const reader = request.body.getReader();
-  const decoder = new TextDecoder();
 
   const cancel = () => {
     void reader.cancel().catch(() => undefined);
@@ -55,8 +71,9 @@ export async function readBodyText(
 
   request.signal.addEventListener('abort', cancel, { once: true });
 
-  let body = '';
-  let bytes = 0;
+  const chunks: Uint8Array[] = [];
+
+  let total = 0;
 
   try {
     for (;;) {
@@ -70,30 +87,50 @@ export async function readBodyText(
         throw new RequestTimeoutError(timeoutMs);
       }
 
-      if (request.signal.aborted) {
-        throw new RequestAbortedError();
-      }
-
       if (done) {
         break;
       }
 
-      bytes += value.byteLength;
+      if (!value) {
+        continue;
+      }
 
-      if (bytes > maxBytes) {
-        await reader.cancel().catch(() => undefined);
+      total += value.byteLength;
+
+      if (total > maxBytes) {
+        cancel();
         throw new PayloadTooLargeError(maxBytes);
       }
 
-      /* `stream: true` so a multi-byte character split across chunks is not mangled. */
-      body += decoder.decode(value, { stream: true });
+      chunks.push(value);
+    }
+  } catch (error) {
+    if (error instanceof RequestAbortedError || error instanceof RequestTimeoutError) {
+      throw error;
     }
 
-    body += decoder.decode();
+    if (timedOut) {
+      throw new RequestTimeoutError(timeoutMs);
+    }
+
+    if (request.signal.aborted) {
+      throw new RequestAbortedError();
+    }
+
+    throw error;
   } finally {
     clearTimeout(timer);
     request.signal.removeEventListener('abort', cancel);
     reader.releaseLock();
+  }
+
+  const body = new Uint8Array(total);
+
+  let offset = 0;
+
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
   }
 
   return body;

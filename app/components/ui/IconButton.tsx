@@ -46,7 +46,8 @@ export const IconButton = memo(
         'data-testid': dataTestId,
         onClick,
         children,
-      }: IconButtonProps,
+        ...rest
+      }: IconButtonProps & { 'aria-pressed'?: boolean },
       ref: ForwardedRef<HTMLButtonElement>,
     ) => {
       return (
@@ -64,6 +65,7 @@ export const IconButton = memo(
           aria-label={ariaLabel ?? title}
           data-testid={dataTestId}
           disabled={disabled}
+          {...rest}
           onClick={(event) => {
             if (disabled) {
               return;

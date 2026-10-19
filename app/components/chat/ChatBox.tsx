@@ -14,12 +14,13 @@ import { SendButton } from './SendButton.client';
 import { SupabaseConnection } from './SupabaseConnection';
 import { ToolAccessMenu } from './ToolAccessMenu';
 import { ModelSelector } from '~/components/chat/ModelSelector';
-import { SpeechRecognitionButton } from '~/components/chat/SpeechRecognition';
+import { DictationStatus, SpeechRecognitionButton } from '~/components/chat/SpeechRecognition';
 import { CloseButton } from '~/components/ui/CloseButton';
 import { ColorSchemeDialog } from '~/components/ui/ColorSchemeDialog';
 import { IconButton } from '~/components/ui/IconButton';
 import { ExpoQrModal } from '~/components/workbench/ExpoQrModal';
 import type { ElementInfo } from '~/components/workbench/Inspector';
+import { DICTATION_LANGUAGES, type DictationEngine, type DictationSettings } from '~/lib/dictation';
 import { isGitHubConnected } from '~/lib/stores/githubConnection';
 import { isGitLabConnected } from '~/lib/stores/gitlabConnection';
 import { useMCPStore, type ConnectorId } from '~/lib/stores/mcp';
@@ -116,8 +117,22 @@ interface ChatBoxProps {
   handleSendMessage: (event: React.UIEvent, messageInput?: string) => void;
   isListening: boolean;
 
-  /** False when the browser has no SpeechRecognition (Firefox): the mic is disabled with a reason. */
+  /** False when no dictation engine exists in this browser: the mic is disabled with a reason. */
   speechSupported?: boolean;
+
+  /** Which engine a click will use: Web Speech in Chromium, server transcription elsewhere. */
+  speechEngine?: DictationEngine | null;
+
+  /** An upload is being transcribed (server engine). */
+  speechTranscribing?: boolean;
+
+  /** Phrased failure of the last dictation, shown under the composer. */
+  speechError?: string | null;
+  clearSpeechError?: () => void;
+
+  /** Language and behaviour of the dictation, shared with the voice settings tab. */
+  dictationSettings?: DictationSettings;
+  updateDictationSettings?: (patch: Partial<DictationSettings>) => void;
   startListening: () => void;
   stopListening: () => void;
   chatStarted: boolean;
@@ -273,10 +288,17 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
         <rect className={classNames(styles.PromptEffectLine)} pathLength="100" strokeLinecap="round"></rect>
         <rect className={classNames(styles.PromptShine)} x="48" y="24" width="70" height="1"></rect>
       </svg>
-      <div>
+      {/*
+       * This wrapper needs an explicit display: it is a plain block box inside a flex parent, and
+       * without `w-full`/`flex` it collapses to zero height, which made BOTH the model picker and
+       * the reasoning selector invisible in the composer (measured on the live host: the row was
+       * 494x0 and every control inside it had a 0x0 box).
+       */}
+      <div className="w-full flex flex-col gap-2">
         <ClientOnly>
+          {/* `contents` keeps this wrapper from being a box: as a box it took a 0-height line and every control inside collapsed to 0x0 (measured live, the row stayed 494x0). */}
           {() => (
-            <div className={props.isModelSettingsCollapsed ? 'hidden' : ''}>
+            <div className={props.isModelSettingsCollapsed ? 'hidden' : 'contents'}>
               <ModelSelector
                 key={props.provider?.name}
                 model={props.model}
@@ -422,6 +444,25 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
           aria-label={props.chatMode === 'build' ? 'Décrivez l’application à créer' : 'Message'}
           translate="no"
         />
+        {(props.speechError || props.isListening || props.speechTranscribing) && (
+          <div className="px-3 pb-1">
+            <DictationStatus
+              errorMessage={props.speechError ?? null}
+              isListening={props.isListening}
+              isTranscribing={Boolean(props.speechTranscribing)}
+              languageLabel={
+                DICTATION_LANGUAGES.find((entry) => entry.value === props.dictationSettings?.language)?.label ??
+                props.dictationSettings?.language ??
+                'fr-FR'
+              }
+              onDismiss={() => props.clearSpeechError?.()}
+              onRetry={() => {
+                props.clearSpeechError?.();
+                props.startListening();
+              }}
+            />
+          </div>
+        )}
         <div className="flex justify-between items-center gap-2 text-sm px-3 pb-3 pt-1">
           <div className="flex gap-1 items-center min-w-0">
             <ClientOnly>
@@ -556,10 +597,14 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
             </DropdownMenu.Root>
             <SpeechRecognitionButton
               isListening={props.isListening}
+              isTranscribing={Boolean(props.speechTranscribing)}
               onStart={props.startListening}
               onStop={props.stopListening}
               disabled={props.isStreaming}
               supported={props.speechSupported ?? true}
+              engine={props.speechEngine ?? null}
+              language={props.dictationSettings?.language}
+              onLanguageChange={(language) => props.updateDictationSettings?.({ language })}
             />
             <IconButton
               title="Réglages du modèle"

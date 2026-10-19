@@ -131,6 +131,33 @@ GitLab hostname validation is **not complete SSRF protection**: redirect/DNS
 handling and network egress require separate review. UI source checks are not a
 physical-device or live-browser proof.
 
+## Preview-server restart verification
+
+The terminal's circular-arrow control restarts the project preview server; it does
+not merely clear or reattach xterm. It preserves the launch command, prevents
+concurrent restarts, and reports runtime failures. Commit `79a7d1b` fixes an OSC
+handoff race: consume the preceding prompt before sending Ctrl+C, then consume
+its acknowledgement before launching the next command. Otherwise exit 130 can be
+attributed to a still-running new server and the next restart hits its occupied port.
+
+Verified on the deployed image using controlled, temporary projects (no model call):
+
+- Chromium: two real restarts, preview PID 41 → 62 → 83; reopen PID 117.
+- Firefox: two real restarts, PID 151 → 172 → 193; reopen PID 227.
+- Mobile Chromium, 390 × 844, Vite project: PID 120 → 152 → 183; reopen PID 214.
+  Open the compact header's preview control first; an off-screen workbench is not
+  evidence that its restart button is broken.
+- Full live smoke: 8/8 (login, account profile, onboarding state, French UI,
+  direct-link restore, publish/served output, mobile settings, browser errors).
+- Clean committed-tree verification: 1256/1256 tests in 156 files; TypeScript,
+  ESLint and production image build passed. The earlier overlay-container run
+  counted 1266 tests because it retained three obsolete spec files (10 tests)
+  absent from git; no tests were excluded or budgets changed for this fix.
+
+The three temporary conversations and published test site were removed and their
+absence checked. These results verify the named journeys, not an exhaustive audit
+or a physical-phone test.
+
 ## Remaining work and operational cautions
 
 The audit is not complete. Open work includes publication ownership and concurrent

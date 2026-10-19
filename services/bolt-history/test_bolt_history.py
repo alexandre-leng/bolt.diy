@@ -15,6 +15,13 @@ from http.server import ThreadingHTTPServer
 TEST_DB = os.environ.get("BOLT_HISTORY_TEST_DB", "bolt_history_test")
 os.environ["BOLT_HISTORY_PG_DB"] = TEST_DB
 
+# Refuses to start if the redirect above ever stops being effective: the suite DELETEs
+# chats/projects/users, and a run against the production database would erase the user's
+# real conversations without a word. See test_db_guard.py.
+from test_db_guard import require_test_database
+
+require_test_database()
+
 bh = importlib.import_module("bolt_history")
 
 

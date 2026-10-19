@@ -251,10 +251,7 @@ it('does not re-add a deprecated model the gateway still serves', async () => {
   );
 
   const provider = new OpenCodeGoProvider();
-
-  const dynamic = await provider.getDynamicModels(undefined, undefined, {
-    OPENCODE_GO_API_KEY: 'server-key',
-  } as unknown as Env);
+  const dynamic = await provider.getDynamicModels(undefined, undefined, { OPENCODE_GO_API_KEY: 'server-key' });
 
   const ids = dynamic.map((model) => model.name);
 

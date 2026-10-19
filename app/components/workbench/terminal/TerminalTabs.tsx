@@ -1,6 +1,7 @@
 import { useStore } from '@nanostores/react';
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Panel, type PanelImperativeHandle } from 'react-resizable-panels';
+import { RestartPreviewButton } from './RestartPreviewButton';
 import { Terminal, type TerminalRef } from './Terminal';
 import { TerminalManager } from './TerminalManager';
 import { readTerminalLog } from './readTerminalLog';
@@ -226,24 +227,12 @@ export const TerminalTabs = memo(() => {
               <span className="i-ph:copy text-base" aria-hidden="true" />
               <span className="hidden sm:inline">Copy logs</span>
             </button>
-            <IconButton
-              icon="i-ph:arrow-clockwise"
-              title="Reset Terminal"
-              size="md"
-              onClick={() => {
-                const ref = terminalRefs.current.get(activeTerminal);
+            <RestartPreviewButton
+              onRestart={async () => {
+                setActiveTerminal(0);
 
-                if (ref?.getTerminal()) {
-                  const terminal = ref.getTerminal()!;
-                  terminal.clear();
-                  terminal.focus();
-
-                  if (activeTerminal === 0) {
-                    workbenchStore.attachBoltTerminal(terminal);
-                  } else {
-                    workbenchStore.attachTerminal(terminal);
-                  }
-                }
+                const { restartProjectPreview } = await import('~/lib/runtime/projectMcp');
+                await restartProjectPreview();
               }}
             />
             <IconButton

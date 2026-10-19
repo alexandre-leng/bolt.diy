@@ -12,33 +12,22 @@ describe('route declarations', () => {
   const declared = readFileSync(join(__dirname, 'routes.ts'), 'utf8');
 
   /*
-   * Routes deliberately NOT declared in routes.ts. Keep this empty unless a route truly must stay
-   * unserved, and say why: a route file nobody declared is a silent 404 for its callers.
+   * Every app/routes/api.*.ts must be declared: a file present on disk but absent from
+   * routes.ts is simply not served, and the endpoint 404s in production while its code and
+   * tests look fine. There is no allowlist any more — api.supabase-user.ts was declared once
+   * the two live clients that fetch it were traced (SupabaseTab.tsx, connectorActivation.ts).
    */
-  const KNOWN_UNDECLARED = new Set<string>();
-
   const apiFiles = readdirSync(routesDir).filter((name) => name.startsWith('api.') && name.endsWith('.ts'));
 
   it('finds the API route files', () => {
     expect(apiFiles.length).toBeGreaterThan(10);
   });
 
-  it.each(apiFiles.filter((name) => !name.endsWith('.spec.ts') && !KNOWN_UNDECLARED.has(name)))(
-    'declares %s in routes.ts',
-    (file) => {
-      expect(declared).toContain(`routes/${file}`);
-    },
-  );
+  it('serves the supabase-user route the clients fetch', () => {
+    expect(declared).toContain("routes/api.supabase-user.ts', path: '/api/supabase-user'");
+  });
 
-  it('keeps no stale exception in KNOWN_UNDECLARED', () => {
-    /*
-     * An exception that is now declared (or deleted) must be removed from the list, so the guard
-     * never silently covers a real missing route.
-     */
-    const stale = [...KNOWN_UNDECLARED].filter(
-      (name) => !apiFiles.includes(name) || declared.includes(`routes/${name}`),
-    );
-
-    expect(stale).toEqual([]);
+  it.each(apiFiles.filter((name) => !name.endsWith('.spec.ts')))('declares %s in routes.ts', (file) => {
+    expect(declared).toContain(`routes/${file}`);
   });
 });

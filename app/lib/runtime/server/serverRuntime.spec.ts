@@ -141,6 +141,59 @@ describe('RuntimeSocket', () => {
     vi.useRealTimers();
   });
 
+  it('reconnects to the selected project rather than the previous conversation', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const { server, socket, container } = setup();
+      server.handlers['session.switch'] = () => ({ outcome: 'switched' });
+      await vi.advanceTimersByTimeAsync(0);
+      await socket.ready;
+      container.projectResolver = () => 'chat-2';
+      await container.followLocation();
+      server.current.drop();
+      await vi.advanceTimersByTimeAsync(250);
+
+      const opens = server.received.filter((message) => message.op === 'session.open');
+      expect(opens.at(-1)?.projectId).toBe('chat-2');
+      socket.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps requests queued during a reconnect until the next session opens', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const { server, socket } = setup();
+      server.handlers['fs.readdir'] = () => ['saved.txt'];
+
+      const pending = socket.request('fs.readdir', { path: '.' });
+
+      const result = pending.then(
+        (value) => ({ value }),
+        (error) => ({ error }),
+      );
+
+      // The first connection dies before the queued file operation was sent.
+      server.current.drop();
+      await vi.advanceTimersByTimeAsync(250);
+      expect(await result).toEqual({ value: ['saved.txt'] });
+      socket.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('rejects readiness when explicitly closed before the first session opens', async () => {
+    const { socket } = setup();
+    const result = socket.ready.catch((error: Error) => error.message);
+    socket.close();
+
+    await expect(result).resolves.toContain('runtime closed');
+  });
+
   it('fails the first open instead of hanging when the server refuses (capacity)', async () => {
     const server = new FakeServer();
     server.failOpen = true;

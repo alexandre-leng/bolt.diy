@@ -99,10 +99,19 @@ interface DialogProps {
   showCloseButton?: boolean;
   onClose?: () => void;
   onBackdrop?: () => void;
+  onEscapeKeyDown?: (event: KeyboardEvent) => void;
 }
 
 export const Dialog = memo(
-  ({ children, className, backdropClassName, showCloseButton = true, onClose, onBackdrop }: DialogProps) => {
+  ({
+    children,
+    className,
+    backdropClassName,
+    showCloseButton = true,
+    onClose,
+    onBackdrop,
+    onEscapeKeyDown,
+  }: DialogProps) => {
     return (
       <RadixDialog.Portal>
         <RadixDialog.Overlay asChild>
@@ -118,10 +127,10 @@ export const Dialog = memo(
             onClick={onBackdrop}
           />
         </RadixDialog.Overlay>
-        <RadixDialog.Content asChild>
+        <RadixDialog.Content asChild onEscapeKeyDown={onEscapeKeyDown}>
           <motion.div
             className={classNames(
-              'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-950 rounded-lg shadow-xl border border-bolt-elements-borderColor z-[9999] w-[520px] focus:outline-none',
+              'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-950 rounded-lg shadow-xl border border-bolt-elements-borderColor z-[9999] w-[min(520px,calc(100vw-2rem))] max-h-[90vh] overflow-y-auto focus:outline-none',
               className,
             )}
             initial="closed"
@@ -310,13 +319,30 @@ export function SelectionDialog({
   maxHeight = '60vh',
 }: SelectionDialogProps) {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
-  const [selectAll, setSelectAll] = useState(false);
+  const selectedIds = selectedItems.filter((id) => items.some((item) => item.id === id));
+  const selectAll = items.length > 0 && items.every((item) => selectedIds.includes(item.id));
+  const [viewportHeight, setViewportHeight] = useState(768);
+
+  useEffect(() => {
+    const updateHeight = () => setViewportHeight(window.innerHeight);
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+
+    return () => window.removeEventListener('resize', updateHeight);
+  }, []);
+
+  // Keep surviving selections, but never submit IDs removed by a refreshed list.
+  useEffect(() => {
+    setSelectedItems((previous) => {
+      const next = previous.filter((id) => items.some((item) => item.id === id));
+      return next.length === previous.length ? previous : next;
+    });
+  }, [items]);
 
   // Reset selected items when dialog opens
   useEffect(() => {
     if (isOpen) {
       setSelectedItems([]);
-      setSelectAll(false);
     }
   }, [isOpen]);
 
@@ -325,25 +351,28 @@ export function SelectionDialog({
   };
 
   const handleSelectAll = () => {
-    if (selectedItems.length === items.length) {
+    if (selectAll) {
       setSelectedItems([]);
-      setSelectAll(false);
     } else {
       setSelectedItems(items.map((item) => item.id));
-      setSelectAll(true);
     }
   };
 
   const handleConfirm = () => {
-    onConfirm(selectedItems);
+    onConfirm(selectedIds);
     onClose();
   };
 
   // Calculate the height for the virtualized list
-  const listHeight = Math.min(
-    items.length * 60,
-    parseInt(maxHeight.replace('vh', '')) * window.innerHeight * 0.01 - 40,
-  );
+  const heightValue = Number.parseFloat(maxHeight);
+
+  const heightLimit = maxHeight.endsWith('vh')
+    ? (heightValue * viewportHeight) / 100
+    : maxHeight.endsWith('px')
+      ? heightValue
+      : viewportHeight * 0.6;
+
+  const listHeight = Math.max(0, Math.min(items.length * 60, heightLimit - 40));
 
   // Render each item in the virtualized list
   const ItemRenderer = ({ index, style, ariaAttributes }: RowComponentProps) => {
@@ -393,22 +422,23 @@ export function SelectionDialog({
         <div className="p-6 bg-white dark:bg-gray-950 relative z-10">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription className="mt-2 mb-4">
-            Select the items you want to include and click{' '}
+            Sélectionnez les éléments à inclure, puis cliquez sur{' '}
             <span className="text-bolt-elements-item-contentAccent font-medium">{confirmLabel}</span>.
           </DialogDescription>
 
           <div className="py-4">
             <div className="flex items-center justify-between mb-4">
               <span className="text-sm font-medium text-bolt-elements-textSecondary">
-                {selectedItems.length} of {items.length} selected
+                {selectedIds.length} sur {items.length} sélectionnés
               </span>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleSelectAll}
+                disabled={items.length === 0}
                 className="text-xs h-8 px-2 text-bolt-elements-textPrimary hover:text-bolt-elements-item-contentAccent hover:bg-bolt-elements-item-backgroundAccent bg-bolt-elements-bg-depth-2 dark:bg-transparent"
               >
-                {selectAll ? 'Deselect All' : 'Select All'}
+                {selectAll ? 'Tout désélectionner' : 'Tout sélectionner'}
               </Button>
             </div>
 
@@ -428,7 +458,7 @@ export function SelectionDialog({
                   className="scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-bolt-elements-bg-depth-3"
                 />
               ) : (
-                <div className="text-center py-4 text-sm text-bolt-elements-textTertiary">No items to display</div>
+                <div className="text-center py-4 text-sm text-bolt-elements-textTertiary">Aucun élément à afficher</div>
               )}
             </div>
           </div>
@@ -439,11 +469,11 @@ export function SelectionDialog({
               onClick={onClose}
               className="border-bolt-elements-borderColor text-bolt-elements-textPrimary hover:bg-bolt-elements-item-backgroundActive"
             >
-              Cancel
+              Annuler
             </Button>
             <Button
               onClick={handleConfirm}
-              disabled={selectedItems.length === 0}
+              disabled={selectedIds.length === 0}
               className="bg-accent-500 text-white hover:bg-accent-600 disabled:opacity-50 disabled:pointer-events-none"
             >
               {confirmLabel}

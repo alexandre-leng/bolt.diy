@@ -1,19 +1,14 @@
+import { execSync as nodeExecSync } from 'node:child_process';
 import type { ActionFunctionArgs, LoaderFunction } from 'react-router';
 
-// Only import child_process if we're not in a Cloudflare environment
-let execSync: any;
-
-try {
-  // Check if we're in a Node.js environment
-  if (typeof process !== 'undefined' && process.platform) {
-    // Using dynamic import to avoid require()
-    const childProcess = { execSync: null };
-    execSync = childProcess.execSync;
-  }
-} catch {
-  // In Cloudflare environment, this will fail, which is expected
-  console.log('Running in Cloudflare environment, child_process not available');
-}
+/*
+ * `execSync` is only available under Node (not the Cloudflare/workerd runtime). The previous
+ * version assigned it from a hard-coded `{ execSync: null }` literal, so it was ALWAYS null:
+ * production returned "Disk information is not available in this environment" and development
+ * returned hard-coded mock disks — the real `df`/PowerShell parsing below was dead code.
+ * Null out the binding rather than the module so the guard below stays meaningful.
+ */
+const execSync: typeof nodeExecSync | null = typeof process !== 'undefined' && process.platform ? nodeExecSync : null;
 
 // For development environments, we'll always provide mock data if real data isn't available
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -76,6 +71,12 @@ const getDiskInfo = (): DiskInfo[] => {
     ];
   }
 
+  /*
+   * Past the two guards above `execSync` is known non-null; bind it to a local so the
+   * `platform` branches below type-check without a cast at each call site.
+   */
+  const exec = execSync as typeof nodeExecSync;
+
   try {
     // Different commands for different operating systems
     const platform = process.platform;
@@ -85,7 +86,7 @@ const getDiskInfo = (): DiskInfo[] => {
     if (platform === 'darwin') {
       // macOS - use df command to get disk information
       try {
-        const output = execSync('df -k', { encoding: 'utf-8' }).toString().trim();
+        const output = exec('df -k', { encoding: 'utf-8' }).toString().trim();
 
         // Skip the header line
         const lines = output.split('\n').slice(1);
@@ -137,7 +138,7 @@ const getDiskInfo = (): DiskInfo[] => {
     } else if (platform === 'linux') {
       // Linux - use df command to get disk information
       try {
-        const output = execSync('df -k', { encoding: 'utf-8' }).toString().trim();
+        const output = exec('df -k', { encoding: 'utf-8' }).toString().trim();
 
         // Skip the header line
         const lines = output.split('\n').slice(1);
@@ -189,7 +190,7 @@ const getDiskInfo = (): DiskInfo[] => {
     } else if (platform === 'win32') {
       // Windows - use PowerShell to get disk information
       try {
-        const output = execSync(
+        const output = exec(
           'powershell "Get-PSDrive -PSProvider FileSystem | Select-Object Name, Used, Free, @{Name=\'Size\';Expression={$_.Used + $_.Free}} | ConvertTo-Json"',
           { encoding: 'utf-8' },
         )

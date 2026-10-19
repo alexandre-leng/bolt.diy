@@ -5,8 +5,9 @@ import {
   applyAccountPreferences,
   fetchAccountPreferences,
   fetchSecretNames,
-  pushSecrets,
+  pushAccountPreferences,
   saveOnboardingToAccount,
+  storeApiKeysOnAccount,
 } from '~/lib/accountSettings';
 import { API_KEYS_UPDATED_EVENT, type ApiKeysUpdatedDetail } from '~/lib/api/apiKeys';
 import { getAll, openDatabase } from '~/lib/persistence/db';
@@ -243,6 +244,13 @@ export function FirstRunOnboarding() {
     }
   }, [open, mcpInitialized, initializeMcp]);
 
+  const skip = () => {
+    // Dismissal is not completion: never flush draft fields or the full local profile.
+    localStorage.setItem(COMPLETED_KEY, 'true');
+    setOpen(false);
+    void pushAccountPreferences({ onboardingCompleted: true });
+  };
+
   const finish = () => {
     localStorage.setItem(COMPLETED_KEY, 'true');
     setOpen(false);
@@ -286,11 +294,12 @@ export function FirstRunOnboarding() {
 
     /*
      * Also store it on the account, encrypted server-side. The cookie above is what the
-     * running app reads (it keeps working offline and the server never hands a key back), so
-     * this is a second home rather than a replacement: a key entered on the desktop is then
-     * present when the phone signs in, instead of being asked for again.
+     * running app reads (it keeps working offline), so this is a second home rather than a
+     * replacement: a key entered on the desktop is then restored when the phone signs in
+     * (restoreApiKeysFromAccount), instead of being asked for again. Merged with what the
+     * account already holds, so saving here never erases a key another device stored.
      */
-    void pushSecrets({ provider_settings: JSON.stringify(apiKeys) });
+    void storeApiKeysOnAccount({ [providerName]: apiKey.trim() });
   };
 
   const next = async () => {
@@ -381,6 +390,10 @@ export function FirstRunOnboarding() {
         backdropClassName="!bg-[#09080f]/80 !backdrop-blur-md bg-[radial-gradient(ellipse_at_top,_rgba(91,33,182,0.18),_transparent_55%)]"
         className="w-[min(560px,calc(100vw-2rem))] max-h-[90vh] overflow-y-auto !rounded-xl !border-[#302e39] !bg-[#1b1a22] p-6 !text-[#f4f1fa]"
         showCloseButton={false}
+        onEscapeKeyDown={(event) => {
+          event.preventDefault();
+          skip();
+        }}
       >
         <div className="mb-5">
           <div className="mb-2 text-xs font-medium text-[#a09baa]">
@@ -635,7 +648,14 @@ export function FirstRunOnboarding() {
           </div>
         )}
 
-        <div className="mt-6 flex items-center justify-end gap-3">
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={skip}
+            className="appearance-none rounded-md px-4 py-2 text-sm text-[#b8b3c2] hover:bg-[#302e39] hover:text-[#f4f1fa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8b5cf6]"
+          >
+            Passer
+          </button>
           <div className="flex gap-2">
             {step > 0 && (
               <button

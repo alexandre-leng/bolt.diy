@@ -1,0 +1,104 @@
+diff --git a/src/requestValidation.ts b/src/requestValidation.ts
+new file mode 100644
+index 0000000..399b8e9
+--- /dev/null
++++ b/src/requestValidation.ts
+@@ -0,0 +1,11 @@
++import type { RequestMessage } from './protocol.js';
++
++/** Validate the envelope before any property access outside the handler's error boundary. */
++export function isRequestMessage(value: unknown): value is RequestMessage {
++  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
++    return false;
++  }
++
++  const message = value as Record<string, unknown>;
++  return typeof message.id === 'number' && Number.isFinite(message.id) && typeof message.op === 'string';
++}
+diff --git a/src/server.ts b/src/server.ts
+index 16050b7..0e97809 100644
+--- a/src/server.ts
++++ b/src/server.ts
+@@ -9,8 +9,9 @@ import { loadConfig, type RuntimeConfig } from './config.js';
+ import { isValidProjectId, isValidUserId, reapStaleSandboxes } from './docker.js';
+ import { SessionManager } from './manager.js';
+ import { createPreviewHandler } from './previewProxy.js';
+-import type { EventMessage, RequestMessage, ResponseMessage, SessionOpenResult } from './protocol.js';
++import type { EventMessage, ResponseMessage, SessionOpenResult } from './protocol.js';
+ import { WORKDIR } from './protocol.js';
++import { isRequestMessage } from './requestValidation.js';
+ import type { ClientSink, Session } from './session.js';
+ import { issueToken, PREVIEW_COOKIE } from './tokens.js';
+ 
+@@ -163,15 +164,15 @@ export function createApiHandler(config: RuntimeConfig, manager: SessionManager,
+     ws.on('pong', () => (alive = true));
+ 
+     ws.on('message', async (raw) => {
+-      let message: RequestMessage;
++      let message: unknown;
+ 
+       try {
+-        message = JSON.parse(raw.toString()) as RequestMessage;
++        message = JSON.parse(raw.toString());
+       } catch {
+         return;
+       }
+ 
+-      if (typeof message.id !== 'number' || typeof message.op !== 'string') {
++      if (!isRequestMessage(message)) {
+         return;
+       }
+ 
+diff --git a/test/unit/requestValidation.test.ts b/test/unit/requestValidation.test.ts
+new file mode 100644
+index 0000000..28e4cc6
+--- /dev/null
++++ b/test/unit/requestValidation.test.ts
+@@ -0,0 +1,47 @@
++import { createServer } from 'node:http';
++import type { AddressInfo } from 'node:net';
++import { once } from 'node:events';
++import { WebSocket } from 'ws';
++import { describe, expect, it } from 'vitest';
++import { createApiHandler } from '../../src/server.js';
++import type { RuntimeConfig } from '../../src/config.js';
++import type { SessionManager } from '../../src/manager.js';
++import { isRequestMessage } from '../../src/requestValidation.js';
++
++describe('runtime WebSocket request boundary', () => {
++  it.each([null, [], true, 'hello', 3, {}, { id: null, op: 'session.open' }, { id: 1e309, op: 'session.open' }])(
++    'rejects non-request JSON without throwing: %j',
++    (input) => {
++      expect(isRequestMessage(input)).toBe(false);
++    },
++  );
++
++  it('ignores null on a real socket and still answers the following operation', async () => {
++    const config = { appOrigin: 'https://audit.invalid' } as RuntimeConfig;
++    const handler = createApiHandler(config, { sessions: [] } as unknown as SessionManager);
++    const server = createServer(handler.http);
++    server.on('upgrade', handler.upgrade);
++    server.listen(0, '127.0.0.1');
++    await once(server, 'listening');
++    const address = server.address() as AddressInfo;
++    const socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/runtime`, {
++      headers: { Origin: config.appOrigin, 'x-bolt-user-id': '11111111-1111-1111-1111-111111111111' },
++    });
++
++    try {
++      await once(socket, 'open');
++      const response = once(socket, 'message');
++      socket.send('null');
++      socket.send(JSON.stringify({ id: 1, op: 'fs.readdir', path: '.' }));
++      const [raw] = await response;
++      expect(JSON.parse(String(raw))).toMatchObject({ id: 1, ok: false, error: { code: 'ESESSION' } });
++    } finally {
++      socket.terminate();
++      await new Promise<void>((resolve) => server.close(() => resolve()));
++    }
++  });
++
++  it('accepts an operation envelope while leaving operation validation to its handler', () => {
++    expect(isRequestMessage({ id: 1, op: 'fs.readdir', path: '.' })).toBe(true);
++  });
++});

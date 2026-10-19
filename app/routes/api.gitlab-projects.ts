@@ -1,4 +1,5 @@
 import { withSecurity } from '~/lib/security';
+import { fetchPublicUrlWithRedirects, validatePublicHttpUrl } from '~/lib/services/webTools.server';
 import type { GitLabProjectInfo } from '~/types/GitLab';
 
 interface GitLabProject {
@@ -24,10 +25,23 @@ async function gitlabProjectsLoader({ request }: { request: Request }) {
       return Response.json({ error: 'GitLab token is required' }, { status: 400 });
     }
 
+    /*
+     * Reject private/loopback/reserved hosts: without this the server would fetch an
+     * attacker-chosen internal URL (e.g. http://127.0.0.1:8210) and relay it back.
+     */
+    try {
+      validatePublicHttpUrl(gitlabUrl);
+    } catch (error) {
+      return Response.json(
+        { error: error instanceof Error ? error.message : 'GitLab URL is not allowed' },
+        { status: 400 },
+      );
+    }
+
     // Fetch user's projects from GitLab API
     const url = `${gitlabUrl}/api/v4/projects?membership=true&per_page=100&order_by=updated_at&sort=desc`;
 
-    const response = await fetch(url, {
+    const response = await fetchPublicUrlWithRedirects(url, {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'application/json',

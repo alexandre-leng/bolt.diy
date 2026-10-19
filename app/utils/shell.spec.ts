@@ -62,7 +62,7 @@ async function initializedShell(onInput: (data: string, output: ReadableStreamDe
   const commandStream = new ReadableStream<string>({
     start(controller) {
       output = controller;
-      output.enqueue('\x1b]654;interactive\x07');
+      output.enqueue('\x1b]654;interactive\x07\x1b]654;exit=0:0\x07\x1b]654;prompt\x07');
     },
   });
 
@@ -80,6 +80,32 @@ async function initializedShell(onInput: (data: string, output: ReadableStreamDe
 }
 
 describe('BoltShell command handoff', () => {
+  it('does not mistake the startup interrupt exit for the dev server exit', async () => {
+    let running = false;
+
+    const { shell } = await initializedShell((data, output) => {
+      if (data === '\x03') {
+        running = false;
+        output.enqueue('^C\x1b]654;exit=0:130\x07\x1b]654;prompt\x07');
+      } else if (data === 'npm run dev\n') {
+        running = true;
+      }
+    });
+
+    let completed = false;
+
+    const server = shell.executeCommand('preview', 'npm run dev').then((result) => {
+      completed = true;
+      return result;
+    });
+    await vi.waitFor(() => expect(running).toBe(true));
+    expect(completed).toBe(false);
+    expect(shell.executionState.get()?.active).toBe(true);
+    await shell.stop();
+    await expect(server).resolves.toMatchObject({ exitCode: 130 });
+    expect(running).toBe(false);
+  });
+
   it('does not double a command when the same terminal is attached again on chat restore', async () => {
     const shell = new BoltShell();
     const writer = vi.fn();

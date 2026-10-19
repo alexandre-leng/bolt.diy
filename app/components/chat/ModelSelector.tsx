@@ -257,6 +257,7 @@ export const ModelSelector = ({
   const modelSearchInputRef = useRef<HTMLInputElement>(null);
   const modelOptionsRef = useRef<(HTMLDivElement | null)[]>([]);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
+  const modelTriggerRef = useRef<HTMLDivElement>(null);
   const [providerSearchQuery, setProviderSearchQuery] = useState('');
   const [debouncedProviderSearchQuery, setDebouncedProviderSearchQuery] = useState('');
   const [isProviderDropdownOpen, setIsProviderDropdownOpen] = useState(false);
@@ -264,6 +265,7 @@ export const ModelSelector = ({
   const providerSearchInputRef = useRef<HTMLInputElement>(null);
   const providerOptionsRef = useRef<(HTMLDivElement | null)[]>([]);
   const providerDropdownRef = useRef<HTMLDivElement>(null);
+  const providerTriggerRef = useRef<HTMLDivElement>(null);
   const [showFreeModelsOnly, setShowFreeModelsOnly] = useState(false);
 
   type ConnectionStatus = 'unknown' | 'connected' | 'disconnected';
@@ -430,6 +432,15 @@ export const ModelSelector = ({
     }
   }, [isProviderDropdownOpen]);
 
+  // Returns keyboard focus to the combobox trigger once a listbox closes (selection or Escape).
+  const restoreModelFocus = () => {
+    modelTriggerRef.current?.focus();
+  };
+
+  const restoreProviderFocus = () => {
+    providerTriggerRef.current?.focus();
+  };
+
   const handleModelKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (!isModelDropdownOpen) {
       return;
@@ -453,6 +464,7 @@ export const ModelSelector = ({
           setIsModelDropdownOpen(false);
           setModelSearchQuery('');
           setDebouncedModelSearchQuery('');
+          restoreModelFocus();
         }
 
         break;
@@ -461,6 +473,7 @@ export const ModelSelector = ({
         setIsModelDropdownOpen(false);
         setModelSearchQuery('');
         setDebouncedModelSearchQuery('');
+        restoreModelFocus();
         break;
       case 'Tab':
         if (!e.shiftKey && focusedModelIndex === filteredModels.length - 1) {
@@ -511,6 +524,7 @@ export const ModelSelector = ({
           setIsProviderDropdownOpen(false);
           setProviderSearchQuery('');
           setDebouncedProviderSearchQuery('');
+          restoreProviderFocus();
         }
 
         break;
@@ -519,6 +533,7 @@ export const ModelSelector = ({
         setIsProviderDropdownOpen(false);
         setProviderSearchQuery('');
         setDebouncedProviderSearchQuery('');
+        restoreProviderFocus();
         break;
       case 'Tab':
         if (!e.shiftKey && focusedProviderIndex === filteredProviders.length - 1) {
@@ -537,14 +552,15 @@ export const ModelSelector = ({
   };
 
   useEffect(() => {
-    if (focusedModelIndex >= 0 && modelOptionsRef.current[focusedModelIndex]) {
-      modelOptionsRef.current[focusedModelIndex]?.scrollIntoView({ block: 'nearest' });
+    if (focusedModelIndex >= 0) {
+      // jsdom and some older engines lack scrollIntoView: scrolling is cosmetic, so skip it.
+      modelOptionsRef.current[focusedModelIndex]?.scrollIntoView?.({ block: 'nearest' });
     }
   }, [focusedModelIndex]);
 
   useEffect(() => {
-    if (focusedProviderIndex >= 0 && providerOptionsRef.current[focusedProviderIndex]) {
-      providerOptionsRef.current[focusedProviderIndex]?.scrollIntoView({ block: 'nearest' });
+    if (focusedProviderIndex >= 0) {
+      providerOptionsRef.current[focusedProviderIndex]?.scrollIntoView?.({ block: 'nearest' });
     }
   }, [focusedProviderIndex]);
 
@@ -583,6 +599,7 @@ export const ModelSelector = ({
       {/* Provider Combobox */}
       <div className="relative flex w-full" onKeyDown={handleProviderKeyDown} ref={providerDropdownRef}>
         <div
+          ref={providerTriggerRef}
           className={classNames(
             'w-full p-2 rounded-lg border border-bolt-elements-borderColor',
             'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary',
@@ -598,8 +615,14 @@ export const ModelSelector = ({
             }
           }}
           role="combobox"
+          aria-label="Fournisseur"
           aria-expanded={isProviderDropdownOpen}
-          aria-controls="provider-listbox"
+          aria-controls={isProviderDropdownOpen ? 'provider-listbox' : undefined}
+          aria-activedescendant={
+            isProviderDropdownOpen && focusedProviderIndex >= 0 && filteredProviders[focusedProviderIndex]
+              ? `provider-option-${focusedProviderIndex}`
+              : undefined
+          }
           aria-haspopup="listbox"
           tabIndex={0}
         >
@@ -715,7 +738,9 @@ export const ModelSelector = ({
                       providerOptionsRef.current[index] = el;
                     }}
                     key={providerOption.name}
+                    id={`provider-option-${index}`}
                     role="option"
+                    aria-label={providerOption.name}
                     aria-selected={provider?.name === providerOption.name}
                     className={classNames(
                       'px-3 py-2 text-sm cursor-pointer',
@@ -743,6 +768,7 @@ export const ModelSelector = ({
                       setIsProviderDropdownOpen(false);
                       setProviderSearchQuery('');
                       setDebouncedProviderSearchQuery('');
+                      restoreProviderFocus();
                     }}
                     tabIndex={focusedProviderIndex === index ? 0 : -1}
                   >
@@ -776,6 +802,7 @@ export const ModelSelector = ({
       {/* Model Combobox */}
       <div className="relative flex w-full min-w-[70%]" onKeyDown={handleModelKeyDown} ref={modelDropdownRef}>
         <div
+          ref={modelTriggerRef}
           className={classNames(
             'w-full p-2 rounded-lg border border-bolt-elements-borderColor',
             'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary',
@@ -791,8 +818,14 @@ export const ModelSelector = ({
             }
           }}
           role="combobox"
+          aria-label="Modèle"
           aria-expanded={isModelDropdownOpen}
-          aria-controls="model-listbox"
+          aria-controls={isModelDropdownOpen ? 'model-listbox' : undefined}
+          aria-activedescendant={
+            isModelDropdownOpen && focusedModelIndex >= 0 && filteredModels[focusedModelIndex]
+              ? `model-option-${focusedModelIndex}`
+              : undefined
+          }
           aria-haspopup="listbox"
           tabIndex={0}
         >
@@ -948,7 +981,9 @@ export const ModelSelector = ({
                       modelOptionsRef.current[index] = el;
                     }}
                     key={modelOption.name}
+                    id={`model-option-${index}`}
                     role="option"
+                    aria-label={modelOption.label}
                     aria-selected={model === modelOption.name}
                     className={classNames(
                       'px-3 py-2 text-sm cursor-pointer',
@@ -966,6 +1001,7 @@ export const ModelSelector = ({
                       setIsModelDropdownOpen(false);
                       setModelSearchQuery('');
                       setDebouncedModelSearchQuery('');
+                      restoreModelFocus();
                     }}
                     tabIndex={focusedModelIndex === index ? 0 : -1}
                   >

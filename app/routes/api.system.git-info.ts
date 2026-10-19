@@ -1,4 +1,5 @@
-import type { LoaderFunction, LoaderFunctionArgs } from 'react-router';
+import type { LoaderFunctionArgs } from 'react-router';
+import { withSecurity } from '~/lib/security';
 
 interface GitInfo {
   local: {
@@ -61,19 +62,8 @@ declare const __GIT_REPO_NAME: string;
  * declare const __GIT_REPO_URL: string;
  */
 
-export const loader: LoaderFunction = async ({ request, context }: LoaderFunctionArgs & { context: AppContext }) => {
+async function gitInfoLoader({ request, context }: LoaderFunctionArgs & { context: AppContext }) {
   console.log('Git info API called with URL:', request.url);
-
-  // Handle CORS preflight requests
-  if (request.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      },
-    });
-  }
 
   const { searchParams } = new URL(request.url);
   const action = searchParams.get('action');
@@ -103,16 +93,7 @@ export const loader: LoaderFunction = async ({ request, context }: LoaderFunctio
 
     if (!token) {
       console.error('No GitHub token available');
-      return Response.json(
-        { error: 'No GitHub token available' },
-        {
-          status: 401,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          },
-        },
-      );
+      return Response.json({ error: 'No GitHub token available' }, { status: 401 });
     }
 
     try {
@@ -131,15 +112,7 @@ export const loader: LoaderFunction = async ({ request, context }: LoaderFunctio
 
         const userData = await response.json();
 
-        return Response.json(
-          { user: userData },
-          {
-            headers: {
-              'Access-Control-Allow-Origin': '*',
-              'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            },
-          },
-        );
+        return Response.json({ user: userData });
       }
 
       if (action === 'getRepos') {
@@ -207,23 +180,15 @@ export const loader: LoaderFunction = async ({ request, context }: LoaderFunctio
            */
         }
 
-        return Response.json(
-          {
-            repos,
-            stats: {
-              totalStars,
-              totalForks,
-              languages: languageStats,
-              totalGists: gists.length,
-            },
+        return Response.json({
+          repos,
+          stats: {
+            totalStars,
+            totalForks,
+            languages: languageStats,
+            totalGists: gists.length,
           },
-          {
-            headers: {
-              'Access-Control-Allow-Origin': '*',
-              'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            },
-          },
-        );
+        });
       }
 
       if (action === 'getOrgs') {
@@ -241,15 +206,7 @@ export const loader: LoaderFunction = async ({ request, context }: LoaderFunctio
 
         const orgs = await response.json();
 
-        return Response.json(
-          { organizations: orgs },
-          {
-            headers: {
-              'Access-Control-Allow-Origin': '*',
-              'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            },
-          },
-        );
+        return Response.json({ organizations: orgs });
       }
 
       if (action === 'getActivity') {
@@ -261,16 +218,7 @@ export const loader: LoaderFunction = async ({ request, context }: LoaderFunctio
 
         if (!username) {
           console.error('GitHub username not found in cookies');
-          return Response.json(
-            { error: 'GitHub username not found in cookies' },
-            {
-              status: 400,
-              headers: {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-              },
-            },
-          );
+          return Response.json({ error: 'GitHub username not found in cookies' }, { status: 400 });
         }
 
         const response = await fetch(`https://api.github.com/users/${username}/events?per_page=30`, {
@@ -287,28 +235,11 @@ export const loader: LoaderFunction = async ({ request, context }: LoaderFunctio
 
         const events = await response.json();
 
-        return Response.json(
-          { recentActivity: events },
-          {
-            headers: {
-              'Access-Control-Allow-Origin': '*',
-              'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            },
-          },
-        );
+        return Response.json({ recentActivity: events });
       }
     } catch (error) {
       console.error('GitHub API error:', error);
-      return Response.json(
-        { error: error instanceof Error ? error.message : 'Unknown error' },
-        {
-          status: 500,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          },
-        },
-      );
+      return Response.json({ error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
     }
   }
 
@@ -325,10 +256,13 @@ export const loader: LoaderFunction = async ({ request, context }: LoaderFunctio
     timestamp: new Date().toISOString(),
   };
 
-  return Response.json(gitInfo, {
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    },
-  });
-};
+  return Response.json(gitInfo);
+}
+
+/*
+ * Aligned with its siblings (api.github-user, api.github-branches, api.github-stats,
+ * api.gitlab-*, api.vercel-user): app-level rate limiting and an explicit method allowlist.
+ * The wildcard `Access-Control-Allow-Origin: *` blocks it used to emit are gone with them —
+ * the app is same-origin behind nginx and does not need to hand any origin a CORS grant.
+ */
+export const loader = withSecurity(gitInfoLoader, { rateLimit: true, allowedMethods: ['GET'] });

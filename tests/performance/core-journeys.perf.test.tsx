@@ -85,18 +85,22 @@ describe('Core Journey Performance', () => {
     const FRAME_BUDGET = 16.67; // 60fps
     let maxFrameTime = 0;
 
-    // Simulate streaming updates
+    // Streaming updates an existing root; mounting 100 independent React roots
+    // measures repeated hydration and accumulated DOM instead of streaming.
+    const { rerender, container } = render(<div />);
+
     for (let i = 0; i < 100; i++) {
       const frameStart = performance.now();
 
-      // Simulate a typical streaming update
-      render(<div>{'A'.repeat(i * 10)}</div>);
+      rerender(<div>{'A'.repeat(i * 10)}</div>);
 
       const frameEnd = performance.now();
       const frameTime = frameEnd - frameStart;
       maxFrameTime = Math.max(maxFrameTime, frameTime);
     }
 
+    expect(container.childElementCount).toBe(1);
+    expect(container.textContent).toBe('A'.repeat(990));
     expect(maxFrameTime).toBeLessThan(FRAME_BUDGET);
     console.log(`✓ Streaming frames: max ${maxFrameTime.toFixed(2)}ms (budget: ${FRAME_BUDGET}ms)`);
   });

@@ -11,6 +11,7 @@ import { workbenchStore } from '~/lib/stores/workbench';
 import { webcontainer } from '~/lib/webcontainer';
 import { WORK_DIR } from '~/utils/constants';
 import { path } from '~/utils/path';
+import { detectProjectCommands } from '~/utils/projectCommands';
 
 const MAX_TEXT_BYTES = 256_000;
 const MAX_LIST_RESULTS = 500;
@@ -963,6 +964,108 @@ export async function callProjectMcpTool(
   sharedBridge = await sharedBridgePromise;
 
   return sharedBridge.callTool(name, args, options);
+}
+
+let previewRestart: Promise<void> | undefined;
+
+/** User-triggered restart: stop the old preview, then launch its command through the normal runtime. */
+export function restartProjectPreview(): Promise<void> {
+  if (previewRestart) {
+    return previewRestart;
+  }
+
+  const generation = workbenchStore.projectGeneration.get();
+  const currentChatId = chatId.get();
+
+  const assertCurrent = () => {
+    if (workbenchStore.projectGeneration.get() !== generation || chatId.get() !== currentChatId) {
+      throw new Error('Le projet actif a changé pendant la relance.');
+    }
+  };
+
+  const run = async () => {
+    await workbenchStore.waitForExecutionQueue();
+    assertCurrent();
+
+    const previewProcesses = [...processes.values()].filter((record) => record.purpose === 'run');
+    const lastRun = previewProcesses.at(-1)?.command;
+
+    const startActions = Object.values(workbenchStore.artifacts.get()).flatMap((artifact) =>
+      Object.values(artifact.runner.actions.get()).filter((action) => action.type === 'start'),
+    );
+
+    let command = lastRun || startActions.at(-1)?.content;
+
+    if (!command) {
+      const files = Object.entries(workbenchStore.files.get()).flatMap(([filePath, entry]) =>
+        entry?.type === 'file' && !entry.isBinary
+          ? [{ path: filePath.replace(`${WORK_DIR}/`, ''), content: entry.content }]
+          : [],
+      );
+      command = (await detectProjectCommands(files)).startCommand;
+    }
+
+    assertCurrent();
+
+    if (!command) {
+      throw new Error('Aucune commande de prévisualisation trouvée dans ce projet.');
+    }
+
+    const stopped = async (operation: Promise<unknown>) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+
+      try {
+        await Promise.race([
+          operation,
+          new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error('Le serveur précédent ne s’est pas arrêté.')), 5000);
+          }),
+        ]);
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+
+    // Artifact-mode servers occupy the Bolt shell; Agent-mode ones have separate processes.
+    await stopped(workbenchStore.boltTerminal.stop());
+    assertCurrent();
+
+    for (const record of previewProcesses) {
+      if (record.exitCode === undefined) {
+        record.process.kill();
+        await stopped(record.process.exit);
+        assertCurrent();
+      }
+    }
+
+    const result = await callProjectMcpTool(
+      'project_run_command',
+      { command, purpose: 'run' },
+      { generation, chatId: currentChatId },
+    );
+    assertCurrent();
+
+    if (result.isError) {
+      const text = Array.isArray(result.content)
+        ? result.content.find(
+            (part: unknown): part is { type: 'text'; text: string } =>
+              typeof part === 'object' &&
+              part !== null &&
+              'type' in part &&
+              part.type === 'text' &&
+              'text' in part &&
+              typeof part.text === 'string',
+          )
+        : undefined;
+      throw new Error(text?.text ?? 'La relance du serveur a échoué.');
+    }
+  };
+
+  previewRestart = run().finally(() => {
+    previewRestart = undefined;
+  });
+
+  return previewRestart;
 }
 
 export async function closeProjectMcpBridge() {

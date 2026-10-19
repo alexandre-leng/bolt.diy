@@ -34,29 +34,35 @@ import { defineConfig } from 'vitest/config';
  * `document`, `localStorage`, `indexedDB`, or constructs a Worker.
  */
 const DOM_TESTS = [
+  'app/components/workbench/terminal/RestartPreviewButton.spec.tsx',
+
   // React rendering
   'app/routes.spec.tsx',
   'app/components/chat/Artifact.spec.tsx',
   'app/components/chat/ScreenshotToCode.spec.tsx',
   'app/components/chat/ScreenshotToCode.design.spec.tsx',
   'app/components/ui/CloseButton.aria.spec.tsx',
+  'app/components/ui/Dialog.audit.spec.tsx',
   'app/components/deploy/PublishButton.spec.tsx',
   'app/components/chat/AttachmentMenu.screenshot.spec.tsx',
   'app/components/chat/ImportZipButton.spec.tsx',
   'app/components/workbench/WorkbenchReopenButton.spec.tsx',
   'app/components/workbench/FirefoxAndroidPreviewNotice.spec.tsx',
+  'app/components/workbench/Preview.portClamp.spec.tsx',
   'app/components/onboarding/FirstRunOnboarding.spec.tsx',
   'app/components/chat/APIKeyManager.spec.tsx',
   'app/lib/stores/sidebar.spec.ts',
   'app/components/mobile/MobileNav.spec.tsx',
   'app/components/sidebar/AccountMenu.spec.tsx',
   'app/components/sidebar/Menu.client.spec.ts',
+  'app/components/sidebar/Menu.bulkDelete.spec.tsx',
   'app/components/header/ProjectBackButton.spec.tsx',
   'app/components/chat/ConnectToolsPill.spec.tsx',
   'app/components/chat/LLMApiAlert.spec.tsx',
   'app/lib/hooks/useMessageParser.spec.ts',
   'app/lib/persistence/useChatHistory.spec.tsx',
   'app/lib/persistence/useChatHistory.lot3.spec.tsx',
+  'app/lib/persistence/useChatHistory.queuedTarget.spec.tsx',
   'app/components/chat/Messages.client.spec.tsx',
   'app/components/chat/ChatBox.spec.tsx',
   'app/components/chat/SpeechRecognition.spec.tsx',
@@ -70,6 +76,18 @@ const DOM_TESTS = [
   'app/components/workbench/EditorPanel.spec.tsx',
   'app/components/header/Header.spec.tsx',
 
+  // UX/a11y regression specs (render React)
+  'app/components/@settings/core/ControlPanel.spec.tsx',
+  'app/components/@settings/shared/service-integration/ConnectionForm.spec.tsx',
+  'app/components/@settings/tabs/profile/ProfileTab.spec.tsx',
+  'app/components/@settings/tabs/settings/SettingsTab.spec.tsx',
+  'app/components/chat/ChatBox.screenshotDialog.spec.tsx',
+  'app/components/chat/ChatControls.a11y.spec.tsx',
+  'app/components/chat/ModelSelector.a11y.spec.tsx',
+  'app/components/ui/ColorSchemeDialog.spec.tsx',
+  'app/components/ui/SelectionDialog.spec.tsx',
+  'app/components/workbench/PortDropdown.spec.tsx',
+
   // Browser storage / globals
   'app/lib/api/cookies.spec.ts',
   'app/lib/auth/session.spec.ts',
@@ -81,6 +99,7 @@ const DOM_TESTS = [
   'app/lib/persistence/chatCache.spec.ts',
   'app/lib/services/importExportService.spec.ts',
   'app/lib/stores/workbench.spec.ts',
+  'app/lib/stores/workbench.exportBinary.spec.ts',
   'app/lib/stores/files.watcher.spec.ts',
 
   /*
@@ -118,8 +137,11 @@ const EXCLUDE = [
   '**/node_modules/**',
   '**/dist/**',
   '**/cypress/**',
-  // Not a unit test: it replays a real chat export from /tmp/pagia_chat.json, which is absent
-  // from the repository and was left empty on disk. Run it by hand against a real export.
+
+  /*
+   * Not a unit test: it replays a real chat export from /tmp/pagia_chat.json, which is absent
+   * from the repository and was left empty on disk. Run it by hand against a real export.
+   */
   'app/lib/persistence/pagiaRealReplay.spec.ts',
   '**/.{idea,git,cache,output,temp}/**',
   '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build}.config.*',

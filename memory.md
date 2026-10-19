@@ -1,5 +1,114 @@
 # Mémoire Externe Partagée — bolt.diy (fork auto-hébergé)
 
+## 2026-10-19 — Traque de bugs : six pistes mesurées, aucun défaut confirmé
+
+- **Type** : audit sans correctif. Rien à corriger = rien de modifié ; pas de commit de code.
+- **Pistes éliminées** (à ne pas re-vérifier) :
+  1. **Dépôt vs VPS** : `services/` identique au VPS, seul `test_bolt_history_audit2.py` est dans le dépôt
+     et pas sur le VPS (tests d'un autre agent). Ses 7 tests passent contre le code qui tourne : le correctif
+     `9cd1b60` est bien déployé.
+  2. **`restart-proof` introuvable (nginx, 10 h 38)** : conversation de test d'un autre agent
+     (`restart-proof-1792400135`, créée puis supprimée à 10 h 56), jamais un site publié. Pas un défaut.
+  3. **Course restauration / cookie vide** : le chat écrit `{"OpenCodeGo":""}` à ~+2 s pendant que la
+     restauration attend ; la réponse, même tardive (+4 s), écrase le vide par la vraie clé (mesuré :
+     écriture 1 ms après la réponse) et le chat recharge la liste de modèles du fournisseur. Le code tient.
+  4. **`urlId` hostile** (slash, `../..`, 200 Ko, unicode, antislash) : accepté et relu sans erreur. Un `urlId`
+     avec `/` est stocké mais pas atteignable par l'URL ; inatteignable en pratique, car le parseur ignore l'`id`
+     que le modèle écrit et fabrique `${messageId}-${compteur}`. Non corrigé volontairement.
+  5. **Isolation entre comptes** : même `urlId` chez deux comptes, chacun lit le sien ; même `id` de chat,
+     le second reçoit 409 et le premier garde ses données.
+  6. **Wizard sur petit écran** (320×568, 390×844, 844×390) : aucun débordement horizontal, tout est
+     atteignable en défilant. L'`INPUT` « non cliquable » est le `<input type=file class=sr-only>` du bouton
+     d'upload d'avatar, masqué volontairement derrière son `<label>`.
+- **Deux fausses alertes de ma part, retirées** : (a) « la restauration se perd si le serveur répond tard » :
+  mon retard était un `time.sleep` dans le gestionnaire de route Playwright, qui gelait son propre thread ;
+  (b) « on ne peut pas terminer l'onboarding sur 320 px » : `elementFromPoint` sur un bouton hors de la zone
+  visible d'un dialogue qui défile renvoie un autre élément ; il faut faire défiler avant de tester.
+- **Pièges de méthode** : retarder une réponse réseau se fait dans la page (envelopper `fetch`), pas avec un
+  `sleep` dans une route ; tester un contrôle d'un conteneur défilant impose `scrollIntoView` d'abord ; un
+  compte déjà passé par le wizard ne le rouvre plus, donc un compte neuf par taille d'écran.
+- **Reste ouvert** : aucun nouveau point. `tests/performance/*` reste sensible à la charge.
+
+## 2026-10-18 — La clé API d'un compte n'arrivait jamais sur le second appareil
+
+- **Type** : fix (serveur + client) + tests + versionnement du code serveur.
+- **Symptôme mesuré** : deux navigateurs, même compte. Le premier enregistre sa clé (chiffrée en base) ;
+  le second apprend qu'elle existe (`GET /api/auth/secrets` → noms) mais ne l'obtient jamais, son cookie
+  `apiKeys` reste `{"OpenCodeGo":""}`. Le wizard affichait pourtant « Your account already stores API
+  keys… they will be used automatically » : faux. Résultat : wizard fermé, chaque requête au modèle en échec.
+- **Correctif serveur** (`bolt-accounts`) : `GET /api/auth/secrets?name=provider_settings` renvoie la valeur
+  déchiffrée de CE seul secret (`READABLE_SECRET_NAMES`) pour le compte connecté ; tout autre nom → 403 ;
+  les jetons GitHub/GitLab/Netlify/Vercel/Supabase/MCP restent en écriture seule. `no-store` déjà posé par `_json`.
+- **Correctif client** (`accountSettings.ts`) : `restoreApiKeysFromAccount` au démarrage (une clé saisie sur
+  cet appareil gagne, le compte ne comble que les trous, valeurs vides/mal formées ignorées, échec réseau
+  sans effet, aucune clé journalisée) ; `storeApiKeysOnAccount` fusionne avec le compte avant d'écrire, et
+  n'écrit RIEN si le compte est illisible (un compte illisible n'est pas un compte vide : sinon les clés
+  d'un autre appareil étaient écrasées).
+- **Deux bugs voisins trouvés en cherchant** : `DELETE /api/auth/secrets` plantait sur un corps JSON non
+  objet (`AttributeError`), et répondait `removed: 1` pour un secret jamais stocké (compteur incrémenté
+  sans regarder la base ; `RETURNING` désormais).
+- **Preuves** : rouge puis vert à chaque étape. Serveur lecture 10/10 (rouge : 3 échecs), serveur hostile
+  8/8 (rouge : 1 échec + 4 erreurs), client 48/48 (rouge : 18 puis 5). Mutation : ne plus doubler
+  l'antislash côté SQL fait échouer 4 cas de mon test d'échappement (`C:\new\notes` serait corrompu).
+  Python : accounts 29 + 23, history 65, sur une base privée. tsc 0, eslint 0.
+- **Rectification** : j'avais écrit que l'échappement de `bolt-history` n'avait « aucun test » — faux, un
+  `grep` sur des noms de fonctions ne voit pas des tests qui passent par l'API. `TestHostileTextInTitles`
+  existait. Mes 3 tests couvrent l'autre sens (un titre qui RESSEMBLE à un échappement).
+- **Piège de méthode** : mes premiers « 404 » sur `/api/history/2` venaient de mon chemin d'URL — le
+  service attend `/history/<id>` (nginx retire `/api`). Et `psql -c` n'interpole pas `:'v'` (seul stdin le fait).
+- **Écart sans effet noté** : le SQL laisse la tabulation brute, le Python l'échappe en `\t`. Le trajet de
+  lecture reste exact (11/11 aller-retours) ; non modifié.
+- **Code serveur versionné pour la première fois** : `services/bolt-accounts/` et `services/bolt-history/`
+  (copie, vérifiée identique octet pour octet au VPS ; scan des valeurs réelles de la clé de chiffrement,
+  du mot de passe PostgreSQL et de la clé Resend : aucune fuite). Exclus : `set_admin_email.py`,
+  `verify_admin_login.py` (adresses réelles), `__pycache__`. Le déploiement reste `/opt/bolt/accounts`.
+- **Reste ouvert** : `tests/performance/*` échoue sous charge (2 échecs à load 12, passent seuls) ;
+  l'écart tabulation ci-dessus.
+- **Commit** : voir `git log` (message « fix(account): a second device now receives the account's API key »).
+
+## 2026-10-18 — Relecture post-commit du lot documentation
+
+- **Type** : verification.
+- **Preuve distincte** : après le run complet 1201/1201, la relecture post-commit a donné 1200 verts / 1 échec sur `streaming-performance.perf.test.tsx`, mixed content (30,49 ms contre 16,67). Relance du fichier seul : 9/9 verts. Aucun seuil changé ni test exclu ; ce résultat est documenté séparément dans le guide, pas confondu avec le premier run.
+
+
+## 2026-10-18 — Documentation du runtime réel et publication du lot validé
+
+- **Type** : docs / fix / delivery.
+- **Périmètre validé par Alex** : correctifs de l'audit, documentation, et les six fichiers UI/connecteurs non commités présentés avant la validation. Relecture et intégration dans le worktree isolé ; aucune modification des fichiers source de l'autre session.
+- **Correction avant inclusion** : les callbacks Échap ajoutés dans ConfirmationDialog/SelectionDialog doublaient la fermeture Radix. Test rouge (`2` appels), correction supprimant les callbacks redondants, test vert (`1` appel). La palette utilise un vrai bouton clavier plutôt qu'un div role=button.
+- **Connecteurs** : quatre tests supplémentaires vérifient le refus de get_token GitHub, les URLs GitLab littérales privées et l'absence de stack Supabase côté réponse. La validation GitLab seule ne prouve pas une protection SSRF complète contre DNS/redirects.
+- **Documentation** : README aligné sur le runtime Docker/gVisor, suppression des affirmations WebContainer courantes, guide `docs/docs/self-hosted-bolt.md`, index `docs/README.md`. Séparation app/services externes, commandes réelles, tests, patches non appliqués automatiquement, reste de l'audit et absence de déploiement explicités. Les liens locaux ont été vérifiés.
+- **Preuve finale** : types 0, lint 0, **1201 tests verts dans 145 fichiers**, build app 0. Contrôle de secrets sur le diff et les nouvelles docs/tests sans correspondance de valeurs de clés configurées.
+- **Limite documentaire** : une tentative de mise à jour d'AGENTS.md a été refusée par le garde-fou (approbation expirée) ; fichier laissé intact, pas de contournement. Les versions effectives restent celles de package.json et du nouveau guide.
+- **Travail parallèle apparu après le périmètre initial** : catalogue modèles OpenCode Go / générateur en cours dans `/opt/bolt/src` ; non intégré dans ce lot sans validation de son état fini. Le snapshot original des six fichiers est conservé hors dépôt pour traçabilité.
+- **Déploiement** : aucun redémarrage de service ni application des patches ; un push GitHub ne vaut pas déploiement. L'audit complet reste ouvert.
+
+
+## 2026-10-18 — Suite personnelle : une trame null faisait tomber bolt-runtime
+
+- **Type** : fix.
+- **Reproduction** : instance HTTP/WS isolée sur port éphémère, même handler `createApiHandler`, trame `null` : Node quittait en code 1 (`Cannot read properties of null (reading id)`). Aucun appel au service live ni accès Docker.
+- **Correction** : validation d'enveloppe avant accès aux propriétés ; refus de null, tableaux, scalaires et id non fini. Module `src/requestValidation.ts` et vrai test WebSocket qui envoie null puis vérifie la réponse à l'opération suivante.
+- **Preuve** : build runtime 0 ; 27/27 tests unitaires dont le socket réel ; sonde de crash relancée : code 0 et `RUNTIME_SURVIVED_MALFORMED_FRAME`.
+- **Livraison** : commit local runtime `19e42fe` dans `/opt/bolt/wt-full-audit-runtime` (dépôt sans remote). Patch distribué dans le fork : `patches/runtime-websocket-envelope.patch`. Pas déployé : la confirmation d'IP est restée sans réponse, donc aucune mutation live.
+- **Reste ouvert** : audit global non terminé ; UI/IA/ownership et courses de publication restent à vérifier. Les changements parallèles dans `/opt/bolt/src` ne sont pas intégrés ni écrasés.
+
+
+## 2026-10-18 — Audit personnel : transport runtime, import ZIP et frontière de publication
+
+- **Type** : fix / audit, première vague ; audit global non terminé.
+- **Isolation** : branche `audit/full-stack-review` dans `/opt/bolt/wt-full-audit` ; services copiés dans `/opt/bolt/wt-full-audit-services`. Deux agents encore actifs arrêtés à la demande d'Alex ; aucune nouvelle délégation.
+- **Runtime client** : les requêtes jamais envoyées survivent à une coupure ; `close()` rejette les attentes et la readiness au lieu de les laisser suspendues. Deux régressions rouges avant correction, vertes après ; changement de projet/reconnexion vérifié également (ce dernier chemin fonctionnait déjà).
+- **ZIP** : sérialisation base64 commune aux restaurations ; test passant par le vrai parseur prouve la préservation du contenu et des fins de fichier. L'import de binaires reste volontairement hors de cette correction.
+- **Mesure perf** : le test nommé streaming montait 100 racines React ; il utilise maintenant `rerender` sur une seule racine, garde le budget 16,67 ms et vérifie le DOM final. Aucun seuil relevé ni exclusion ajoutée.
+- **Publication** : patch versionné `patches/publish-artifact-boundary.patch`. Les copies de dist ne suivent plus les symlinks sur le host (descripteurs relatifs et O_NOFOLLOW) ; token indisponible = échec sandbox, pas de repli implicite sur le host. Régressions rouges puis vertes. Validations concurrentes `parse_publish_body` conservées par resynchronisation depuis le service live.
+- **Preuve** : `tsc --noEmit -p .` 0 ; `eslint app --quiet` 0 ; suite entière **1196/1196, 143 fichiers** ; `npm run build` 0. Patch appliqué sur copie fraîche des services : **64 tests, 2 ignorés, aucun échec** ; les tests live sont exclus de cette preuve.
+- **Non livré en production** : aucun remplacement de service ni redémarrage ; domaine cible historique `bolt.169-58-18-46.sslip.io`, IP constatée `169.58.18.46`, confirmation préalable de déploiement à obtenir.
+- **Reste ouvert** : audit complet des parcours réels/UI/IA, ownership/concurrence publication, import dossier, Electron/CI et autres constats statiques à reproduire. Ne pas traiter un rapport statique d'agent comme un bug confirmé : plusieurs pistes étaient fausses (messages déjà exclus des options, entrée DOM absente ne faisant pas échouer Vitest).
+- **Incident de vérification** : une assertion de mock subprocess a imprimé des variables d'environnement dans une sortie outil. Assertion remplacée par un booléen sans impression des arguments ; rotation préventive des clés concernées à prévoir, aucune valeur conservée ici.
+
+
 > **Cette mémoire est la seule continuité entre les sessions et les agents IA.**
 > Elle n'a aucune valeur si elle n'est pas lue avant d'agir et complétée après avoir agi.
 

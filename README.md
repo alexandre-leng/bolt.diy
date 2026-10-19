@@ -61,9 +61,11 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ## This Fork: Changes and Deployment
 
-This fork adds OpenCode Go as a provider (default `deepseek-v4.1-flash` for a new browser), a prompt-first home, touch-friendly Projects and chat/preview navigation, mobile-first Settings and connector cards, accessible navigation labels, and recovery messaging when an AI stream loses its connection. It also includes fixes for WebContainer restore and preview handling. Provider availability still requires your own configuration; a cloned repository does not inherit the self-hosted server's keys.
+This fork adds OpenCode Go as a provider (default `deepseek-v4.1-flash` for a new browser), account-backed settings/history, project restoration, and touch-friendly chat/Preview navigation. Project code now runs in a separate server-side Docker/gVisor runtime; StackBlitz WebContainer has been removed. Provider availability still requires your own configuration; a cloned repository does not inherit the self-hosted server's keys.
 
-**Local quality gates:** `pnpm run typecheck`, `pnpm run lint`, `pnpm test -- --run`, and `pnpm run build`. The mobile interface must also be checked in a browser at 360, 390, 768 and 1440 px, in both themes, after changes to layout or navigation.
+**Start here:** [Self-hosted architecture, validation, delivery and audit status](docs/docs/self-hosted-bolt.md). This is the fork-specific operational guide; upstream instructions may describe a different runtime.
+
+**Local quality gates:** `pnpm run typecheck`, `pnpm run lint`, `pnpm exec vitest run --no-file-parallelism`, and `pnpm run build`. The mobile interface must also be checked in a browser at 360, 390, 768 and 1440 px, in both themes, after changes to layout or navigation.
 
 **Self-hosted deployment is separate from GitHub.** The live instance uses an external Docker Compose file, an entrypoint that forwards selected environment variables to the Cloudflare Worker, and an nginx authentication/proxy layer. Those files and secrets are not in this repository. To reproduce the deployment, provide your own secrets and authentication, build the `bolt-ai-production` Docker target, and use `wrangler dev` to serve the generated Worker behind a protected reverse proxy. A Git push does **not** rebuild or restart the live instance; consult the maintainer before deploying.
 
@@ -72,6 +74,8 @@ This fork adds OpenCode Go as a provider (default `deepseek-v4.1-flash` for a ne
 ---
 
 ## Running with Docker
+
+> The commands below are inherited development/generic examples. The self-hosted Worker production installation uses an external Compose file and `wrangler dev`, not the legacy `vite preview` production command. Configure the separate runtime and auth services before expecting project execution. Follow the [fork deployment guide](docs/docs/self-hosted-bolt.md#production-serving) for that distinction.
 
 1. **Configure Environment Variables**:
    ```bash
@@ -127,7 +131,7 @@ LMSTUDIO_BASE_URL=http://127.0.0.1:1234
 
 ## Features
 
-- **In-Browser Web Development**: Full-stack Node.js development environment powered by WebContainers.
+- **Browser Workspace, Server Execution**: edit in the browser; project commands execute in a separately configured Docker/gVisor sandbox through `bolt-runtime`.
 - **22+ AI Providers**: Cloud (Anthropic, OpenAI, Google, DeepSeek, Groq, xAI, Mistral, etc.) and Local (Ollama, LM Studio). OpenRouter, Anthropic, OpenAI, and Google are enabled by default.
 - **Interactive Workbench**: Integrated code editor, terminal, visual diff viewer, and real-time live preview. On compact layouts the chat stays in front; use Preview to open the workbench and Chat to return.
 - **Starter Setup**: Explicit framework requests select a matching starter in code. Starter files include detected install and development server commands before the first customization request.
@@ -156,7 +160,7 @@ LMSTUDIO_BASE_URL=http://127.0.0.1:1234
 |---|---|
 | `pnpm run dev` | Start development server with hot module reloading |
 | `pnpm run build` | Build the application for production (`react-router build`) |
-| `pnpm run preview` | Preview production build locally |
+| `pnpm run preview` | Legacy Vite preview script; not the self-hosted Worker deployment entrypoint |
 | `pnpm test` | Run unit and integration tests with Vitest |
 | `pnpm run typecheck` | Run TypeScript type checks (`tsc`) |
 | `pnpm run lint` | Run ESLint across the codebase |
@@ -176,4 +180,4 @@ LMSTUDIO_BASE_URL=http://127.0.0.1:1234
 
 ## Licensing
 
-bolt.diy is open-source under the MIT License. It utilizes the [WebContainers API](https://webcontainers.io/enterprise), which has specific commercial licensing terms for enterprise deployment.
+bolt.diy is open-source under the MIT License. This fork no longer depends on StackBlitz WebContainer. Preserve upstream and third-party notices; see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).

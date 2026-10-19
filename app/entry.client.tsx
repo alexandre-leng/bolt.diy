@@ -2,11 +2,19 @@ import { startTransition } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { HydratedRouter } from 'react-router/dom';
 import '~/utils/clearLocks';
-import { syncAccountSettings } from '~/lib/accountSettings';
+import { restoreApiKeysFromAccount, syncAccountSettings } from '~/lib/accountSettings';
 import { syncPreferences } from '~/lib/preferences';
 import { installStaleChunkReload } from '~/lib/staleChunkReload';
 
 installStaleChunkReload();
+
+/*
+ * Bring the account's provider key to this device. Without it a second device is told a key
+ * exists on the account but never receives it, and every model request then fails for want of
+ * one. Not awaited (the render must not wait on the network); the open page is told through
+ * the API-keys event, which reloads the model list for the restored provider.
+ */
+void restoreApiKeysFromAccount();
 
 /*
  * Pull this account's settings from the server once per page load.

@@ -24,6 +24,32 @@ const { saveAs } = fileSaver;
 
 const logger = createScopedLogger('WorkbenchStore');
 
+/**
+ * Decode a binary file's stored body back to bytes.
+ *
+ * `FilesStore` keeps a binary file as base64 in `dirent.content` with `isBinary: true` (see
+ * `FilesStore.createFile`). Exporting a project used to skip every such entry, so images,
+ * fonts and audio silently vanished from the ZIP and from the synced folder while the import
+ * path preserved them. Decoding here gives both JSZip and `FileSystemWritableFileStream` the
+ * bytes they expect.
+ */
+function base64ToBytes(base64: string): Uint8Array<ArrayBuffer> {
+  const binary = atob(base64.replace(/\s+/g, ''));
+  const buffer = new ArrayBuffer(binary.length);
+  const bytes = new Uint8Array(buffer);
+
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
+  return bytes;
+}
+
+/** The body to write for a file entry: text as-is, binary decoded from base64. */
+function fileContents(dirent: { content: string; isBinary?: boolean }): string | Uint8Array<ArrayBuffer> {
+  return dirent.isBinary ? base64ToBytes(dirent.content) : dirent.content;
+}
+
 export interface ArtifactState {
   id: string;
   title: string;
@@ -335,7 +361,7 @@ export class WorkbenchStore {
   }
 
   setDocuments(files: FileMap) {
-    this.#editorStore.setDocuments(files);
+    this.#editorStore.setDocuments(files, this.unsavedFiles.get());
 
     if (this.#filesStore.filesCount > 0 && this.currentDocument.get() === undefined) {
       // we find the first file and select it
@@ -999,8 +1025,9 @@ export class WorkbenchStore {
     const uniqueProjectName = `${projectName}_${timestampHash}`;
 
     for (const [filePath, dirent] of Object.entries(files)) {
-      if (dirent?.type === 'file' && !dirent.isBinary) {
+      if (dirent?.type === 'file') {
         const relativePath = extractRelativePath(filePath);
+        const contents = fileContents(dirent);
 
         // split the path into segments
         const pathSegments = relativePath.split('/');
@@ -1012,10 +1039,10 @@ export class WorkbenchStore {
           for (let i = 0; i < pathSegments.length - 1; i++) {
             currentFolder = currentFolder.folder(pathSegments[i])!;
           }
-          currentFolder.file(pathSegments[pathSegments.length - 1], dirent.content);
+          currentFolder.file(pathSegments[pathSegments.length - 1], contents);
         } else {
           // if there's only one segment, it's a file in the root
-          zip.file(relativePath, dirent.content);
+          zip.file(relativePath, contents);
         }
       }
     }
@@ -1030,7 +1057,7 @@ export class WorkbenchStore {
     const syncedFiles = [];
 
     for (const [filePath, dirent] of Object.entries(files)) {
-      if (dirent?.type === 'file' && !dirent.isBinary) {
+      if (dirent?.type === 'file') {
         const relativePath = extractRelativePath(filePath);
         const pathSegments = relativePath.split('/');
 
@@ -1045,9 +1072,9 @@ export class WorkbenchStore {
           create: true,
         });
 
-        // write the file content
+        // write the file content (binary entries decoded from their stored base64)
         const writable = await fileHandle.createWritable();
-        await writable.write(dirent.content);
+        await writable.write(fileContents(dirent));
         await writable.close();
 
         syncedFiles.push(relativePath);

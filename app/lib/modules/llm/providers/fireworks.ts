@@ -1,6 +1,7 @@
 import { createFireworks } from '@ai-sdk/fireworks';
 import type { LanguageModel } from 'ai';
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
+import { FIREWORKS_CATALOG } from '~/lib/modules/llm/catalogs/fireworks.catalog';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 
@@ -12,56 +13,20 @@ export default class FireworksProvider extends BaseProvider {
     apiTokenKey: 'FIREWORKS_API_KEY',
   };
 
-  staticModels: ModelInfo[] = [
-    {
-      name: 'accounts/fireworks/models/qwen3-coder-480b-a35b-instruct',
-      label: 'Qwen3-Coder 480B (Best for Coding)',
+  /*
+   * Built from the generated models.dev catalog (catalogs/fireworks.catalog.ts), not hand-written:
+   * the previous list carried stale limits and missed models. Regenerate with
+   * `node scripts/generate-model-catalog.mjs --all`.
+   */
+  staticModels: ModelInfo[] = FIREWORKS_CATALOG
+    .filter((entry) => entry.tools && entry.status !== 'deprecated')
+    .map((entry) => ({
+      name: entry.id,
+      label: entry.label,
       provider: 'Fireworks',
-      maxTokenAllowed: 262000,
-    },
-    {
-      name: 'accounts/fireworks/models/qwen3-coder-30b-a3b-instruct',
-      label: 'Qwen3-Coder 30B (Fast Coding)',
-      provider: 'Fireworks',
-      maxTokenAllowed: 262000,
-    },
-    {
-      name: 'accounts/fireworks/models/llama-v3p1-405b-instruct',
-      label: 'Llama 3.1 405B Instruct',
-      provider: 'Fireworks',
-      maxTokenAllowed: 128000,
-    },
-    {
-      name: 'accounts/fireworks/models/llama-v3p1-70b-instruct',
-      label: 'Llama 3.1 70B Instruct',
-      provider: 'Fireworks',
-      maxTokenAllowed: 128000,
-    },
-    {
-      name: 'accounts/fireworks/models/llama-v3p1-8b-instruct',
-      label: 'Llama 3.1 8B Instruct',
-      provider: 'Fireworks',
-      maxTokenAllowed: 128000,
-    },
-    {
-      name: 'accounts/fireworks/models/deepseek-r1',
-      label: 'DeepSeek R1 (Reasoning)',
-      provider: 'Fireworks',
-      maxTokenAllowed: 64000,
-    },
-    {
-      name: 'accounts/fireworks/models/qwen2p5-72b-instruct',
-      label: 'Qwen 2.5 72B Instruct',
-      provider: 'Fireworks',
-      maxTokenAllowed: 128000,
-    },
-    {
-      name: 'accounts/fireworks/models/firefunction-v2',
-      label: 'FireFunction V2',
-      provider: 'Fireworks',
-      maxTokenAllowed: 8000,
-    },
-  ];
+      maxTokenAllowed: entry.context,
+      maxCompletionTokens: entry.maxOutput,
+    }));
 
   async getDynamicModels(
     apiKeys?: Record<string, string>,

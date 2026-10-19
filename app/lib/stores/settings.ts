@@ -86,8 +86,22 @@ const fetchConfiguredProviders = async (): Promise<ConfiguredProvider[]> => {
 const getInitialProviderSettings = (): ProviderSetting => {
   const initialSettings: ProviderSetting = {};
 
-  // Default enabled providers (only these 4 are enabled by default)
-  const DEFAULT_ENABLED_PROVIDERS = ['OpenRouter', 'Anthropic', 'OpenAI', 'Google', 'OpenCodeGo'];
+  /*
+   * Every provider the app can drive is enabled, so the composer and the settings screen offer the
+   * whole list. A provider is only USABLE once it has a key: the daily one (OpenCodeGo) is
+   * configured on the server and appears as connected, the others are listed and marked as
+   * needing a key. Listing them is the point — a provider nobody sees is a provider nobody sets up.
+   *
+   * The previous default enabled five, which left sixteen implemented providers unreachable
+   * without a trip to the settings screen.
+   *
+   * Local runtimes (Ollama, LM Studio, OpenAI-like) are the exception: they answer only on the
+   * user's own machine, so enabling them by default made the server log a failed lookup for every
+   * page load. They stay opt-in, and enabling one there is a real choice, not a default.
+   */
+  const DEFAULT_ENABLED_PROVIDERS = PROVIDER_LIST.map((provider) => provider.name).filter(
+    (name) => !LOCAL_PROVIDERS.includes(name),
+  );
 
   // Start with default settings
   PROVIDER_LIST.forEach((provider) => {
@@ -109,6 +123,11 @@ const getInitialProviderSettings = (): ProviderSetting => {
         const parsed = JSON.parse(savedSettings);
         Object.entries(parsed).forEach(([key, value]) => {
           if (initialSettings[key]) {
+            /*
+             * A stored `enabled: false` used to hide a provider forever for that browser. The list
+             * is now the whole catalog, so only an explicit user choice is kept — and a provider
+             * that was disabled by the OLD default (no stored key yet) is re-enabled once.
+             */
             initialSettings[key].settings = (value as IProviderConfig).settings;
           }
         });

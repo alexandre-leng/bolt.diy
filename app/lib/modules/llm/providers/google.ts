@@ -1,6 +1,7 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import type { LanguageModel } from 'ai';
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
+import { GOOGLE_CATALOG } from '~/lib/modules/llm/catalogs/google.catalog';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 
@@ -12,64 +13,20 @@ export default class GoogleProvider extends BaseProvider {
     apiTokenKey: 'GOOGLE_GENERATIVE_AI_API_KEY',
   };
 
-  staticModels: ModelInfo[] = [
-    {
-      name: 'gemini-3.1-pro-preview',
-      label: 'Gemini 3.1 Pro Preview',
+  /*
+   * Built from the generated models.dev catalog (catalogs/google.catalog.ts), not hand-written:
+   * the previous list carried stale limits and missed models. Regenerate with
+   * `node scripts/generate-model-catalog.mjs --all`.
+   */
+  staticModels: ModelInfo[] = GOOGLE_CATALOG
+    .filter((entry) => entry.tools && entry.status !== 'deprecated')
+    .map((entry) => ({
+      name: entry.id,
+      label: entry.label,
       provider: 'Google',
-      maxTokenAllowed: 1048576,
-      maxCompletionTokens: 65536,
-    },
-    {
-      name: 'gemini-3.5-flash',
-      label: 'Gemini 3.5 Flash',
-      provider: 'Google',
-      maxTokenAllowed: 1048576,
-      maxCompletionTokens: 65536,
-    },
-    {
-      name: 'gemini-3-flash-preview',
-      label: 'Gemini 3 Flash Preview',
-      provider: 'Google',
-      maxTokenAllowed: 1048576,
-      maxCompletionTokens: 65536,
-    },
-    {
-      name: 'gemini-2.5-pro',
-      label: 'Gemini 2.5 Pro',
-      provider: 'Google',
-      maxTokenAllowed: 1048576,
-      maxCompletionTokens: 65536,
-    },
-    {
-      name: 'gemini-2.5-flash',
-      label: 'Gemini 2.5 Flash',
-      provider: 'Google',
-      maxTokenAllowed: 1048576,
-      maxCompletionTokens: 65536,
-    },
-    {
-      name: 'gemini-2.5-flash-lite',
-      label: 'Gemini 2.5 Flash-Lite',
-      provider: 'Google',
-      maxTokenAllowed: 1048576,
-      maxCompletionTokens: 65536,
-    },
-    {
-      name: 'gemini-1.5-pro',
-      label: 'Gemini 1.5 Pro',
-      provider: 'Google',
-      maxTokenAllowed: 2000000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'gemini-1.5-flash',
-      label: 'Gemini 1.5 Flash',
-      provider: 'Google',
-      maxTokenAllowed: 1000000,
-      maxCompletionTokens: 8192,
-    },
-  ];
+      maxTokenAllowed: entry.context,
+      maxCompletionTokens: entry.maxOutput,
+    }));
 
   async getDynamicModels(
     apiKeys?: Record<string, string>,

@@ -1,6 +1,7 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import type { LanguageModel } from 'ai';
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
+import { PERPLEXITY_CATALOG } from '~/lib/modules/llm/catalogs/perplexity.catalog';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 
@@ -12,26 +13,20 @@ export default class PerplexityProvider extends BaseProvider {
     apiTokenKey: 'PERPLEXITY_API_KEY',
   };
 
-  staticModels: ModelInfo[] = [
-    {
-      name: 'sonar',
-      label: 'Sonar',
+  /*
+   * Built from the generated models.dev catalog (catalogs/perplexity.catalog.ts), not hand-written:
+   * the previous list carried stale limits and missed models. Regenerate with
+   * `node scripts/generate-model-catalog.mjs --all`.
+   */
+  staticModels: ModelInfo[] = PERPLEXITY_CATALOG
+    .filter((entry) => entry.tools && entry.status !== 'deprecated')
+    .map((entry) => ({
+      name: entry.id,
+      label: entry.label,
       provider: 'Perplexity',
-      maxTokenAllowed: 8192,
-    },
-    {
-      name: 'sonar-pro',
-      label: 'Sonar Pro',
-      provider: 'Perplexity',
-      maxTokenAllowed: 8192,
-    },
-    {
-      name: 'sonar-reasoning-pro',
-      label: 'Sonar Reasoning Pro',
-      provider: 'Perplexity',
-      maxTokenAllowed: 8192,
-    },
-  ];
+      maxTokenAllowed: entry.context,
+      maxCompletionTokens: entry.maxOutput,
+    }));
 
   getModelInstance(options: {
     model: string;

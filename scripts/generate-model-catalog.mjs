@@ -40,6 +40,13 @@ const LOCAL_OVERRIDES = {
   },
 };
 
+/*
+ * Provider -> models.dev id, plus where its generated catalog lands.
+ *
+ * `htmlLabel` keeps the label the provider file already exposed on some models: models.dev calls
+ * `claude-sonnet-4-6` "Claude Sonnet 4.6", which is what the picker shows, so no suffix is needed
+ * unless models.dev's own name would be ambiguous.
+ */
 const PROVIDERS = {
   'opencode-go': {
     modelsDevId: 'opencode-go',
@@ -47,10 +54,28 @@ const PROVIDERS = {
     exportName: 'OPENCODE_GO_CATALOG',
     labelSuffixes: { '-contributor': ' (contributeur)', '-free': ' (gratuit)' },
   },
+  anthropic: { modelsDevId: 'anthropic', file: 'app/lib/modules/llm/catalogs/anthropic.catalog.ts', exportName: 'ANTHROPIC_CATALOG' },
+  google: { modelsDevId: 'google', file: 'app/lib/modules/llm/catalogs/google.catalog.ts', exportName: 'GOOGLE_CATALOG' },
+  openai: { modelsDevId: 'openai', file: 'app/lib/modules/llm/catalogs/openai.catalog.ts', exportName: 'OPENAI_CATALOG' },
+  openrouter: { modelsDevId: 'openrouter', file: 'app/lib/modules/llm/catalogs/openrouter.catalog.ts', exportName: 'OPENROUTER_CATALOG', labelSuffixes: { ':free': ' (gratuit)' } },
+  groq: { modelsDevId: 'groq', file: 'app/lib/modules/llm/catalogs/groq.catalog.ts', exportName: 'GROQ_CATALOG' },
+  mistral: { modelsDevId: 'mistral', file: 'app/lib/modules/llm/catalogs/mistral.catalog.ts', exportName: 'MISTRAL_CATALOG' },
+  cohere: { modelsDevId: 'cohere', file: 'app/lib/modules/llm/catalogs/cohere.catalog.ts', exportName: 'COHERE_CATALOG' },
+  perplexity: { modelsDevId: 'perplexity', file: 'app/lib/modules/llm/catalogs/perplexity.catalog.ts', exportName: 'PERPLEXITY_CATALOG' },
+  xai: { modelsDevId: 'xai', file: 'app/lib/modules/llm/catalogs/xai.catalog.ts', exportName: 'XAI_CATALOG' },
+  deepseek: { modelsDevId: 'deepseek', file: 'app/lib/modules/llm/catalogs/deepseek.catalog.ts', exportName: 'DEEPSEEK_CATALOG' },
+  moonshot: { modelsDevId: 'moonshotai', file: 'app/lib/modules/llm/catalogs/moonshot.catalog.ts', exportName: 'MOONSHOT_CATALOG' },
+  together: { modelsDevId: 'togetherai', file: 'app/lib/modules/llm/catalogs/together.catalog.ts', exportName: 'TOGETHER_CATALOG' },
+  fireworks: { modelsDevId: 'fireworks-ai', file: 'app/lib/modules/llm/catalogs/fireworks.catalog.ts', exportName: 'FIREWORKS_CATALOG' },
+  cerebras: { modelsDevId: 'cerebras', file: 'app/lib/modules/llm/catalogs/cerebras.catalog.ts', exportName: 'CEREBRAS_CATALOG' },
+  huggingface: { modelsDevId: 'huggingface', file: 'app/lib/modules/llm/catalogs/huggingface.catalog.ts', exportName: 'HUGGINGFACE_CATALOG' },
+  github: { modelsDevId: 'github-copilot', file: 'app/lib/modules/llm/catalogs/github.catalog.ts', exportName: 'GITHUB_CATALOG' },
+  'amazon-bedrock': { modelsDevId: 'amazon-bedrock', file: 'app/lib/modules/llm/catalogs/amazon-bedrock.catalog.ts', exportName: 'AMAZON_BEDROCK_CATALOG' },
+  lmstudio: { modelsDevId: 'lmstudio', file: 'app/lib/modules/llm/catalogs/lmstudio.catalog.ts', exportName: 'LMSTUDIO_CATALOG' },
 };
 
 function parseArgs(argv) {
-  const args = { provider: null, check: false, probe: false, out: null };
+  const args = { provider: null, check: false, probe: false, out: null, all: false };
 
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index];
@@ -63,6 +88,8 @@ function parseArgs(argv) {
       args.probe = true;
     } else if (arg === '--out') {
       args.out = argv[++index];
+    } else if (arg === '--all') {
+      args.all = true;
     }
   }
 
@@ -318,8 +345,66 @@ async function probeGateway(entries) {
   return answered;
 }
 
+/**
+ * Generate every declared provider in one pass.
+ *
+ * One fetch, many files: models.dev serves the whole catalogue in a single response, so asking it
+ * once per provider would re-download ~6 MB eighteen times.
+ */
+async function generateAll(args) {
+  const catalog = await fetchCatalog();
+  const today = new Date().toISOString().slice(0, 10);
+  let written = 0;
+  let models = 0;
+
+  for (const [providerKey, config] of Object.entries(PROVIDERS)) {
+    const overrides = LOCAL_OVERRIDES[providerKey] ?? { thinkingOnly: [], skip: [], extra: [] };
+
+    if (!catalog[config.modelsDevId]) {
+      console.warn(`  ${providerKey}: absent de models.dev, ignoré`);
+      continue;
+    }
+
+    const entries = buildCatalog(catalog, config, overrides);
+    const target = args.out ? path.join(args.out, path.basename(config.file)) : path.join(ROOT, config.file);
+    const output = render(entries, config, today);
+
+    if (args.check) {
+      if (!existsSync(target)) {
+        console.error(`catalogue absent: ${target}`);
+        process.exit(1);
+      }
+
+      const current = await readFile(target, 'utf8');
+      const same =
+        JSON.stringify(current.match(/id: '[^']+'/g) ?? []) === JSON.stringify(output.match(/id: '[^']+'/g) ?? []);
+
+      if (!same) {
+        console.error(`catalogue périmé: ${providerKey} — relancez le script et commitez`);
+        process.exit(1);
+      }
+    } else {
+      await writeFile(target, output, 'utf8');
+      written += 1;
+    }
+
+    models += entries.length;
+    console.log(`  ${providerKey.padEnd(15)} ${String(entries.length).padStart(4)} modèles`);
+  }
+
+  console.log(
+    args.check ? `--all --check: ${models} modèles, tous à jour` : `--all: ${written} catalogues, ${models} modèles`,
+  );
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+
+  if (args.all) {
+    await generateAll(args);
+    return;
+  }
+
   const providerKey = args.provider ?? 'opencode-go';
   const config = PROVIDERS[providerKey];
 

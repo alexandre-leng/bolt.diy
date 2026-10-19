@@ -1,6 +1,7 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import type { LanguageModel } from 'ai';
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
+import { GROQ_CATALOG } from '~/lib/modules/llm/catalogs/groq.catalog';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 
@@ -12,64 +13,20 @@ export default class GroqProvider extends BaseProvider {
     apiTokenKey: 'GROQ_API_KEY',
   };
 
-  staticModels: ModelInfo[] = [
-    {
-      name: 'llama-3.1-8b-instant',
-      label: 'Llama 3.1 8B',
+  /*
+   * Built from the generated models.dev catalog (catalogs/groq.catalog.ts), not hand-written:
+   * the previous list carried stale limits and missed models. Regenerate with
+   * `node scripts/generate-model-catalog.mjs --all`.
+   */
+  staticModels: ModelInfo[] = GROQ_CATALOG
+    .filter((entry) => entry.tools && entry.status !== 'deprecated')
+    .map((entry) => ({
+      name: entry.id,
+      label: entry.label,
       provider: 'Groq',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'llama-3.3-70b-versatile',
-      label: 'Llama 3.3 70B',
-      provider: 'Groq',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'openai/gpt-oss-120b',
-      label: 'GPT-OSS 120B',
-      provider: 'Groq',
-      maxTokenAllowed: 131072,
-      maxCompletionTokens: 65536,
-    },
-    {
-      name: 'openai/gpt-oss-20b',
-      label: 'GPT-OSS 20B',
-      provider: 'Groq',
-      maxTokenAllowed: 131072,
-      maxCompletionTokens: 65536,
-    },
-    {
-      name: 'groq/compound',
-      label: 'Groq Compound',
-      provider: 'Groq',
-      maxTokenAllowed: 131072,
-      maxCompletionTokens: 65536,
-    },
-    {
-      name: 'groq/compound-mini',
-      label: 'Groq Compound Mini',
-      provider: 'Groq',
-      maxTokenAllowed: 131072,
-      maxCompletionTokens: 65536,
-    },
-    {
-      name: 'qwen/qwen3-32b',
-      label: 'Qwen3 32B',
-      provider: 'Groq',
-      maxTokenAllowed: 131072,
-      maxCompletionTokens: 65536,
-    },
-    {
-      name: 'qwen/qwen3.6-27b',
-      label: 'Qwen3.6 27B',
-      provider: 'Groq',
-      maxTokenAllowed: 131072,
-      maxCompletionTokens: 65536,
-    },
-  ];
+      maxTokenAllowed: entry.context,
+      maxCompletionTokens: entry.maxOutput,
+    }));
 
   async getDynamicModels(
     apiKeys?: Record<string, string>,

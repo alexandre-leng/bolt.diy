@@ -1,0 +1,109 @@
+/**
+ * Model catalog for the github-copilot provider, generated from models.dev.
+ *
+ * DO NOT EDIT BY HAND: run
+ *   node scripts/generate-model-catalog.mjs --provider github-copilot
+ *
+ * models.dev is MIT licensed and publishes model limits, pricing and capabilities; the previous
+ * hand-written list capped every model at 128k/8k and omitted models the gateway serves.
+ * Local corrections (which models refuse `thinking: disabled`, which are of no use here) live in
+ * the script's LOCAL_OVERRIDES, and a test compares this file with the live catalogue.
+ */
+
+export interface CatalogModel {
+  /** Model id as the gateway expects it. */
+  id: string;
+  /** Human label, from models.dev. */
+  label: string;
+  /** Context window in tokens. */
+  context: number;
+  /** Maximum output tokens. */
+  maxOutput: number;
+  /** Wire protocol the gateway speaks for this model. */
+  protocol: 'chat' | 'responses' | 'messages';
+  /** True when the model refuses `thinking: disabled`. */
+  thinkingOnly: boolean;
+  /** True for text+image input. */
+  vision: boolean;
+  /** True when the model supports tool calls (required for the agent loop). */
+  tools: boolean;
+  /** USD per million tokens, shown in the settings screen. */
+  costInput: number | null;
+  costOutput: number | null;
+  /** models.dev lifecycle status; 'deprecated' entries stay available but are marked. */
+  status: string | null;
+  /** Where the entry comes from. */
+  source: 'models.dev' | 'override';
+  /** False for a thinking-only model: it refuses `thinking: disabled` (a 400 when forced). */
+  canDisable: boolean;
+  /** Reasoning levels the model accepts, from models.dev (`reasoning_effort` values). */
+  efforts: string[];
+}
+
+/** Date of generation; the script rewrites it, so a stale file is visible at a glance. */
+export const CATALOG_GENERATED_AT = '2026-10-19';
+
+export const GITHUB_CATALOG: CatalogModel[] = [
+  { id: 'claude-fable-5', label: "Claude Fable 5", context: 1000000, maxOutput: 128000, protocol: 'messages', thinkingOnly: false, vision: true, tools: true, costInput: 10, costOutput: 50, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
+  { id: 'claude-fable-5.1', label: "Claude Fable 5.1", context: 1000000, maxOutput: 128000, protocol: 'messages', thinkingOnly: false, vision: true, tools: true, costInput: 10, costOutput: 50, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
+  { id: 'claude-haiku-4.5', label: "Claude Haiku 4.5 (latest)", context: 200000, maxOutput: 64000, protocol: 'messages', thinkingOnly: false, vision: true, tools: true, costInput: 1, costOutput: 5, status: null, source: 'models.dev', canDisable: true, efforts: [] },
+  { id: 'claude-haiku-5.5', label: "Claude Haiku 5.5", context: 1000000, maxOutput: 128000, protocol: 'messages', thinkingOnly: false, vision: true, tools: true, costInput: 0.1, costOutput: 0.5, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
+  { id: 'claude-opus-4.7', label: "Claude Opus 4.7", context: 200000, maxOutput: 32000, protocol: 'messages', thinkingOnly: false, vision: true, tools: true, costInput: 5, costOutput: 25, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
+  { id: 'claude-opus-4.8', label: "Claude Opus 4.8", context: 200000, maxOutput: 64000, protocol: 'messages', thinkingOnly: false, vision: true, tools: true, costInput: 5, costOutput: 25, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
+  { id: 'claude-opus-5', label: "Claude Opus 5", context: 1000000, maxOutput: 64000, protocol: 'messages', thinkingOnly: false, vision: true, tools: true, costInput: 5, costOutput: 25, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
+  { id: 'claude-opus-5.5', label: "Claude Opus 5.5", context: 1000000, maxOutput: 128000, protocol: 'messages', thinkingOnly: false, vision: true, tools: true, costInput: 4, costOutput: 20, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
+  { id: 'claude-sonnet-4.6', label: "Claude Sonnet 4.6", context: 200000, maxOutput: 32000, protocol: 'messages', thinkingOnly: false, vision: true, tools: true, costInput: 3, costOutput: 15, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high', 'max'] },
+  { id: 'claude-sonnet-5', label: "Claude Sonnet 5", context: 1000000, maxOutput: 128000, protocol: 'messages', thinkingOnly: false, vision: true, tools: true, costInput: 2, costOutput: 10, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
+  { id: 'claude-sonnet-5.5', label: "Claude Sonnet 5.5", context: 1000000, maxOutput: 128000, protocol: 'messages', thinkingOnly: false, vision: true, tools: true, costInput: 2, costOutput: 10, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
+  { id: 'gemini-3.5-flash', label: "Gemini 3.5 Flash", context: 200000, maxOutput: 64000, protocol: 'chat', thinkingOnly: false, vision: true, tools: true, costInput: 1.5, costOutput: 9, status: null, source: 'models.dev', canDisable: true, efforts: ['minimal', 'low', 'medium', 'high'] },
+  { id: 'gemini-3.6-flash', label: "Gemini 3.6 Flash", context: 1000000, maxOutput: 64000, protocol: 'chat', thinkingOnly: false, vision: true, tools: true, costInput: 0.75, costOutput: 3.75, status: null, source: 'models.dev', canDisable: true, efforts: ['minimal', 'low', 'medium', 'high'] },
+  { id: 'gemini-3.7-flash', label: "Gemini 3.7 Flash", context: 1000000, maxOutput: 64000, protocol: 'chat', thinkingOnly: false, vision: true, tools: true, costInput: 0.75, costOutput: 3.75, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high'] },
+  { id: 'gemini-3.8-flash', label: "Gemini 3.8 Flash", context: 1000000, maxOutput: 64000, protocol: 'chat', thinkingOnly: false, vision: true, tools: true, costInput: 0.75, costOutput: 3.75, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high'] },
+  { id: 'gemini-4-argon', label: "Gemini 4 Argon", context: 1048576, maxOutput: 65536, protocol: 'chat', thinkingOnly: false, vision: true, tools: true, costInput: 2, costOutput: 10, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high'] },
+  { id: 'gpt-5-mini', label: "GPT-5 Mini", context: 264000, maxOutput: 64000, protocol: 'responses', thinkingOnly: false, vision: true, tools: true, costInput: 0.25, costOutput: 2, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high'] },
+  { id: 'gpt-5.3-codex', label: "GPT-5.3 Codex", context: 400000, maxOutput: 128000, protocol: 'responses', thinkingOnly: false, vision: true, tools: true, costInput: 1.75, costOutput: 14, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high', 'xhigh'] },
+  { id: 'gpt-5.4', label: "GPT-5.4", context: 1050000, maxOutput: 128000, protocol: 'responses', thinkingOnly: false, vision: true, tools: true, costInput: 2.5, costOutput: 15, status: null, source: 'models.dev', canDisable: true, efforts: ['none', 'low', 'medium', 'high', 'xhigh'] },
+  { id: 'gpt-5.4-mini', label: "GPT-5.4 mini", context: 400000, maxOutput: 128000, protocol: 'responses', thinkingOnly: false, vision: true, tools: true, costInput: 0.75, costOutput: 4.5, status: null, source: 'models.dev', canDisable: true, efforts: ['none', 'low', 'medium', 'high', 'xhigh'] },
+  { id: 'gpt-5.4-nano', label: "GPT-5.4 nano", context: 400000, maxOutput: 128000, protocol: 'responses', thinkingOnly: false, vision: true, tools: true, costInput: 0.2, costOutput: 1.25, status: null, source: 'models.dev', canDisable: true, efforts: [] },
+  { id: 'gpt-5.5', label: "GPT-5.5", context: 1050000, maxOutput: 128000, protocol: 'responses', thinkingOnly: false, vision: true, tools: true, costInput: 5, costOutput: 30, status: null, source: 'models.dev', canDisable: true, efforts: ['none', 'low', 'medium', 'high', 'xhigh'] },
+  { id: 'gpt-5.6-luna', label: "GPT-5.6 Luna", context: 1050000, maxOutput: 128000, protocol: 'responses', thinkingOnly: false, vision: true, tools: true, costInput: 0.2, costOutput: 1.2, status: null, source: 'models.dev', canDisable: true, efforts: ['none', 'low', 'medium', 'high', 'xhigh', 'max'] },
+  { id: 'gpt-5.6-sol', label: "GPT-5.6 Sol", context: 1050000, maxOutput: 128000, protocol: 'responses', thinkingOnly: false, vision: true, tools: true, costInput: 4, costOutput: 20, status: null, source: 'models.dev', canDisable: true, efforts: ['none', 'low', 'medium', 'high', 'xhigh', 'max'] },
+  { id: 'gpt-5.6-terra', label: "GPT-5.6 Terra", context: 1050000, maxOutput: 128000, protocol: 'responses', thinkingOnly: false, vision: true, tools: true, costInput: 2, costOutput: 12, status: null, source: 'models.dev', canDisable: true, efforts: ['none', 'low', 'medium', 'high', 'xhigh', 'max'] },
+  { id: 'gpt-6-astra', label: "GPT-6 Astra", context: 1050000, maxOutput: 128000, protocol: 'responses', thinkingOnly: false, vision: true, tools: true, costInput: 10, costOutput: 50, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
+  { id: 'gpt-6-luna', label: "GPT-6 Luna", context: 1050000, maxOutput: 128000, protocol: 'responses', thinkingOnly: false, vision: true, tools: true, costInput: 0.1, costOutput: 0.5, status: null, source: 'models.dev', canDisable: true, efforts: ['none', 'low', 'medium', 'high', 'xhigh', 'max'] },
+  { id: 'gpt-6-sol', label: "GPT-6 Sol", context: 1050000, maxOutput: 128000, protocol: 'responses', thinkingOnly: false, vision: true, tools: true, costInput: 2, costOutput: 10, status: null, source: 'models.dev', canDisable: true, efforts: ['none', 'low', 'medium', 'high', 'xhigh', 'max'] },
+  { id: 'gpt-6.1-sol', label: "GPT-6.1 Sol", context: 1050000, maxOutput: 128000, protocol: 'responses', thinkingOnly: false, vision: true, tools: true, costInput: 2, costOutput: 10, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
+  { id: 'grok-4.5', label: "Grok 4.5", context: 500000, maxOutput: 128000, protocol: 'responses', thinkingOnly: false, vision: true, tools: true, costInput: 2, costOutput: 6, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high'] },
+  { id: 'grok-4.6', label: "Grok 4.6", context: 500000, maxOutput: 128000, protocol: 'responses', thinkingOnly: false, vision: true, tools: true, costInput: 2, costOutput: 6, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high', 'xhigh'] },
+  { id: 'grok-4.7', label: "Grok 4.7", context: 500000, maxOutput: 128000, protocol: 'responses', thinkingOnly: false, vision: true, tools: true, costInput: 2, costOutput: 6, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high', 'xhigh'] },
+  { id: 'kimi-k2.7-code', label: "Kimi K2.7 Code", context: 256000, maxOutput: 32000, protocol: 'chat', thinkingOnly: false, vision: true, tools: true, costInput: 0.95, costOutput: 4, status: null, source: 'models.dev', canDisable: true, efforts: [] },
+  { id: 'kimi-k3', label: "Kimi K3", context: 1048576, maxOutput: 131072, protocol: 'chat', thinkingOnly: false, vision: true, tools: true, costInput: 3, costOutput: 15, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'high', 'max'] },
+  { id: 'mai-code-1-flash-picker', label: "MAI-Code-1-Flash", context: 256000, maxOutput: 128000, protocol: 'chat', thinkingOnly: false, vision: false, tools: true, costInput: 0.75, costOutput: 4.5, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high'] },
+  { id: 'mai-code-1.1-flash', label: "MAI-Code-1.1-Flash", context: 256000, maxOutput: 128000, protocol: 'chat', thinkingOnly: false, vision: true, tools: true, costInput: 0.2, costOutput: 1.2, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high'] },
+];
+
+/** Protocol to use for a model, falling back to the id pattern for unknown ones. */
+export function catalogProtocol(model: string): 'chat' | 'responses' | 'messages' {
+  const entry = GITHUB_CATALOG.find((item) => item.id === model);
+
+  if (entry) {
+    return entry.protocol;
+  }
+
+  return /^claude-/i.test(model) ? 'messages' : /^(gpt-|grok-)/i.test(model) ? 'responses' : 'chat';
+}
+
+/** True when the model cannot run with thinking disabled. */
+export function catalogThinkingOnly(model: string): boolean {
+  return GITHUB_CATALOG.find((item) => item.id === model)?.thinkingOnly ?? false;
+}
+
+/** True when the model accepts `thinking: {type: 'disabled'}` at all. */
+export function catalogCanDisableThinking(model: string): boolean {
+  return GITHUB_CATALOG.find((item) => item.id === model)?.canDisable ?? true;
+}
+
+/** Reasoning levels the model accepts; empty when it takes no effort parameter. */
+export function catalogEfforts(model: string): string[] {
+  return GITHUB_CATALOG.find((item) => item.id === model)?.efforts ?? [];
+}

@@ -1,6 +1,7 @@
 import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock';
 import type { LanguageModel } from 'ai';
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
+import { AMAZON_BEDROCK_CATALOG } from '~/lib/modules/llm/catalogs/amazon-bedrock.catalog';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 
@@ -19,50 +20,20 @@ export default class AmazonBedrockProvider extends BaseProvider {
     apiTokenKey: 'AWS_BEDROCK_CONFIG',
   };
 
-  staticModels: ModelInfo[] = [
-    {
-      name: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-      label: 'Claude 3.5 Sonnet v2 (Bedrock)',
+  /*
+   * Built from the generated models.dev catalog (catalogs/amazon-bedrock.catalog.ts), not hand-written:
+   * the previous list carried stale limits and missed models. Regenerate with
+   * `node scripts/generate-model-catalog.mjs --all`.
+   */
+  staticModels: ModelInfo[] = AMAZON_BEDROCK_CATALOG
+    .filter((entry) => entry.tools && entry.status !== 'deprecated')
+    .map((entry) => ({
+      name: entry.id,
+      label: entry.label,
       provider: 'AmazonBedrock',
-      maxTokenAllowed: 200000,
-    },
-    {
-      name: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
-      label: 'Claude 3.5 Sonnet (Bedrock)',
-      provider: 'AmazonBedrock',
-      maxTokenAllowed: 4096,
-    },
-    {
-      name: 'anthropic.claude-3-sonnet-20240229-v1:0',
-      label: 'Claude 3 Sonnet (Bedrock)',
-      provider: 'AmazonBedrock',
-      maxTokenAllowed: 4096,
-    },
-    {
-      name: 'anthropic.claude-3-haiku-20240307-v1:0',
-      label: 'Claude 3 Haiku (Bedrock)',
-      provider: 'AmazonBedrock',
-      maxTokenAllowed: 4096,
-    },
-    {
-      name: 'amazon.nova-pro-v1:0',
-      label: 'Amazon Nova Pro (Bedrock)',
-      provider: 'AmazonBedrock',
-      maxTokenAllowed: 5120,
-    },
-    {
-      name: 'amazon.nova-lite-v1:0',
-      label: 'Amazon Nova Lite (Bedrock)',
-      provider: 'AmazonBedrock',
-      maxTokenAllowed: 5120,
-    },
-    {
-      name: 'mistral.mistral-large-2402-v1:0',
-      label: 'Mistral Large 24.02 (Bedrock)',
-      provider: 'AmazonBedrock',
-      maxTokenAllowed: 8192,
-    },
-  ];
+      maxTokenAllowed: entry.context,
+      maxCompletionTokens: entry.maxOutput,
+    }));
 
   private _parseAndValidateConfig(apiKey: string): AWSBedRockConfig {
     let parsedConfig: AWSBedRockConfig;

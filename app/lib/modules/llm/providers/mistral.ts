@@ -1,6 +1,7 @@
 import { createMistral } from '@ai-sdk/mistral';
 import type { LanguageModel } from 'ai';
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
+import { MISTRAL_CATALOG } from '~/lib/modules/llm/catalogs/mistral.catalog';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 
@@ -12,78 +13,20 @@ export default class MistralProvider extends BaseProvider {
     apiTokenKey: 'MISTRAL_API_KEY',
   };
 
-  staticModels: ModelInfo[] = [
-    {
-      name: 'mistral-medium-latest',
-      label: 'Mistral Medium 3.5',
+  /*
+   * Built from the generated models.dev catalog (catalogs/mistral.catalog.ts), not hand-written:
+   * the previous list carried stale limits and missed models. Regenerate with
+   * `node scripts/generate-model-catalog.mjs --all`.
+   */
+  staticModels: ModelInfo[] = MISTRAL_CATALOG
+    .filter((entry) => entry.tools && entry.status !== 'deprecated')
+    .map((entry) => ({
+      name: entry.id,
+      label: entry.label,
       provider: 'Mistral',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 32768,
-    },
-    {
-      name: 'mistral-small-latest',
-      label: 'Mistral Small 4',
-      provider: 'Mistral',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 32768,
-    },
-    {
-      name: 'codestral-latest',
-      label: 'Codestral Premier',
-      provider: 'Mistral',
-      maxTokenAllowed: 256000,
-      maxCompletionTokens: 32768,
-    },
-    {
-      name: 'mistral-large-latest',
-      label: 'Mistral Large Latest',
-      provider: 'Mistral',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 32768,
-    },
-    {
-      name: 'open-mistral-7b',
-      label: 'Mistral 7B',
-      provider: 'Mistral',
-      maxTokenAllowed: 32000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'open-mixtral-8x7b',
-      label: 'Mistral 8x7B',
-      provider: 'Mistral',
-      maxTokenAllowed: 32000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'open-mixtral-8x22b',
-      label: 'Mistral 8x22B',
-      provider: 'Mistral',
-      maxTokenAllowed: 64000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'open-codestral-mamba',
-      label: 'Codestral Mamba',
-      provider: 'Mistral',
-      maxTokenAllowed: 256000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'open-mistral-nemo',
-      label: 'Mistral Nemo',
-      provider: 'Mistral',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'ministral-8b-latest',
-      label: 'Mistral 8B',
-      provider: 'Mistral',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 8192,
-    },
-  ];
+      maxTokenAllowed: entry.context,
+      maxCompletionTokens: entry.maxOutput,
+    }));
 
   getModelInstance(options: {
     model: string;

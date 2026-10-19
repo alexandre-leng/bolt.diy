@@ -1,6 +1,7 @@
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import type { LanguageModel } from 'ai';
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
+import { OPENROUTER_CATALOG } from '~/lib/modules/llm/catalogs/openrouter.catalog';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 
@@ -27,27 +28,20 @@ export default class OpenRouterProvider extends BaseProvider {
     apiTokenKey: 'OPEN_ROUTER_API_KEY',
   };
 
-  staticModels: ModelInfo[] = [
-    {
-      name: 'z-ai/glm-5.3-flash',
-      label: 'GLM 5.3 Flash',
+  /*
+   * Built from the generated models.dev catalog (catalogs/openrouter.catalog.ts), not hand-written:
+   * the previous list carried stale limits and missed models. Regenerate with
+   * `node scripts/generate-model-catalog.mjs --all`.
+   */
+  staticModels: ModelInfo[] = OPENROUTER_CATALOG
+    .filter((entry) => entry.tools && entry.status !== 'deprecated')
+    .map((entry) => ({
+      name: entry.id,
+      label: entry.label,
       provider: 'OpenRouter',
-      maxTokenAllowed: 1310720,
-      maxCompletionTokens: 16384,
-    },
-    {
-      name: 'anthropic/claude-3.5-sonnet',
-      label: 'Claude 3.5 Sonnet',
-      provider: 'OpenRouter',
-      maxTokenAllowed: 200000,
-    },
-    {
-      name: 'openai/gpt-4o',
-      label: 'GPT-4o',
-      provider: 'OpenRouter',
-      maxTokenAllowed: 128000,
-    },
-  ];
+      maxTokenAllowed: entry.context,
+      maxCompletionTokens: entry.maxOutput,
+    }));
 
   async getDynamicModels(
     _apiKeys?: Record<string, string>,

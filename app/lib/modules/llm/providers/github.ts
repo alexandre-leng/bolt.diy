@@ -1,6 +1,7 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import type { LanguageModel } from 'ai';
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
+import { GITHUB_CATALOG } from '~/lib/modules/llm/catalogs/github.catalog';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 
@@ -17,52 +18,20 @@ export default class GithubProvider extends BaseProvider {
    * Updated for the new GitHub Models API at https://models.github.ai
    * Model IDs use the format: publisher/model-name
    */
-  staticModels: ModelInfo[] = [
-    { name: 'openai/gpt-4o', label: 'GPT-4o', provider: 'Github', maxTokenAllowed: 131072, maxCompletionTokens: 4096 },
-    {
-      name: 'openai/gpt-4o-mini',
-      label: 'GPT-4o Mini',
+  /*
+   * Built from the generated models.dev catalog (catalogs/github.catalog.ts), not hand-written:
+   * the previous list carried stale limits and missed models. Regenerate with
+   * `node scripts/generate-model-catalog.mjs --all`.
+   */
+  staticModels: ModelInfo[] = GITHUB_CATALOG
+    .filter((entry) => entry.tools && entry.status !== 'deprecated')
+    .map((entry) => ({
+      name: entry.id,
+      label: entry.label,
       provider: 'Github',
-      maxTokenAllowed: 131072,
-      maxCompletionTokens: 4096,
-    },
-    {
-      name: 'openai/o1-preview',
-      label: 'o1-preview',
-      provider: 'Github',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 32000,
-    },
-    {
-      name: 'openai/o1-mini',
-      label: 'o1-mini',
-      provider: 'Github',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 65000,
-    },
-    { name: 'openai/o1', label: 'o1', provider: 'Github', maxTokenAllowed: 200000, maxCompletionTokens: 100000 },
-    {
-      name: 'openai/gpt-4.1',
-      label: 'GPT-4.1',
-      provider: 'Github',
-      maxTokenAllowed: 1048576,
-      maxCompletionTokens: 32768,
-    },
-    {
-      name: 'openai/gpt-4.1-mini',
-      label: 'GPT-4.1-mini',
-      provider: 'Github',
-      maxTokenAllowed: 1048576,
-      maxCompletionTokens: 32768,
-    },
-    {
-      name: 'deepseek/deepseek-r1',
-      label: 'DeepSeek-R1',
-      provider: 'Github',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 4096,
-    },
-  ];
+      maxTokenAllowed: entry.context,
+      maxCompletionTokens: entry.maxOutput,
+    }));
 
   async getDynamicModels(
     apiKeys?: Record<string, string>,

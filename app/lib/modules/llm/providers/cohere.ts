@@ -1,6 +1,7 @@
 import { createCohere } from '@ai-sdk/cohere';
 import type { LanguageModel } from 'ai';
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
+import { COHERE_CATALOG } from '~/lib/modules/llm/catalogs/cohere.catalog';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 
@@ -12,66 +13,20 @@ export default class CohereProvider extends BaseProvider {
     apiTokenKey: 'COHERE_API_KEY',
   };
 
-  staticModels: ModelInfo[] = [
-    {
-      name: 'command-r-plus-08-2024',
-      label: 'Command R plus Latest',
+  /*
+   * Built from the generated models.dev catalog (catalogs/cohere.catalog.ts), not hand-written:
+   * the previous list carried stale limits and missed models. Regenerate with
+   * `node scripts/generate-model-catalog.mjs --all`.
+   */
+  staticModels: ModelInfo[] = COHERE_CATALOG
+    .filter((entry) => entry.tools && entry.status !== 'deprecated')
+    .map((entry) => ({
+      name: entry.id,
+      label: entry.label,
       provider: 'Cohere',
-      maxTokenAllowed: 4096,
-      maxCompletionTokens: 4000,
-    },
-    {
-      name: 'command-r-08-2024',
-      label: 'Command R Latest',
-      provider: 'Cohere',
-      maxTokenAllowed: 4096,
-      maxCompletionTokens: 4000,
-    },
-    {
-      name: 'command-r-plus',
-      label: 'Command R plus',
-      provider: 'Cohere',
-      maxTokenAllowed: 4096,
-      maxCompletionTokens: 4000,
-    },
-    { name: 'command-r', label: 'Command R', provider: 'Cohere', maxTokenAllowed: 4096, maxCompletionTokens: 4000 },
-    { name: 'command', label: 'Command', provider: 'Cohere', maxTokenAllowed: 4096, maxCompletionTokens: 4000 },
-    {
-      name: 'command-nightly',
-      label: 'Command Nightly',
-      provider: 'Cohere',
-      maxTokenAllowed: 4096,
-      maxCompletionTokens: 4000,
-    },
-    {
-      name: 'command-light',
-      label: 'Command Light',
-      provider: 'Cohere',
-      maxTokenAllowed: 4096,
-      maxCompletionTokens: 4000,
-    },
-    {
-      name: 'command-light-nightly',
-      label: 'Command Light Nightly',
-      provider: 'Cohere',
-      maxTokenAllowed: 4096,
-      maxCompletionTokens: 4000,
-    },
-    {
-      name: 'c4ai-aya-expanse-8b',
-      label: 'c4AI Aya Expanse 8b',
-      provider: 'Cohere',
-      maxTokenAllowed: 4096,
-      maxCompletionTokens: 4000,
-    },
-    {
-      name: 'c4ai-aya-expanse-32b',
-      label: 'c4AI Aya Expanse 32b',
-      provider: 'Cohere',
-      maxTokenAllowed: 4096,
-      maxCompletionTokens: 4000,
-    },
-  ];
+      maxTokenAllowed: entry.context,
+      maxCompletionTokens: entry.maxOutput,
+    }));
 
   getModelInstance(options: {
     model: string;

@@ -257,6 +257,12 @@ export const ModelSelector = ({
   const modelSearchInputRef = useRef<HTMLInputElement>(null);
   const modelOptionsRef = useRef<(HTMLDivElement | null)[]>([]);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * Needed to hand keyboard focus back to the trigger when a listbox closes. Without these the focus
+   * falls to `document.body` and a keyboard user loses their place.
+   */
+  const modelTriggerRef = useRef<HTMLDivElement>(null);
   const [providerSearchQuery, setProviderSearchQuery] = useState('');
   const [debouncedProviderSearchQuery, setDebouncedProviderSearchQuery] = useState('');
   const [isProviderDropdownOpen, setIsProviderDropdownOpen] = useState(false);
@@ -264,6 +270,7 @@ export const ModelSelector = ({
   const providerSearchInputRef = useRef<HTMLInputElement>(null);
   const providerOptionsRef = useRef<(HTMLDivElement | null)[]>([]);
   const providerDropdownRef = useRef<HTMLDivElement>(null);
+  const providerTriggerRef = useRef<HTMLDivElement>(null);
   const [showFreeModelsOnly, setShowFreeModelsOnly] = useState(false);
 
   type ConnectionStatus = 'unknown' | 'connected' | 'disconnected';
@@ -418,6 +425,21 @@ export const ModelSelector = ({
     }
   }, []);
 
+  /*
+   * Returns keyboard focus to the combobox trigger once a listbox closes (selection or Escape).
+   *
+   * Without it the focus falls back to `document.body` and a keyboard user loses their place, having
+   * to tab through the whole page to reach the control they were just using. Both listboxes own the
+   * behaviour, so both have their helper.
+   */
+  const restoreModelFocus = useCallback(() => {
+    modelTriggerRef.current?.focus();
+  }, []);
+
+  const restoreProviderFocus = useCallback(() => {
+    providerTriggerRef.current?.focus();
+  }, []);
+
   useEffect(() => {
     if (isModelDropdownOpen && modelSearchInputRef.current) {
       modelSearchInputRef.current.focus();
@@ -453,6 +475,7 @@ export const ModelSelector = ({
           setIsModelDropdownOpen(false);
           setModelSearchQuery('');
           setDebouncedModelSearchQuery('');
+          restoreModelFocus();
         }
 
         break;
@@ -461,6 +484,7 @@ export const ModelSelector = ({
         setIsModelDropdownOpen(false);
         setModelSearchQuery('');
         setDebouncedModelSearchQuery('');
+        restoreModelFocus();
         break;
       case 'Tab':
         if (!e.shiftKey && focusedModelIndex === filteredModels.length - 1) {
@@ -511,6 +535,7 @@ export const ModelSelector = ({
           setIsProviderDropdownOpen(false);
           setProviderSearchQuery('');
           setDebouncedProviderSearchQuery('');
+          restoreProviderFocus();
         }
 
         break;
@@ -519,6 +544,7 @@ export const ModelSelector = ({
         setIsProviderDropdownOpen(false);
         setProviderSearchQuery('');
         setDebouncedProviderSearchQuery('');
+        restoreProviderFocus();
         break;
       case 'Tab':
         if (!e.shiftKey && focusedProviderIndex === filteredProviders.length - 1) {
@@ -536,16 +562,23 @@ export const ModelSelector = ({
     }
   };
 
+  /*
+   * Keep the focused option in view as the user arrows through the list.
+   *
+   * `scrollIntoView` is called defensively: jsdom and older engines do not implement it on every
+   * node, and an exception thrown here aborts the whole effect pass, which silently broke the
+   * `aria-activedescendant` navigation this hook exists to support.
+   */
   useEffect(() => {
-    if (focusedModelIndex >= 0 && modelOptionsRef.current[focusedModelIndex]) {
-      modelOptionsRef.current[focusedModelIndex]?.scrollIntoView({ block: 'nearest' });
-    }
+    const option = focusedModelIndex >= 0 ? modelOptionsRef.current[focusedModelIndex] : null;
+
+    option?.scrollIntoView?.({ block: 'nearest' });
   }, [focusedModelIndex]);
 
   useEffect(() => {
-    if (focusedProviderIndex >= 0 && providerOptionsRef.current[focusedProviderIndex]) {
-      providerOptionsRef.current[focusedProviderIndex]?.scrollIntoView({ block: 'nearest' });
-    }
+    const option = focusedProviderIndex >= 0 ? providerOptionsRef.current[focusedProviderIndex] : null;
+
+    option?.scrollIntoView?.({ block: 'nearest' });
   }, [focusedProviderIndex]);
 
   useEffect(() => {
@@ -576,13 +609,16 @@ export const ModelSelector = ({
     );
   }
 
+  /*
+   * `flex-wrap` so the three fields (provider, model, reasoning) each keep their own line on a
+   * narrow chat pane: without it the reasoning label was cut down to a single letter.
+   */
   return (
-    // `flex-wrap` so the three fields (provider, model, reasoning) each keep their own line on a
-    // narrow chat pane: without it the reasoning label was cut down to a single letter.
     <div className="flex gap-2 flex-wrap flex-col sm:flex-row">
       {/* Provider Combobox */}
       <div className="relative flex w-full" onKeyDown={handleProviderKeyDown} ref={providerDropdownRef}>
         <div
+          ref={providerTriggerRef}
           className={classNames(
             'w-full p-2 rounded-lg border border-bolt-elements-borderColor',
             'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary',
@@ -598,8 +634,20 @@ export const ModelSelector = ({
             }
           }}
           role="combobox"
+          aria-label="Fournisseur"
           aria-expanded={isProviderDropdownOpen}
-          aria-controls="provider-listbox"
+
+          /*
+           * Only point at the listbox while it exists. A closed combobox referencing a listbox that
+           * is not in the DOM is an invalid reference, and the accessibility contract asserts the
+           * attribute is absent when closed.
+           */
+          aria-controls={isProviderDropdownOpen ? 'provider-listbox' : undefined}
+          aria-activedescendant={
+            isProviderDropdownOpen && focusedProviderIndex >= 0 && filteredProviders[focusedProviderIndex]
+              ? `provider-option-${focusedProviderIndex}`
+              : undefined
+          }
           aria-haspopup="listbox"
           tabIndex={0}
         >
@@ -716,6 +764,8 @@ export const ModelSelector = ({
                     }}
                     key={providerOption.name}
                     role="option"
+                    aria-label={providerOption.name}
+                    id={`provider-option-${index}`}
                     aria-selected={provider?.name === providerOption.name}
                     className={classNames(
                       'px-3 py-2 text-sm cursor-pointer',
@@ -743,6 +793,7 @@ export const ModelSelector = ({
                       setIsProviderDropdownOpen(false);
                       setProviderSearchQuery('');
                       setDebouncedProviderSearchQuery('');
+                      restoreProviderFocus();
                     }}
                     tabIndex={focusedProviderIndex === index ? 0 : -1}
                   >
@@ -790,6 +841,7 @@ export const ModelSelector = ({
       {/* Model Combobox */}
       <div className="relative flex w-full min-w-[70%]" onKeyDown={handleModelKeyDown} ref={modelDropdownRef}>
         <div
+          ref={modelTriggerRef}
           className={classNames(
             'w-full p-2 rounded-lg border border-bolt-elements-borderColor',
             'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary',
@@ -805,8 +857,14 @@ export const ModelSelector = ({
             }
           }}
           role="combobox"
+          aria-label="Modèle"
           aria-expanded={isModelDropdownOpen}
-          aria-controls="model-listbox"
+          aria-controls={isModelDropdownOpen ? 'model-listbox' : undefined}
+          aria-activedescendant={
+            isModelDropdownOpen && focusedModelIndex >= 0 && filteredModels[focusedModelIndex]
+              ? `model-option-${focusedModelIndex}`
+              : undefined
+          }
           aria-haspopup="listbox"
           tabIndex={0}
         >
@@ -963,6 +1021,14 @@ export const ModelSelector = ({
                     }}
                     key={modelOption.name}
                     role="option"
+                    aria-label={modelOption.label}
+
+                    /*
+                     * The id is what `aria-activedescendant` on the trigger points at. Without it the
+                     * reference resolves to nothing and a screen reader announces no active option
+                     * while the user arrows through the list.
+                     */
+                    id={`model-option-${index}`}
                     aria-selected={model === modelOption.name}
                     className={classNames(
                       'px-3 py-2 text-sm cursor-pointer',
@@ -980,6 +1046,7 @@ export const ModelSelector = ({
                       setIsModelDropdownOpen(false);
                       setModelSearchQuery('');
                       setDebouncedModelSearchQuery('');
+                      restoreModelFocus();
                     }}
                     tabIndex={focusedModelIndex === index ? 0 : -1}
                   >

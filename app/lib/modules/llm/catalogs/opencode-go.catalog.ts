@@ -102,3 +102,14 @@ export function catalogCanDisableThinking(model: string): boolean {
 export function catalogEfforts(model: string): string[] {
   return OPENCODE_GO_CATALOG.find((item) => item.id === model)?.efforts ?? [];
 }
+
+/*
+ * Lifecycle status from models.dev, or `null` for a model the catalog does not list.
+ *
+ * Callers must not infer retirement from a model's absence in `staticModels`: that list already
+ * filters deprecated entries out, so "not in staticModels" means "retired OR unknown OR untoolable".
+ * Ask this function instead.
+ */
+export function catalogStatus(model: string): string | null {
+  return OPENCODE_GO_CATALOG.find((item) => item.id === model)?.status ?? null;
+}

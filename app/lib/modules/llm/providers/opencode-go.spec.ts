@@ -189,37 +189,79 @@ describe('OpenCode Go provider', () => {
   });
 });
 
-  /*
-   * The reasoning level chosen in the chat is sent to the gateway. Measured there: DeepSeek and the
-   * GPT/Grok family read `thinking`, GLM and the MiMo family read `reasoning_effort` — sending the
-   * wrong one is silently ignored, so which field is used matters.
-   */
-  it('sends the reasoning level the user chose', async () => {
-    // A named level: verified live (glm-5.3 reasoning grows from 7 to 427 characters with max).
-    expect(effortPayload('glm-5.3', 'max')).toEqual({ thinking: { type: 'enabled', effort: 'max' } });
-    expect(effortPayload('deepseek-v4.1-flash', 'high')).toEqual({ thinking: { type: 'enabled', effort: 'high' } });
-    // GPT and Grok read the other field.
-    expect(effortPayload('grok-4.7', 'high')).toEqual({ reasoning_effort: 'high' });
-  });
+/*
+ * The reasoning level chosen in the chat is sent to the gateway. Measured there: DeepSeek and the
+ * GPT/Grok family read `thinking`, GLM and the MiMo family read `reasoning_effort` — sending the
+ * wrong one is silently ignored, so which field is used matters.
+ */
+it('sends the reasoning level the user chose', async () => {
+  // A named level: verified live (glm-5.3 reasoning grows from 7 to 427 characters with max).
+  expect(effortPayload('glm-5.3', 'max')).toEqual({ thinking: { type: 'enabled', effort: 'max' } });
+  expect(effortPayload('deepseek-v4.1-flash', 'high')).toEqual({ thinking: { type: 'enabled', effort: 'high' } });
 
-  it('never sends a level the model does not accept, nor disables a model that refuses it', async () => {
-    // deepseek-v4.1-flash accepts low/high/max only.
-    expect(effortPayload('deepseek-v4.1-flash', 'medium')).toBeNull();
-    // glm-5.3 is thinking-only: "disabled" is not offered and not sent.
-    expect(opencodeGoCanDisableThinking('glm-5.3')).toBe(false);
-    expect(effortPayload('glm-5.3', 'disabled')).toBeNull();
-    // A model with no levels keeps its own default.
-    expect(opencodeGoEfforts('mimo-v2.6-pro')).toEqual([]);
-    expect(effortPayload('mimo-v2.6-pro', 'high')).toBeNull();
-  });
+  // GPT and Grok read the other field.
+  expect(effortPayload('grok-4.7', 'high')).toEqual({ reasoning_effort: 'high' });
+});
 
-  it('keeps the agent-friendly default when the level is automatic', async () => {
-    // 'auto' and 'model' send nothing, so the fetch below injects `thinking: disabled` as before.
-    expect(effortPayload('deepseek-v4.1-flash', 'auto')).toBeNull();
-    expect(effortPayload('deepseek-v4.1-flash', 'model')).toBeNull();
-    expect(shouldDisableThinking('deepseek-v4.1-flash', 'disabled')).toBe(true);
-    // Asking for a named level turns reasoning ON, so the "disabled" injection is skipped.
-    expect(shouldDisableThinking('deepseek-v4.1-flash', 'high')).toBe(false);
-    // 'auto' keeps the injection the agent loop depends on.
-    expect(shouldDisableThinking('deepseek-v4.1-flash', 'auto')).toBe(true);
-  });
+it('never sends a level the model does not accept, nor disables a model that refuses it', async () => {
+  // deepseek-v4.1-flash accepts low/high/max only.
+  expect(effortPayload('deepseek-v4.1-flash', 'medium')).toBeNull();
+
+  // glm-5.3 is thinking-only: "disabled" is not offered and not sent.
+  expect(opencodeGoCanDisableThinking('glm-5.3')).toBe(false);
+  expect(effortPayload('glm-5.3', 'disabled')).toBeNull();
+
+  // A model with no levels keeps its own default.
+  expect(opencodeGoEfforts('mimo-v2.6-pro')).toEqual([]);
+  expect(effortPayload('mimo-v2.6-pro', 'high')).toBeNull();
+});
+
+it('keeps the agent-friendly default when the level is automatic', async () => {
+  // 'auto' and 'model' send nothing, so the fetch below injects `thinking: disabled` as before.
+  expect(effortPayload('deepseek-v4.1-flash', 'auto')).toBeNull();
+  expect(effortPayload('deepseek-v4.1-flash', 'model')).toBeNull();
+  expect(shouldDisableThinking('deepseek-v4.1-flash', 'disabled')).toBe(true);
+
+  // Asking for a named level turns reasoning ON, so the "disabled" injection is skipped.
+  expect(shouldDisableThinking('deepseek-v4.1-flash', 'high')).toBe(false);
+
+  // 'auto' keeps the injection the agent loop depends on.
+  expect(shouldDisableThinking('deepseek-v4.1-flash', 'auto')).toBe(true);
+});
+
+/*
+ * The dynamic merge re-adds models the gateway serves but `staticModels` does not list. That list
+ * ALREADY drops the deprecated entries, so `!known.has(id)` was true for a retired model and the
+ * picker offered it again: minimax-m2.7 was selectable while the catalog marks it deprecated. The
+ * static-model tests could not catch this because they never exercise the merge.
+ */
+it('does not re-add a deprecated model the gateway still serves', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        data: [
+          { id: 'minimax-m2.7' }, // retired in the catalog, still answered by the gateway
+          { id: 'brand-new-model' }, // genuinely new: must still be discovered
+          { id: 'cat-jam-free' }, // also retired
+        ],
+      }),
+    })),
+  );
+
+  const provider = new OpenCodeGoProvider();
+
+  const dynamic = await provider.getDynamicModels(undefined, undefined, {
+    OPENCODE_GO_API_KEY: 'server-key',
+  } as unknown as Env);
+
+  const ids = dynamic.map((model) => model.name);
+
+  // The regression: a retired model came back through the dynamic door.
+  expect(ids).not.toContain('minimax-m2.7');
+  expect(ids).not.toContain('cat-jam-free');
+
+  // Discovery of an unknown model must keep working.
+  expect(ids).toContain('brand-new-model');
+});

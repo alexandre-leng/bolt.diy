@@ -1,4 +1,6 @@
+import Cookies from 'js-cookie';
 import React, { useEffect, useMemo, useState } from 'react';
+import { getApiKeysFromCookies } from '~/components/chat/APIKeyManager';
 import { Card, CardContent } from '~/components/ui/Card';
 import { Switch } from '~/components/ui/Switch';
 import {
@@ -8,7 +10,16 @@ import {
   type DictationSettings,
   parseDictationSettings,
 } from '~/lib/dictation';
-import { readStoredDictationSettings, writeStoredDictationSettings } from '~/lib/hooks/useSpeechRecognition';
+import {
+  DICTATION_PROVIDERS,
+  type TranscriptionSettings,
+  describeKeyState,
+  dictationProvider,
+  readStoredVoiceSettings,
+  readTranscriptionSettings,
+  writeStoredVoiceSettings,
+} from '~/lib/dictation-config';
+import { readStoredDictationSettings } from '~/lib/hooks/useSpeechRecognition';
 import { toast } from '~/lib/toastify';
 import { classNames } from '~/utils/classNames';
 
@@ -25,6 +36,58 @@ import { classNames } from '~/utils/classNames';
  */
 
 const SAMPLE_TEXT = 'Bonjour, ceci est un test de la voix de synthèse choisie.';
+
+const selectClass = classNames(
+  'w-full rounded-lg px-3 py-2 text-sm',
+  'bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor',
+  'text-bolt-elements-textPrimary',
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-focus',
+);
+
+const inputClass = classNames(
+  'w-full rounded-lg px-3 py-2 text-sm',
+  'bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor',
+  'text-bolt-elements-textPrimary',
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-focus',
+);
+
+/**
+ * Records a short clip from the microphone, for the transcription test.
+ *
+ * The test has to prove the KEY, the SERVICE and the MODEL together, which only a real call can
+ * do: so it records 3 seconds (the user is told to speak) and posts it exactly as the composer
+ * does. Synthesizing a sample locally was tried and rejected: `speechSynthesis` cannot be routed
+ * into a MediaRecorder reliably, and a fake pass would be worse than no test.
+ */
+async function recordSample(durationMs = 3000): Promise<Blob> {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+  try {
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : '';
+
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    const chunks: Blob[] = [];
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        chunks.push(event.data);
+      }
+    };
+
+    const stopped = new Promise<void>((resolve) => {
+      recorder.onstop = () => resolve();
+    });
+
+    recorder.start();
+    await new Promise((resolve) => setTimeout(resolve, durationMs));
+    recorder.stop();
+    await stopped;
+
+    return new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+  } finally {
+    stream.getTracks().forEach((track) => track.stop());
+  }
+}
 
 function useSpeechVoices() {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -58,6 +121,29 @@ function useSpeechVoices() {
 
 export default function VoiceTab() {
   const [dictation, setDictation] = useState<DictationSettings>(() => readStoredDictationSettings());
+
+  /*
+   * Transcription service and model: the same choice the route receives with each clip. Stored
+   * beside the dictation preferences (one key, one source of truth) so the composer never reads
+   * a stale value.
+   */
+  const [transcription, setTranscription] = useState<TranscriptionSettings>(
+    () => readStoredVoiceSettings().transcription,
+  );
+
+  /** Keys typed in this browser, under the same `apiKeys` cookie the Cloud Providers tab uses. */
+  const [apiKeys, setApiKeys] = useState<Record<string, string>>(() => {
+    try {
+      return getApiKeysFromCookies();
+    } catch {
+      return {};
+    }
+  });
+
+  const [keyDrafts, setKeyDrafts] = useState<Record<string, string>>({});
+  const [keyVisible, setKeyVisible] = useState<Record<string, boolean>>({});
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const { voices, synthesisSupported } = useSpeechVoices();
   const [selectedVoice, setSelectedVoice] = useState<string>('');
   const [rate, setRate] = useState(1);
@@ -88,11 +174,96 @@ export default function VoiceTab() {
     }
   }, [sortedVoices, selectedVoice]);
 
+  const updateTranscription = (patch: Partial<TranscriptionSettings>) => {
+    const next = readTranscriptionSettings({
+      sttProvider: patch.provider ?? transcription.provider,
+      sttModel: patch.model ?? transcription.model,
+    });
+
+    setTranscription(next);
+    writeStoredVoiceSettings(dictation, next);
+    setTestResult(null);
+  };
+
+  /**
+   * Saves a key into the shared `apiKeys` cookie.
+   *
+   * Same storage the Cloud Providers tab writes and `/api/transcribe` reads, so a key is typed
+   * once and never duplicated. An empty draft removes the entry (the deployment key can then
+   * take over), which is how a user revokes a key typed by mistake.
+   */
+  const saveKey = (apiKeyId: 'OpenAI' | 'Groq') => {
+    const draft = (keyDrafts[apiKeyId] ?? '').trim();
+    const current = getApiKeysFromCookies();
+    const next = { ...current, [apiKeyId]: draft };
+
+    if (!draft) {
+      delete next[apiKeyId];
+    }
+
+    Cookies.set('apiKeys', JSON.stringify(next));
+    setApiKeys(next);
+    setKeyDrafts((previous) => ({ ...previous, [apiKeyId]: '' }));
+    setKeyVisible((previous) => ({ ...previous, [apiKeyId]: false }));
+    toast.success(draft ? `Clé ${apiKeyId} enregistrée pour cet appareil.` : `Clé ${apiKeyId} retirée.`);
+    setTestResult(null);
+  };
+
+  /**
+   * Real end-to-end test: synthesizes one sentence locally, then posts it to `/api/transcribe`
+   * exactly as the composer does. Proves the key, the service and the model together, which no
+   * client-side check can.
+   */
+  const testTranscription = async () => {
+    const provider = dictationProvider(transcription.provider);
+
+    setTesting(true);
+    setTestResult(null);
+
+    try {
+      const blob = await recordSample();
+
+      if (blob.size === 0) {
+        setTestResult({ ok: false, message: 'Rien n’a été enregistré. Vérifiez le microphone.' });
+
+        return;
+      }
+
+      const body = new FormData();
+      body.append('file', new File([blob], `test.${blob.type.includes('ogg') ? 'ogg' : 'webm'}`, { type: blob.type }));
+      body.append('language', dictation.language);
+      body.append('provider', transcription.provider);
+      body.append('model', transcription.model);
+
+      const response = await fetch('/api/transcribe', { method: 'POST', body });
+      const payload = (await response.json().catch(() => null)) as { text?: string; message?: string } | null;
+
+      if (!response.ok) {
+        setTestResult({
+          ok: false,
+          message: `${payload?.message ?? `Erreur ${response.status}`} (${provider.label} / ${transcription.model})`,
+        });
+
+        return;
+      }
+
+      setTestResult({
+        ok: true,
+        message: `Test réussi avec ${provider.label} / ${transcription.model} : « ${payload?.text ?? ''} »`,
+      });
+    } catch (error) {
+      console.error('Transcription test failed:', error);
+      setTestResult({ ok: false, message: 'Le test a échoué : requête impossible.' });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const updateDictation = (patch: Partial<DictationSettings>) => {
     const next = parseDictationSettings({ ...dictation, ...patch });
 
     setDictation(next);
-    writeStoredDictationSettings(next);
+    writeStoredVoiceSettings(next, transcription);
 
     // The composer hook reads this key on mount and on language change: tell it right away.
     window.dispatchEvent(new CustomEvent('bolt:dictation-settings', { detail: next }));
@@ -229,6 +400,174 @@ export default function VoiceTab() {
               l’audio au service du navigateur ; la transcription serveur l’envoie à Whisper.
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* ---------- Transcription service (server engine) ---------- */}
+      <Card className="bg-bolt-elements-background-depth-2" data-testid="voice-transcription-card">
+        <CardContent className="!p-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="i-ph:cloud-arrow-up-fill h-4 w-4 text-purple-500" />
+            <h2 className="text-sm font-medium text-bolt-elements-textPrimary">Transcription serveur (OpenAI, Groq)</h2>
+          </div>
+
+          <p className="text-xs text-bolt-elements-textSecondary">
+            Utilisée quand le navigateur n’a pas de reconnaissance vocale (Firefox, Safari, Brave). La clé saisie ici
+            est celle du fournisseur de modèles : elle est enregistrée dans ce navigateur, et jamais renvoyée par le
+            serveur.
+          </p>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="stt-provider" className="mb-2 block text-sm text-bolt-elements-textSecondary">
+                Service de transcription
+              </label>
+              <select
+                id="stt-provider"
+                value={transcription.provider}
+                onChange={(event) =>
+                  updateTranscription({
+                    provider: event.target.value === 'groq' ? 'groq' : 'openai',
+                    model: dictationProvider(event.target.value).defaultModel,
+                  })
+                }
+                className={selectClass}
+              >
+                {DICTATION_PROVIDERS.map((provider) => (
+                  <option key={provider.name} value={provider.name}>
+                    {provider.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="stt-model" className="mb-2 block text-sm text-bolt-elements-textSecondary">
+                Modèle
+              </label>
+              <select
+                id="stt-model"
+                value={transcription.model}
+                onChange={(event) => updateTranscription({ model: event.target.value })}
+                className={selectClass}
+              >
+                {dictationProvider(transcription.provider).models.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-bolt-elements-textSecondary">
+                {dictationProvider(transcription.provider).models.find((model) => model.id === transcription.model)
+                  ?.note ?? ''}
+              </p>
+            </div>
+          </div>
+
+          {/* ---- keys: one per service, same cookie as the provider settings ---- */}
+          <div className="space-y-3">
+            {DICTATION_PROVIDERS.map((provider) => {
+              const storedKey = apiKeys[provider.apiKeyId];
+              const state = describeKeyState(storedKey, false);
+              const visible = keyVisible[provider.apiKeyId] ?? false;
+              const draft = keyDrafts[provider.apiKeyId] ?? '';
+
+              return (
+                <div
+                  key={provider.name}
+                  className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-3"
+                >
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-bolt-elements-textPrimary">
+                      Clé {provider.label}
+                      <span className="ml-2 text-xs font-normal text-bolt-elements-textSecondary">
+                        {state === 'account' ? 'enregistrée dans ce navigateur' : 'non renseignée'}
+                      </span>
+                    </span>
+                    <a
+                      href={provider.keyUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-bolt-elements-textSecondary underline hover:text-bolt-elements-textPrimary"
+                    >
+                      obtenir une clé
+                    </a>
+                  </div>
+
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <div className="relative flex-1">
+                      <input
+                        id={`stt-key-${provider.name}`}
+                        type={visible ? 'text' : 'password'}
+                        value={draft}
+                        onChange={(event) =>
+                          setKeyDrafts((previous) => ({ ...previous, [provider.apiKeyId]: event.target.value }))
+                        }
+                        placeholder={
+                          storedKey ? 'Clé enregistrée, saisissez-en une nouvelle pour la remplacer' : 'sk-…'
+                        }
+                        autoComplete="off"
+                        spellCheck={false}
+                        aria-label={`Clé API ${provider.label}`}
+                        className={classNames(inputClass, 'pr-12')}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setKeyVisible((previous) => ({ ...previous, [provider.apiKeyId]: !visible }))}
+                        aria-label={visible ? `Masquer la clé ${provider.label}` : `Afficher la clé ${provider.label}`}
+                        aria-pressed={visible}
+                        title={visible ? 'Masquer' : 'Afficher'}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-item-backgroundActive hover:text-bolt-elements-textPrimary focus:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-focus"
+                      >
+                        {visible ? <div className="i-ph:eye-slash" /> : <div className="i-ph:eye" />}
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => saveKey(provider.apiKeyId)}
+                      className="min-h-[44px] rounded-lg bg-bolt-elements-button-primary-background px-3 py-2 text-sm font-medium text-bolt-elements-button-primary-text hover:bg-bolt-elements-button-primary-backgroundHover focus:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-focus"
+                    >
+                      Enregistrer
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={testTranscription}
+              disabled={testing}
+              className={classNames(
+                'inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-bolt-elements-borderColor px-3 py-2 text-sm text-bolt-elements-textPrimary',
+                'hover:bg-bolt-elements-item-backgroundActive focus:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-focus',
+                'disabled:cursor-not-allowed disabled:opacity-50',
+              )}
+            >
+              <div className={testing ? 'i-ph:circle-notch-bold animate-spin' : 'i-ph:waveform'} />
+              {testing ? 'Enregistrement (3 s), parlez…' : 'Tester la transcription'}
+            </button>
+            <span className="text-xs text-bolt-elements-textSecondary">
+              Enregistre 3 secondes puis transcrit pour de vrai avec le service et le modèle choisis.
+            </span>
+          </div>
+
+          {testResult ? (
+            <p
+              role="status"
+              aria-live="polite"
+              className={classNames(
+                'rounded-lg border px-3 py-2 text-xs',
+                testResult.ok
+                  ? 'border-green-500/40 bg-green-500/5 text-bolt-elements-textPrimary'
+                  : 'border-red-500/40 bg-red-500/5 text-bolt-elements-textPrimary',
+              )}
+            >
+              {testResult.message}
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 

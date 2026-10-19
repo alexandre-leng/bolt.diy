@@ -16,6 +16,7 @@ import {
   pickRecordingMimeType,
   recordingExtension,
 } from '~/lib/dictation';
+import { readTranscriptionSettings } from '~/lib/dictation-config';
 
 /*
  * Dictation for the composer, with two engines and one contract.
@@ -71,6 +72,24 @@ export function readStoredDictationSettings(): DictationSettings {
     return parseDictationSettings(stored);
   } catch {
     return { ...DEFAULT_DICTATION_SETTINGS };
+  }
+}
+
+/**
+ * Preferred transcription service and model, from the same stored object as the preferences.
+ *
+ * They are read at call time rather than captured in state: the settings panel may change them
+ * while a composer is mounted, and a dictation always uses the current choice.
+ */
+export function readTranscriptionChoice(): { provider: 'openai' | 'groq'; model: string } {
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+    return { provider: 'openai', model: 'gpt-4o-mini-transcribe' };
+  }
+
+  try {
+    return readTranscriptionSettings(localStorage.getItem(DICTATION_STORAGE_KEY));
+  } catch {
+    return { provider: 'openai', model: 'gpt-4o-mini-transcribe' };
   }
 }
 
@@ -340,8 +359,17 @@ export function useSpeechRecognition({ input, onTranscript }: UseSpeechRecogniti
       const mimeType = blob.type || 'audio/webm';
       const body = new FormData();
 
+      const choice = readTranscriptionChoice();
+
       body.append('file', new File([blob], `dictation.${recordingExtension(mimeType)}`, { type: mimeType }));
       body.append('language', settingsRef.current.language);
+
+      /*
+       * The service and the model the user picked in the Voice settings tab. Read here, not from
+       * a captured state, so a change made in another tab applies to the next dictation.
+       */
+      body.append('provider', choice.provider);
+      body.append('model', choice.model);
 
       const response = await fetch('/api/transcribe', { method: 'POST', body });
 

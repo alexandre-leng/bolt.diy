@@ -70,7 +70,9 @@ describe('POST /api/transcribe', () => {
     expect(body.text).toBe('Bonjour le monde');
 
     expect(seen[0].url).toContain('api.openai.com');
-    expect(seen[0].model).toBe('whisper-1');
+
+    // Default model when the client sends none: the cheapest one that answered a real request.
+    expect(seen[0].model).toBe('gpt-4o-mini-transcribe');
 
     // Base language only: Whisper rejects `fr-FR`.
     expect(seen[0].language).toBe('fr');
@@ -161,6 +163,58 @@ describe('POST /api/transcribe', () => {
 
     expect(response.status).toBe(413);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('uses the provider and the model chosen in the settings panel', async () => {
+    const seen: { url: string; model: string }[] = [];
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit) => {
+        seen.push({ url: String(url), model: String((init.body as FormData).get('model')) });
+
+        return Response.json({ text: 'ok' });
+      }),
+    );
+
+    const form = makeForm();
+    form.append('provider', 'groq');
+    form.append('model', 'whisper-large-v3');
+
+    const response = await invoke(makeRequest(form), {
+      OPENAI_API_KEY: openaiKey,
+      GROQ_API_KEY: groqKey,
+    });
+
+    expect(response.status).toBe(200);
+
+    // The preferred provider is tried first, with ITS model, even though OpenAI is also configured.
+    expect(seen[0].url).toContain('api.groq.com');
+    expect(seen[0].model).toBe('whisper-large-v3');
+  });
+
+  it('refuses a model the provider does not serve, falling back to its default', async () => {
+    const seen: string[] = [];
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit) => {
+        seen.push(String((init.body as FormData).get('model')));
+
+        return Response.json({ text: 'ok' });
+      }),
+    );
+
+    const form = makeForm();
+    form.append('provider', 'openai');
+
+    // Groq's model sent to OpenAI: never forwarded as-is.
+    form.append('model', 'whisper-large-v3-turbo');
+
+    const response = await invoke(makeRequest(form), { OPENAI_API_KEY: openaiKey });
+
+    expect(response.status).toBe(200);
+    expect(seen[0]).toBe('gpt-4o-mini-transcribe');
   });
 
   it('accepts an unlabelled recording: the container is what matters', async () => {

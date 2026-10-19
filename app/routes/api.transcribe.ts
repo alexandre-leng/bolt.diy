@@ -10,9 +10,10 @@ import { createScopedLogger } from '~/utils/logger';
  * Dictation for browsers without the Web Speech API.
  *
  * The composer records with MediaRecorder and posts the clip here; this route forwards it to
- * a transcription service and answers `{ text }`. Two providers, tried in order:
- *   1. OpenAI (`/v1/audio/transcriptions`, `whisper-1`) when OPENAI_API_KEY is set,
- *   2. Groq (`/openai/v1/audio/transcriptions`, `whisper-large-v3-turbo`) when GROQ_API_KEY is set.
+ * a transcription service and answers `{ text }`. The service and the model come from the
+ * Voice settings panel (`provider` and `model` form fields), both checked against
+ * ALLOWED_MODELS; the other configured provider is kept as a fallback when the chosen one
+ * refuses the key.
  * Both need a file with a NAME and a supported container, both bill (or quota) per minute,
  * so the clip is bounded before a single byte leaves the server.
  *
@@ -45,21 +46,59 @@ interface TranscriptionProvider {
   field: string;
 }
 
+/*
+ * Models this route will call, and nothing else.
+ *
+ * The model is a client-supplied string, so it is checked against a list rather than trusted: an
+ * arbitrary value would be a free-text field in a billable API call. Every entry answered a real
+ * request on 2026-10-19; the settings panel offers exactly these (see `~/lib/dictation-config`).
+ */
+const ALLOWED_MODELS: Record<TranscriptionProvider['name'], string[]> = {
+  openai: ['gpt-4o-mini-transcribe', 'gpt-4o-transcribe', 'whisper-1'],
+  groq: ['whisper-large-v3-turbo', 'whisper-large-v3'],
+};
+
+const DEFAULT_MODELS: Record<TranscriptionProvider['name'], string> = {
+  openai: 'gpt-4o-mini-transcribe',
+  groq: 'whisper-large-v3-turbo',
+};
+
+/**
+ * The model to ask for: the client's choice when it is one we support for that provider,
+ * otherwise the provider's default. Never an arbitrary string.
+ */
+function resolveModel(provider: TranscriptionProvider['name'], requested: unknown): string {
+  return typeof requested === 'string' && ALLOWED_MODELS[provider].includes(requested)
+    ? requested
+    : DEFAULT_MODELS[provider];
+}
+
 function normalizeMimeType(type: string): string {
   return type.split(';')[0].trim().toLowerCase();
 }
 
-/** Providers available for this deployment, in priority order. */
-function availableProviders(env: Record<string, unknown>, cookieKeys: Record<string, string>): TranscriptionProvider[] {
-  const providers: TranscriptionProvider[] = [];
+/**
+ * Providers available for this deployment, preferred one first.
+ *
+ * `preferred` comes from the settings panel. The other provider is kept as a fallback so a key
+ * that expired (401) still produces a transcript through the service that works, rather than an
+ * error the user cannot act on.
+ */
+function availableProviders(
+  env: Record<string, unknown>,
+  cookieKeys: Record<string, string>,
+  requestedModel: unknown,
+  preferred: 'openai' | 'groq',
+): TranscriptionProvider[] {
+  const catalogue: TranscriptionProvider[] = [];
 
   const openaiKey = cookieKeys.OpenAI || env.OPENAI_API_KEY;
 
   if (typeof openaiKey === 'string' && openaiKey.trim()) {
-    providers.push({
+    catalogue.push({
       name: 'openai',
       endpoint: 'https://api.openai.com/v1/audio/transcriptions',
-      model: 'whisper-1',
+      model: resolveModel('openai', requestedModel),
       field: 'OPENAI_API_KEY',
     });
   }
@@ -67,15 +106,18 @@ function availableProviders(env: Record<string, unknown>, cookieKeys: Record<str
   const groqKey = cookieKeys.Groq || env.GROQ_API_KEY;
 
   if (typeof groqKey === 'string' && groqKey.trim()) {
-    providers.push({
+    catalogue.push({
       name: 'groq',
       endpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
-      model: 'whisper-large-v3-turbo',
+      model: resolveModel('groq', requestedModel),
       field: 'GROQ_API_KEY',
     });
   }
 
-  return providers;
+  return [
+    ...catalogue.filter((provider) => provider.name === preferred),
+    ...catalogue.filter((provider) => provider.name !== preferred),
+  ];
 }
 
 function keyFor(provider: TranscriptionProvider, env: Record<string, unknown>, cookieKeys: Record<string, string>) {
@@ -131,6 +173,9 @@ async function transcribeAction({ context, request }: ActionFunctionArgs) {
 
   const file = form.get('file');
   const languageRaw = form.get('language');
+  const modelRaw = form.get('model');
+  const providerRaw = form.get('provider');
+  const preferred: 'openai' | 'groq' = providerRaw === 'groq' ? 'groq' : 'openai';
 
   if (!(file instanceof File) || file.size === 0) {
     return toApiErrorResponse(
@@ -160,7 +205,7 @@ async function transcribeAction({ context, request }: ActionFunctionArgs) {
     );
   }
 
-  const providers = availableProviders(env, cookieKeys);
+  const providers = availableProviders(env, cookieKeys, modelRaw, preferred);
 
   if (providers.length === 0) {
     logger.warn('Dictation requested but no transcription key is configured');

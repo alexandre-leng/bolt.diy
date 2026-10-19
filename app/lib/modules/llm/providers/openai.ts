@@ -1,6 +1,7 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import type { LanguageModel } from 'ai';
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
+import { OPENAI_CATALOG } from '~/lib/modules/llm/catalogs/openai.catalog';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 
@@ -20,80 +21,20 @@ export default class OpenAIProvider extends BaseProvider {
     apiTokenKey: 'OPENAI_API_KEY',
   };
 
-  staticModels: ModelInfo[] = [
-    {
-      name: 'gpt-5.5',
-      label: 'GPT-5.5',
+  /*
+   * Built from the generated models.dev catalog (catalogs/openai.catalog.ts), not hand-written:
+   * the previous list carried stale limits and missed models. Regenerate with
+   * `node scripts/generate-model-catalog.mjs --all`.
+   */
+  staticModels: ModelInfo[] = OPENAI_CATALOG
+    .filter((entry) => entry.tools && entry.status !== 'deprecated')
+    .map((entry) => ({
+      name: entry.id,
+      label: entry.label,
       provider: 'OpenAI',
-      maxTokenAllowed: 1000000,
-      maxCompletionTokens: 128000,
-    },
-    {
-      name: 'gpt-5.5-pro',
-      label: 'GPT-5.5 Pro',
-      provider: 'OpenAI',
-      maxTokenAllowed: 1000000,
-      maxCompletionTokens: 128000,
-    },
-    {
-      name: 'gpt-5.4',
-      label: 'GPT-5.4',
-      provider: 'OpenAI',
-      maxTokenAllowed: 1000000,
-      maxCompletionTokens: 128000,
-    },
-    {
-      name: 'gpt-5.4-pro',
-      label: 'GPT-5.4 Pro',
-      provider: 'OpenAI',
-      maxTokenAllowed: 1000000,
-      maxCompletionTokens: 128000,
-    },
-    {
-      name: 'gpt-5.4-mini',
-      label: 'GPT-5.4 Mini',
-      provider: 'OpenAI',
-      maxTokenAllowed: 400000,
-      maxCompletionTokens: 128000,
-    },
-    {
-      name: 'gpt-5.4-nano',
-      label: 'GPT-5.4 Nano',
-      provider: 'OpenAI',
-      maxTokenAllowed: 400000,
-      maxCompletionTokens: 128000,
-    },
-    {
-      name: 'gpt-5.3-codex',
-      label: 'GPT-5.3 Codex',
-      provider: 'OpenAI',
-      maxTokenAllowed: 400000,
-      maxCompletionTokens: 128000,
-    },
-    { name: 'gpt-4o', label: 'GPT-4o', provider: 'OpenAI', maxTokenAllowed: 128000, maxCompletionTokens: 4096 },
-    {
-      name: 'gpt-4o-mini',
-      label: 'GPT-4o Mini',
-      provider: 'OpenAI',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 4096,
-    },
-    {
-      name: 'gpt-3.5-turbo',
-      label: 'GPT-3.5 Turbo',
-      provider: 'OpenAI',
-      maxTokenAllowed: 16000,
-      maxCompletionTokens: 4096,
-    },
-    {
-      name: 'o1-preview',
-      label: 'o1-preview',
-      provider: 'OpenAI',
-      maxTokenAllowed: 128000,
-      maxCompletionTokens: 32000,
-    },
-    { name: 'o1-mini', label: 'o1-mini', provider: 'OpenAI', maxTokenAllowed: 128000, maxCompletionTokens: 65000 },
-  ];
+      maxTokenAllowed: entry.context,
+      maxCompletionTokens: entry.maxOutput,
+    }));
 
   async getDynamicModels(
     apiKeys?: Record<string, string>,

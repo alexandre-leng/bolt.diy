@@ -1,6 +1,7 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import type { LanguageModel } from 'ai';
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
+import { XAI_CATALOG } from '~/lib/modules/llm/catalogs/xai.catalog';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 
@@ -12,33 +13,20 @@ export default class XAIProvider extends BaseProvider {
     apiTokenKey: 'XAI_API_KEY',
   };
 
-  staticModels: ModelInfo[] = [
-    {
-      name: 'grok-4.3',
-      label: 'xAI Grok 4.3',
+  /*
+   * Built from the generated models.dev catalog (catalogs/xai.catalog.ts), not hand-written:
+   * the previous list carried stale limits and missed models. Regenerate with
+   * `node scripts/generate-model-catalog.mjs --all`.
+   */
+  staticModels: ModelInfo[] = XAI_CATALOG
+    .filter((entry) => entry.tools && entry.status !== 'deprecated')
+    .map((entry) => ({
+      name: entry.id,
+      label: entry.label,
       provider: 'xAI',
-      maxTokenAllowed: 256000,
-      maxCompletionTokens: 65536,
-    },
-    {
-      name: 'grok-build-0.1',
-      label: 'xAI Grok Build 0.1',
-      provider: 'xAI',
-      maxTokenAllowed: 256000,
-      maxCompletionTokens: 65536,
-    },
-    {
-      name: 'grok-code-fast-1',
-      label: 'xAI Grok Code Fast 1',
-      provider: 'xAI',
-      maxTokenAllowed: 131000,
-      maxCompletionTokens: 32768,
-    },
-    { name: 'grok-4', label: 'xAI Grok 4', provider: 'xAI', maxTokenAllowed: 256000 },
-    { name: 'grok-4-07-09', label: 'xAI Grok 4 (07-09)', provider: 'xAI', maxTokenAllowed: 256000 },
-    { name: 'grok-3-mini', label: 'xAI Grok 3 Mini', provider: 'xAI', maxTokenAllowed: 131000 },
-    { name: 'grok-3-mini-fast', label: 'xAI Grok 3 Mini Fast', provider: 'xAI', maxTokenAllowed: 131000 },
-  ];
+      maxTokenAllowed: entry.context,
+      maxCompletionTokens: entry.maxOutput,
+    }));
 
   getModelInstance(options: {
     model: string;

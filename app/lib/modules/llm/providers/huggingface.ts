@@ -1,6 +1,7 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import type { LanguageModel } from 'ai';
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
+import { HUGGINGFACE_CATALOG } from '~/lib/modules/llm/catalogs/huggingface.catalog';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 
@@ -12,74 +13,20 @@ export default class HuggingFaceProvider extends BaseProvider {
     apiTokenKey: 'HuggingFace_API_KEY',
   };
 
-  staticModels: ModelInfo[] = [
-    {
-      name: 'Qwen/Qwen2.5-Coder-32B-Instruct',
-      label: 'Qwen2.5-Coder-32B-Instruct (HuggingFace)',
+  /*
+   * Built from the generated models.dev catalog (catalogs/huggingface.catalog.ts), not hand-written:
+   * the previous list carried stale limits and missed models. Regenerate with
+   * `node scripts/generate-model-catalog.mjs --all`.
+   */
+  staticModels: ModelInfo[] = HUGGINGFACE_CATALOG
+    .filter((entry) => entry.tools && entry.status !== 'deprecated')
+    .map((entry) => ({
+      name: entry.id,
+      label: entry.label,
       provider: 'HuggingFace',
-      maxTokenAllowed: 8000,
-    },
-    {
-      name: '01-ai/Yi-1.5-34B-Chat',
-      label: 'Yi-1.5-34B-Chat (HuggingFace)',
-      provider: 'HuggingFace',
-      maxTokenAllowed: 8000,
-    },
-    {
-      name: 'codellama/CodeLlama-34b-Instruct-hf',
-      label: 'CodeLlama-34b-Instruct (HuggingFace)',
-      provider: 'HuggingFace',
-      maxTokenAllowed: 8000,
-    },
-    {
-      name: 'NousResearch/Hermes-3-Llama-3.1-8B',
-      label: 'Hermes-3-Llama-3.1-8B (HuggingFace)',
-      provider: 'HuggingFace',
-      maxTokenAllowed: 8000,
-    },
-    {
-      name: 'Qwen/Qwen2.5-Coder-32B-Instruct',
-      label: 'Qwen2.5-Coder-32B-Instruct (HuggingFace)',
-      provider: 'HuggingFace',
-      maxTokenAllowed: 8000,
-    },
-    {
-      name: 'Qwen/Qwen2.5-72B-Instruct',
-      label: 'Qwen2.5-72B-Instruct (HuggingFace)',
-      provider: 'HuggingFace',
-      maxTokenAllowed: 8000,
-    },
-    {
-      name: 'meta-llama/Llama-3.1-70B-Instruct',
-      label: 'Llama-3.1-70B-Instruct (HuggingFace)',
-      provider: 'HuggingFace',
-      maxTokenAllowed: 8000,
-    },
-    {
-      name: 'meta-llama/Llama-3.1-405B',
-      label: 'Llama-3.1-405B (HuggingFace)',
-      provider: 'HuggingFace',
-      maxTokenAllowed: 8000,
-    },
-    {
-      name: '01-ai/Yi-1.5-34B-Chat',
-      label: 'Yi-1.5-34B-Chat (HuggingFace)',
-      provider: 'HuggingFace',
-      maxTokenAllowed: 8000,
-    },
-    {
-      name: 'codellama/CodeLlama-34b-Instruct-hf',
-      label: 'CodeLlama-34b-Instruct (HuggingFace)',
-      provider: 'HuggingFace',
-      maxTokenAllowed: 8000,
-    },
-    {
-      name: 'NousResearch/Hermes-3-Llama-3.1-8B',
-      label: 'Hermes-3-Llama-3.1-8B (HuggingFace)',
-      provider: 'HuggingFace',
-      maxTokenAllowed: 8000,
-    },
-  ];
+      maxTokenAllowed: entry.context,
+      maxCompletionTokens: entry.maxOutput,
+    }));
 
   getModelInstance(options: {
     model: string;

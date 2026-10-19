@@ -1,6 +1,7 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import type { LanguageModel } from 'ai';
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
+import { ANTHROPIC_CATALOG } from '~/lib/modules/llm/catalogs/anthropic.catalog';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 
@@ -12,57 +13,20 @@ export default class AnthropicProvider extends BaseProvider {
     apiTokenKey: 'ANTHROPIC_API_KEY',
   };
 
-  staticModels: ModelInfo[] = [
-    {
-      name: 'claude-fable-5',
-      label: 'Claude Fable 5',
+  /*
+   * Built from the generated models.dev catalog (catalogs/anthropic.catalog.ts), not hand-written:
+   * the previous list carried stale limits and missed models. Regenerate with
+   * `node scripts/generate-model-catalog.mjs --all`.
+   */
+  staticModels: ModelInfo[] = ANTHROPIC_CATALOG
+    .filter((entry) => entry.tools && entry.status !== 'deprecated')
+    .map((entry) => ({
+      name: entry.id,
+      label: entry.label,
       provider: 'Anthropic',
-      maxTokenAllowed: 1000000,
-      maxCompletionTokens: 128000,
-    },
-    {
-      name: 'claude-opus-4-8',
-      label: 'Claude Opus 4.8',
-      provider: 'Anthropic',
-      maxTokenAllowed: 1000000,
-      maxCompletionTokens: 128000,
-    },
-    {
-      name: 'claude-sonnet-4-6',
-      label: 'Claude Sonnet 4.6',
-      provider: 'Anthropic',
-      maxTokenAllowed: 1000000,
-      maxCompletionTokens: 128000,
-    },
-    {
-      name: 'claude-haiku-4-5-20251001',
-      label: 'Claude Haiku 4.5',
-      provider: 'Anthropic',
-      maxTokenAllowed: 200000,
-      maxCompletionTokens: 64000,
-    },
-    {
-      name: 'claude-3-5-sonnet-20241022',
-      label: 'Claude 3.5 Sonnet',
-      provider: 'Anthropic',
-      maxTokenAllowed: 200000,
-      maxCompletionTokens: 128000,
-    },
-    {
-      name: 'claude-3-haiku-20240307',
-      label: 'Claude 3 Haiku',
-      provider: 'Anthropic',
-      maxTokenAllowed: 200000,
-      maxCompletionTokens: 128000,
-    },
-    {
-      name: 'claude-opus-4-20250514',
-      label: 'Claude 4 Opus',
-      provider: 'Anthropic',
-      maxTokenAllowed: 200000,
-      maxCompletionTokens: 32000,
-    },
-  ];
+      maxTokenAllowed: entry.context,
+      maxCompletionTokens: entry.maxOutput,
+    }));
 
   async getDynamicModels(
     apiKeys?: Record<string, string>,

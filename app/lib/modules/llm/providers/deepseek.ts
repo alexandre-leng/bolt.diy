@@ -1,6 +1,7 @@
 import { createDeepSeek } from '@ai-sdk/deepseek';
 import type { LanguageModel } from 'ai';
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
+import { DEEPSEEK_CATALOG } from '~/lib/modules/llm/catalogs/deepseek.catalog';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 
@@ -12,57 +13,20 @@ export default class DeepseekProvider extends BaseProvider {
     apiTokenKey: 'DEEPSEEK_API_KEY',
   };
 
-  staticModels: ModelInfo[] = [
-    {
-      name: 'deepseek-v4-pro',
-      label: 'DeepSeek V4 Pro',
+  /*
+   * Built from the generated models.dev catalog (catalogs/deepseek.catalog.ts), not hand-written:
+   * the previous list carried stale limits and missed models. Regenerate with
+   * `node scripts/generate-model-catalog.mjs --all`.
+   */
+  staticModels: ModelInfo[] = DEEPSEEK_CATALOG
+    .filter((entry) => entry.tools && entry.status !== 'deprecated')
+    .map((entry) => ({
+      name: entry.id,
+      label: entry.label,
       provider: 'Deepseek',
-      maxTokenAllowed: 1000000,
-      maxCompletionTokens: 384000,
-    },
-    {
-      name: 'deepseek-v4-flash',
-      label: 'DeepSeek V4 Flash',
-      provider: 'Deepseek',
-      maxTokenAllowed: 1000000,
-      maxCompletionTokens: 384000,
-    },
-    {
-      name: 'deepseek-coder',
-      label: 'Deepseek-Coder',
-      provider: 'Deepseek',
-      maxTokenAllowed: 8000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'deepseek-chat',
-      label: 'Deepseek-Chat',
-      provider: 'Deepseek',
-      maxTokenAllowed: 8000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'deepseek-reasoner',
-      label: 'Deepseek-Reasoner',
-      provider: 'Deepseek',
-      maxTokenAllowed: 8000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'deepseek-v3.2',
-      label: 'DeepSeek V3.2 (Coding + Tool Use)',
-      provider: 'Deepseek',
-      maxTokenAllowed: 64000,
-      maxCompletionTokens: 8192,
-    },
-    {
-      name: 'deepseek-v3.2-speciale',
-      label: 'DeepSeek V3.2 Speciale (High-Compute)',
-      provider: 'Deepseek',
-      maxTokenAllowed: 64000,
-      maxCompletionTokens: 8192,
-    },
-  ];
+      maxTokenAllowed: entry.context,
+      maxCompletionTokens: entry.maxOutput,
+    }));
 
   async getDynamicModels(
     apiKeys?: Record<string, string>,

@@ -142,6 +142,7 @@ export default function VoiceTab() {
 
   const [keyDrafts, setKeyDrafts] = useState<Record<string, string>>({});
   const [keyVisible, setKeyVisible] = useState<Record<string, boolean>>({});
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const { voices, synthesisSupported } = useSpeechVoices();
@@ -290,8 +291,14 @@ export default function VoiceTab() {
         utterance.voice = voice;
       }
 
-      utterance.onerror = () => toast.error('La synthèse vocale a échoué pour cette voix.');
+      utterance.onerror = () => {
+        setIsSpeaking(false);
+        toast.error('La synthèse vocale a échoué pour cette voix.');
+      };
 
+      utterance.onend = () => setIsSpeaking(false);
+
+      setIsSpeaking(true);
       window.speechSynthesis.speak(utterance);
     } catch (error) {
       console.error('Speech synthesis failed:', error);
@@ -588,7 +595,9 @@ export default function VoiceTab() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="tts-voice" className="mb-2 block text-sm text-bolt-elements-textSecondary">
-                Voix ({voices.length} disponible{voices.length === 1 ? '' : 's'})
+                {voices.length === 0
+                  ? 'Voix (aucune détectée pour l’instant)'
+                  : `Voix (${voices.length} disponible${voices.length === 1 ? '' : 's'})`}
               </label>
               <select
                 id="tts-voice"
@@ -648,7 +657,7 @@ export default function VoiceTab() {
             <button
               type="button"
               onClick={speak}
-              disabled={!synthesisSupported}
+              disabled={!synthesisSupported || voices.length === 0}
               className={classNames(
                 'inline-flex min-h-[44px] items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium',
                 'bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text',
@@ -662,9 +671,12 @@ export default function VoiceTab() {
             </button>
             <button
               type="button"
-              onClick={() => window.speechSynthesis.cancel()}
-              disabled={!synthesisSupported}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-bolt-elements-borderColor px-3 py-2 text-sm text-bolt-elements-textPrimary hover:bg-bolt-elements-item-backgroundActive disabled:opacity-50"
+              onClick={() => {
+                window.speechSynthesis.cancel();
+                setIsSpeaking(false);
+              }}
+              disabled={!synthesisSupported || !isSpeaking}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-bolt-elements-borderColor px-3 py-2 text-sm text-bolt-elements-textPrimary hover:bg-bolt-elements-item-backgroundActive disabled:cursor-not-allowed disabled:opacity-40"
             >
               <div className="i-ph:stop-fill" />
               Arrêter

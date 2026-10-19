@@ -268,6 +268,12 @@ export class BoltShell {
          */
         await this.stop(state.sessionId);
       } else {
+        /*
+         * Consume the previous prompt before interrupting. Otherwise its buffered
+         * marker is mistaken for the interrupt acknowledgement, and the ensuing
+         * exit=130 is attributed to the new server while it is still running.
+         */
+        await this.waitTillOscCode('prompt');
         this.terminal!.input('\x03');
       }
 

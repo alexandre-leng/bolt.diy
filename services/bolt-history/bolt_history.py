@@ -23,6 +23,7 @@ Routes
 
 import json
 import os
+import pathlib
 import re
 import subprocess
 import sys
@@ -31,6 +32,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("BOLT_HISTORY_PORT", "8200"))
+
+# SQL files applied at startup, in name order, by init_schema(). Kept as files rather than
+# inlined so a schema change is reviewable on its own and re-runnable.
+MIGRATIONS_DIR = pathlib.Path(os.environ.get("BOLT_HISTORY_MIGRATIONS", "/opt/bolt/history/migrations"))
 
 PG_HOST = os.environ.get("BOLT_HISTORY_PG_HOST", "127.0.0.1")
 PG_PORT = os.environ.get("BOLT_HISTORY_PG_PORT", "5432")
@@ -244,8 +249,16 @@ def _run_sql(sql, params=None, fetch=True):
 
 
 def init_schema():
-    """Create the table and index on first use. Safe to call repeatedly."""
+    """Create the tables and indexes on first use, then bring older rows up to date.
+
+    Safe to call repeatedly: both steps are idempotent. The second one matters because a
+    schema added by CREATE TABLE IF NOT EXISTS never reaches a database that already has an
+    older shape — the projects key change is exactly that case.
+    """
     _run_sql(SCHEMA, fetch=False)
+
+    for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
+        _run_sql(migration.read_text(), fetch=False)
 
 
 def json_bytes(payload, status=200):
@@ -263,7 +276,15 @@ def _log_database_error(context, exc):
 
 
 def validate_chat(payload):
-    """Return (chat, error). A chat must at least carry an id, a timestamp and messages."""
+    """Return (chat, error). A chat must at least carry an id, a timestamp and messages.
+
+    PATCH semantics, made explicit: a field that is ABSENT from the body keeps whatever is
+    stored, while an explicit `""` clears it. The two used to be indistinguishable — both
+    arrived at the upsert as an empty value — so "clear the title" and "this save never
+    carried a title" took the same path and the stored title was lost either way. The
+    presence of the key is what separates them, so it must be recorded HERE, before the
+    value reaches psql where the distinction no longer exists.
+    """
     if not isinstance(payload, dict):
         return None, "body must be a JSON object"
 
@@ -319,6 +340,8 @@ def sql_escaped(expression):
     """SQL expression that escapes a text column the same way escape_field() does."""
 
     return SQL_ESCAPE.format(expr=expression)
+
+
 
 
 CHAT_LIST_SQL = (
@@ -695,26 +718,28 @@ class Handler(BaseHTTPRequestHandler):
                 INSERT INTO chats (id, url_id, description, timestamp, metadata, messages, user_id)
                 VALUES (
                     :'chat_id',
-                    :'url_id',
-                    :'description',
+                    -- nullif() turns the empty binding back into a real SQL NULL for the
+                    -- INSERT itself (the column is nullable and stores NULL for "no title").
+                    -- The UPDATE branch below does NOT rely on this: it branches on whether
+                    -- the key was present, because '' here means both "omitted" and "cleared".
+                    nullif(:'url_id',''),
+                    nullif(:'description',''),
                     :'timestamp',
                     nullif(:'metadata','')::jsonb,
                     :'messages'::jsonb,
                     nullif(:'owner','')::uuid
                 )
                 ON CONFLICT (id) DO UPDATE SET
-                    url_id      = coalesce(nullif(EXCLUDED.url_id, ''), chats.url_id),
-                    -- HONEST LIMITATION: an omitted field and an explicit empty string are
-                    -- INDISTINGUISHABLE here. `chat.get("description")` is None for an omitted
-                    -- key, and _run_sql binds a None as the psql variable '' — the exact same
-                    -- literal an explicit "" binds. So the database cannot tell "the client
-                    -- cleared this title" from "this partial save never carried one", and
-                    -- coalesce() picks PRESERVE: a stale title is strictly less destructive than
-                    -- erasing a real one on every partial save. Same treatment as url_id above.
-                    -- (metadata avoids this only for an explicit JSON null, which binds to NULL.)
-                    description = coalesce(nullif(EXCLUDED.description, ''), chats.description),
+                    url_id      = CASE WHEN :'has_url_id'::boolean
+                                       THEN nullif(:'url_id','')
+                                       ELSE chats.url_id END,
+                    description = CASE WHEN :'has_description'::boolean
+                                       THEN nullif(:'description','')
+                                       ELSE chats.description END,
                     timestamp   = EXCLUDED.timestamp,
-                    metadata    = coalesce(EXCLUDED.metadata, chats.metadata),
+                    metadata    = CASE WHEN :'has_metadata'::boolean
+                                       THEN nullif(:'metadata','')::jsonb
+                                       ELSE chats.metadata END,
                     messages    = EXCLUDED.messages,
                     user_id     = coalesce(EXCLUDED.user_id, chats.user_id),
                     updated_at  = now()
@@ -726,6 +751,12 @@ class Handler(BaseHTTPRequestHandler):
                 """,
                 {
                     "chat_id": chat["id"],
+                    # Whether the key was in the body at all — the fact that decides between
+                    # "keep the stored value" and "this write sets it". Value alone cannot: an
+                    # omitted key and an explicit "" both reach psql as the same empty binding.
+                    "has_url_id": "true" if "urlId" in chat else "false",
+                    "has_description": "true" if "description" in chat else "false",
+                    "has_metadata": "true" if "metadata" in chat else "false",
                     "url_id": chat.get("urlId"),
                     "description": chat.get("description"),
                     "timestamp": chat["timestamp"],
@@ -789,14 +820,15 @@ class Handler(BaseHTTPRequestHandler):
                 """
                 INSERT INTO projects (slug, name, url, chat_id, user_id)
                 VALUES (:'slug', :'name', :'url', nullif(:'chat_id',''), :'owner'::uuid)
-                ON CONFLICT (slug) DO UPDATE SET
+                -- Conflict on the COMPOSITE key: a slug belongs to a user, so two accounts
+                -- publishing the same slug each keep their own row. With the old single-column
+                -- key the second one landed in this branch, failed the ownership guard below
+                -- and got a 409 — a legitimate publish that silently never appeared.
+                ON CONFLICT (user_id, slug) DO UPDATE SET
                     name         = EXCLUDED.name,
                     url          = EXCLUDED.url,
                     chat_id      = EXCLUDED.chat_id,
-                    user_id      = EXCLUDED.user_id,
                     published_at = now()
-                -- Same guard as chats: another account's project is never taken over.
-                WHERE projects.user_id IS NULL OR projects.user_id = EXCLUDED.user_id
                 RETURNING slug;
                 """,
                 {"slug": slug, "name": name, "url": url, "chat_id": chat_id, "owner": owner},

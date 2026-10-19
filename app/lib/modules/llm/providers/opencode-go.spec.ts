@@ -1,7 +1,10 @@
 import { generateText } from 'ai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import OpenCodeGoProvider, {
+  effortPayload,
   isThinkingFieldRefusal,
+  opencodeGoCanDisableThinking,
+  opencodeGoEfforts,
   opencodeGoProtocol,
   sessionScope,
   shouldDisableThinking,
@@ -185,3 +188,38 @@ describe('OpenCode Go provider', () => {
     expect((await captureRequest('qwen3.8-max')).url).toMatch(/\/chat\/completions$/);
   });
 });
+
+  /*
+   * The reasoning level chosen in the chat is sent to the gateway. Measured there: DeepSeek and the
+   * GPT/Grok family read `thinking`, GLM and the MiMo family read `reasoning_effort` — sending the
+   * wrong one is silently ignored, so which field is used matters.
+   */
+  it('sends the reasoning level the user chose', async () => {
+    // A named level: verified live (glm-5.3 reasoning grows from 7 to 427 characters with max).
+    expect(effortPayload('glm-5.3', 'max')).toEqual({ thinking: { type: 'enabled', effort: 'max' } });
+    expect(effortPayload('deepseek-v4.1-flash', 'high')).toEqual({ thinking: { type: 'enabled', effort: 'high' } });
+    // GPT and Grok read the other field.
+    expect(effortPayload('grok-4.7', 'high')).toEqual({ reasoning_effort: 'high' });
+  });
+
+  it('never sends a level the model does not accept, nor disables a model that refuses it', async () => {
+    // deepseek-v4.1-flash accepts low/high/max only.
+    expect(effortPayload('deepseek-v4.1-flash', 'medium')).toBeNull();
+    // glm-5.3 is thinking-only: "disabled" is not offered and not sent.
+    expect(opencodeGoCanDisableThinking('glm-5.3')).toBe(false);
+    expect(effortPayload('glm-5.3', 'disabled')).toBeNull();
+    // A model with no levels keeps its own default.
+    expect(opencodeGoEfforts('mimo-v2.6-pro')).toEqual([]);
+    expect(effortPayload('mimo-v2.6-pro', 'high')).toBeNull();
+  });
+
+  it('keeps the agent-friendly default when the level is automatic', async () => {
+    // 'auto' and 'model' send nothing, so the fetch below injects `thinking: disabled` as before.
+    expect(effortPayload('deepseek-v4.1-flash', 'auto')).toBeNull();
+    expect(effortPayload('deepseek-v4.1-flash', 'model')).toBeNull();
+    expect(shouldDisableThinking('deepseek-v4.1-flash', 'disabled')).toBe(true);
+    // Asking for a named level turns reasoning ON, so the "disabled" injection is skipped.
+    expect(shouldDisableThinking('deepseek-v4.1-flash', 'high')).toBe(false);
+    // 'auto' keeps the injection the agent loop depends on.
+    expect(shouldDisableThinking('deepseek-v4.1-flash', 'auto')).toBe(true);
+  });

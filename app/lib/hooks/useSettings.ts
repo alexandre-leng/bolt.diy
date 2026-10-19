@@ -20,6 +20,7 @@ import {
   updateContextOptimization,
   updateEventLogs,
   updatePromptId,
+  writeProvidersCookie,
 } from '~/lib/stores/settings';
 import type { IProviderSetting, ProviderInfo, IProviderConfig } from '~/types/model';
 
@@ -169,13 +170,13 @@ export function useSettings(): UseSettingsReturn {
     [saveSettings],
   );
 
+  /*
+   * Single writer for the `providers` cookie: the store's updateProviderSettings already writes it
+   * synchronously, so this effect only re-syncs a store populated from elsewhere (localStorage at
+   * boot, or the server's auto-enable pass). Keeping one implementation avoids the two drifting.
+   */
   useEffect(() => {
-    const providers = providersStore.get();
-    const providerSetting: Record<string, IProviderSetting> = {}; // preserve the entire settings object for each provider
-    Object.keys(providers).forEach((provider) => {
-      providerSetting[provider] = providers[provider].settings;
-    });
-    Cookies.set('providers', JSON.stringify(providerSetting));
+    writeProvidersCookie(providersStore.get());
   }, [providers]);
 
   return {

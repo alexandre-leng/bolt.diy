@@ -3,7 +3,8 @@ import { create } from 'zustand';
 import { toggleTheme } from './theme';
 import { DEFAULT_TAB_CONFIG } from '~/components/@settings/core/constants';
 import type { TabVisibilityConfig, TabWindowConfig, UserTabConfig } from '~/components/@settings/core/types';
-import type { IProviderConfig } from '~/types/model';
+import Cookies from 'js-cookie';
+import type { IProviderConfig, IProviderSetting } from '~/types/model';
 import { PROVIDER_LIST } from '~/utils/constants';
 
 export interface Shortcut {
@@ -205,6 +206,24 @@ const autoEnableConfiguredProviders = async () => {
   }
 };
 
+/**
+ * The `providers` cookie is the server's only view of the provider settings (no access to
+ * localStorage). Anything that changes a provider setting must refresh it.
+ */
+export const writeProvidersCookie = (settings: ProviderSetting) => {
+  if (!isBrowser) {
+    return;
+  }
+
+  const providerSetting: Record<string, IProviderSetting> = {};
+
+  Object.keys(settings).forEach((provider) => {
+    providerSetting[provider] = settings[provider].settings;
+  });
+
+  Cookies.set('providers', JSON.stringify(providerSetting), { expires: 30 });
+};
+
 export const providersStore = map<ProviderSetting>(getInitialProviderSettings());
 
 // Export the auto-enable function for use in components
@@ -237,6 +256,15 @@ export const updateProviderSettings = (provider: string, settings: ProviderSetti
   // Save to localStorage
   const allSettings = providersStore.get();
   localStorage.setItem(PROVIDER_SETTINGS_KEY, JSON.stringify(allSettings));
+
+  /*
+   * Mirror it into the `providers` cookie, which is what the SERVER reads (api.chat resolves the
+   * provider settings from the cookie and never sees localStorage). The sync used to live only in
+   * useSettings' effect, so a screen that changed settings without that hook observing the store
+   * wrote localStorage and left the cookie untouched: the value looked saved and had no effect on
+   * any request. Writing it here makes every settings change reach the server, whatever the screen.
+   */
+  writeProvidersCookie(allSettings);
 
   // If this is a local provider, update the auto-enabled tracking
   if (LOCAL_PROVIDERS.includes(provider) && updatedProvider.settings.enabled !== undefined) {

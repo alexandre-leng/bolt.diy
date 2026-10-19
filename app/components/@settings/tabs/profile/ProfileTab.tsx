@@ -1,6 +1,7 @@
 import { useStore } from '@nanostores/react';
 import { useState, useCallback, useId } from 'react';
 import { DEFAULT_AVATARS, profileStore, updateProfile } from '~/lib/stores/profile';
+import { persistProfileField } from '~/lib/stores/profilePersistence';
 import { toast } from '~/lib/toastify';
 import { classNames } from '~/utils/classNames';
 import { debounce } from '~/utils/debounce';
@@ -11,11 +12,23 @@ export default function ProfileTab() {
   const [isUploading, setIsUploading] = useState(false);
   const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
 
-  // Create debounced update functions
+  /*
+   * Persist on the server, then toast what actually happened.
+   *
+   * The store is updated first so the field never lags behind the keystroke, but the success toast
+   * waits for the response: a change the server refused must not be announced as saved.
+   */
   const debouncedUpdate = useCallback(
-    debounce((field: 'username' | 'bio', value: string) => {
+    debounce(async (field: 'username' | 'bio', value: string) => {
       updateProfile({ [field]: value });
-      toast.success(`${field.charAt(0).toUpperCase() + field.slice(1)} updated`);
+
+      const result = await persistProfileField(field, value);
+
+      if (result.ok) {
+        toast.success(`${field.charAt(0).toUpperCase() + field.slice(1)} updated`);
+      } else {
+        toast.error(result.error ?? 'Could not save your profile');
+      }
     }, 1000),
     [],
   );

@@ -108,6 +108,20 @@ export function Header() {
  * step. It lives in the stylesheet because UnoCSS extracts classes statically and a shared
  * string keeps the two controls from drifting apart again.
  */
+/*
+ * Two controls sit side by side here and they mean different things, so they must not look
+ * alike. Measured on the deployed build: both were 36px round buttons 4px apart, and the
+ * sidebar glyph (a panel with a separator drawn on its left edge) reads as a second back
+ * chevron at 20px. Two fixes, not one:
+ *
+ * 1. The control that OPENS the panel draws a list glyph (`i-ph:list-dashes`), which has no
+ *    direction in it: nothing on the left edge can be mistaken for "go back".
+ * 2. The two are separated by a hairline. A gap alone did not communicate "different family";
+ *    a rule does, and it also anchors the toggle to the side of the panel it controls.
+ *
+ * When the panel is open the toggle becomes a close control and draws `caret-left`, but the
+ * back control is hidden from the eye by the panel by then, so the glyphs never compete.
+ */
 function SidebarToggle() {
   const isOpen = useStore(sidebarOpenStore);
   const label = isOpen ? 'Fermer le panneau' : 'Ouvrir le panneau';
@@ -121,9 +135,9 @@ function SidebarToggle() {
       aria-controls="sidebar-panel"
       title={label}
       data-testid="sidebar-toggle"
-      className="header-icon-control"
+      className="header-icon-control header-icon-control--separated"
     >
-      <span className={classNames('text-xl', isOpen ? 'i-ph:caret-left' : 'i-ph:sidebar-simple')} aria-hidden="true" />
+      <span className={classNames('text-xl', isOpen ? 'i-ph:x' : 'i-ph:list-dashes')} aria-hidden="true" />
     </button>
   );
 }

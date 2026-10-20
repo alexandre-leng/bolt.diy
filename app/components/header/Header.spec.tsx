@@ -92,6 +92,29 @@ describe('Header sidebar controls', () => {
     expect(toggle.getAttribute('aria-label')).toBe('Ouvrir le panneau');
   });
 
+  it('opens the panel with a glyph that cannot be read as "back"', () => {
+    chatStore.setKey('started', true);
+    sidebarOpenStore.set(false);
+    renderHeader();
+
+    const toggle = screen.getByTestId('sidebar-toggle');
+    const glyph = toggle.querySelector('span');
+    expect(glyph?.className).toContain('i-ph:list-dashes');
+    expect(glyph?.className).not.toContain('caret');
+    expect(glyph?.className).not.toContain('sidebar-simple');
+
+    // The back control keeps the only directional chevron of the pair.
+    expect(screen.getByTestId('back-to-projects').querySelector('span')?.className).toContain('i-ph:caret-left');
+  });
+
+  it('marks the toggle as a separate control family from the back button', () => {
+    chatStore.setKey('started', true);
+    renderHeader();
+
+    expect(screen.getByTestId('sidebar-toggle').className).toContain('header-icon-control--separated');
+    expect(screen.getByTestId('back-to-projects').className).not.toContain('header-icon-control--separated');
+  });
+
   it('points aria-controls at the panel element', () => {
     renderHeader();
     expect(screen.getByTestId('sidebar-toggle').getAttribute('aria-controls')).toBe('sidebar-panel');

@@ -53,7 +53,8 @@ vi.mock('~/lib/persistence', async () => {
 });
 
 vi.mock('~/lib/persistence/historySync', () => ({
-  migrateLocalHistoryToServer: vi.fn(async () => ({ offline: false, pulled: 0, pushed: 0 })),
+  PULL_BATCH_SIZE: 6,
+  migrateLocalHistoryToServer: vi.fn(async () => ({ offline: false, pulled: 0, pushed: 0, failed: 0, pending: [] })),
   markDeleted: mocks.markDeleted,
   renameChat: vi.fn(),
 }));

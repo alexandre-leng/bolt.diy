@@ -4,7 +4,10 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { AvatarDropdown } from './AvatarDropdown';
 import { TAB_LABELS, TAB_ICONS, DEFAULT_TAB_CONFIG, TAB_DESCRIPTIONS } from './constants';
 import type { TabType, Profile } from './types';
+import { ConnectorCredentialDialog } from '~/components/@settings/core/ConnectorCredentialDialog';
+import { SettingsHeader } from '~/components/@settings/core/SettingsHeader';
 import { TabTile } from '~/components/@settings/shared/components/TabTile';
+import type { ConnectorCredentialRequest } from '~/components/@settings/tabs/connectors/ConnectorsTab';
 
 // Import all tab components
 import ConnectorsTab from '~/components/@settings/tabs/connectors/ConnectorsTab';
@@ -64,6 +67,9 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
   const [isDocumentationOpen, setIsDocumentationOpen] = useState(false);
   const [hasVisitedCloudProviders, setHasVisitedCloudProviders] = useState(false);
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(true);
+
+  /* Set by the Connectors tab when a connector needs an API key to switch on. */
+  const [connectorCredential, setConnectorCredential] = useState<ConnectorCredentialRequest | null>(null);
 
   const navigationRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLElement>(null);
@@ -175,6 +181,7 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
   const handleClose = () => {
     setActiveTab(null);
     setLoadingTab(null);
+    setConnectorCredential(null);
     onClose();
   };
 
@@ -196,7 +203,9 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
       case 'local-providers':
         return <LocalProvidersTab />;
       case 'connectors':
-        return <ConnectorsTab />;
+        return (
+          <ConnectorsTab credentialRequest={connectorCredential} onCredentialRequestChange={setConnectorCredential} />
+        );
       case 'github':
         return <GitHubTab />;
       case 'gitlab':
@@ -300,7 +309,7 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
   return (
     <RadixDialog.Root open={open}>
       <RadixDialog.Portal>
-        <div className="fixed inset-0 flex items-center justify-center z-[100] modern-scrollbar">
+        <div className="fixed inset-0 flex items-center justify-center z-[100] modern-scrollbar" data-testid="settings-overlay">
           <RadixDialog.Overlay className="absolute inset-0 bg-black/70 dark:bg-black/80 backdrop-blur-sm transition-opacity duration-200" />
 
           <RadixDialog.Content
@@ -331,13 +340,21 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
                     mobileNavigationOpen ? 'flex' : 'hidden sm:flex',
                   )}
                 >
-                  <button
-                    onClick={handleClose}
-                    className="mx-4 mt-4 flex appearance-none items-center gap-2 border-0 border-b border-solid border-bolt-elements-borderColor bg-transparent px-2 pb-5 pt-2 text-left text-sm font-semibold text-bolt-elements-textPrimary hover:text-bolt-elements-item-contentAccent"
-                  >
-                    <span className="i-ph:arrow-left w-4 h-4" /> Retour au projet
-                  </button>
-                  <nav className="min-h-0 flex-1 overflow-y-auto modern-scrollbar px-3 py-4">
+                  {/*
+                   * The panel starts under the app header, which is a separate layer painted
+                   * above it (logo + toggle). Without this inset the old "Retour au projet"
+                   * button sat at y=17 while the header logo occupied y 12..38, so the wordmark
+                   * was printed over the button (measured at 390x844).
+                   */}
+                  <div className="shrink-0 px-3 pb-1 pt-[calc(var(--header-height)+0.25rem)] sm:pt-3">
+                    <SettingsHeader
+                      title={activeTab ? TAB_LABELS[activeTab] : undefined}
+                      showingSection={!mobileNavigationOpen}
+                      onBack={() => (mobileNavigationOpen ? handleClose() : setMobileNavigationOpen(true))}
+                      onClose={handleClose}
+                    />
+                  </div>
+                  <nav className="min-h-0 flex-1 overflow-y-auto modern-scrollbar px-3 py-1">
                     {navigationTabs.map((group) => (
                       <div key={group.label} className="mb-5">
                         <p className="mb-2 px-2 text-[11px] font-medium uppercase tracking-wide text-bolt-elements-textTertiary">
@@ -383,17 +400,31 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
                   aria-label="Contenu des réglages"
                   data-testid="settings-content"
                   className={classNames(
-                    'min-w-0 flex-1 overflow-y-auto modern-scrollbar p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 md:px-10 md:py-8',
+                    'min-w-0 flex-1 overflow-y-auto modern-scrollbar px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-6 md:px-10 md:pb-8',
                     mobileNavigationOpen ? 'hidden sm:block' : 'block',
                   )}
                 >
-                  <button
-                    type="button"
-                    className="mb-5 flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-medium text-bolt-elements-textPrimary hover:text-bolt-elements-item-contentAccent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500 sm:hidden"
-                    onClick={() => setMobileNavigationOpen(true)}
-                  >
-                    <span className="i-ph:arrow-left text-lg" aria-hidden="true" /> Tous les réglages
-                  </button>
+                  {/*
+                   * On a phone this column is a second pane next to the category list, so it
+                   * needs the same header: a "Retour" control (to the list) and "Fermer". It
+                   * used to open on "Tous les réglages", a third label for the same idea.
+                   */}
+                  <div className="sm:hidden">
+                    <SettingsHeader
+                      title={activeTab ? TAB_LABELS[activeTab] : undefined}
+                      showingSection
+                      onBack={() => setMobileNavigationOpen(true)}
+                      onClose={handleClose}
+                    />
+                  </div>
+                  <div className="hidden sm:block">
+                    <SettingsHeader
+                      title={activeTab ? TAB_LABELS[activeTab] : undefined}
+                      showingSection={false}
+                      onBack={handleClose}
+                      onClose={handleClose}
+                    />
+                  </div>
                   {activeTab && activeTab !== 'cloud-providers' ? (
                     <div className="mx-auto max-w-5xl">{getTabComponent(activeTab)}</div>
                   ) : !activeTab ? (
@@ -442,6 +473,13 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
           </RadixDialog.Content>
         </div>
       </RadixDialog.Portal>
+      <ConnectorCredentialDialog
+        request={connectorCredential}
+        onClose={() => setConnectorCredential(null)}
+        onActivated={(connectorId) =>
+          setConnectorCredential((current) => (current?.connectorId === connectorId ? null : current))
+        }
+      />
       <DocumentationPanel open={isDocumentationOpen} onClose={() => setIsDocumentationOpen(false)} />
     </RadixDialog.Root>
   );

@@ -1,0 +1,25 @@
+services:
+  bolt:
+    image: bolt-diy:local
+    # Sans ce target, `docker compose build` produit l'étape `development`
+    # (CMD pnpm run dev), qui n'installe ni ca-certificates ni curl : workerd
+    # ne fait alors plus confiance à aucun certificat TLS et TOUT appel sortant
+    # HTTPS meurt en 502. Le stage de prod est le seul déployable.
+    build:
+      context: ./src
+      target: bolt-ai-production
+    container_name: bolt-diy
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/opt/bolt-entrypoint.sh"]
+    ports:
+      - "127.0.0.1:5173:5173"
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=production
+      - WRANGLER_SEND_METRICS=false
+      - CI=true
+    volumes:
+      - ./entrypoint.sh:/opt/bolt-entrypoint.sh:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

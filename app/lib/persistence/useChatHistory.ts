@@ -473,7 +473,7 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
               const commandActionsString = createCommandActionsString(projectCommands);
 
               const restoredAssistantText = `Bolt Restored your chat from a snapshot. You can revert this message to load the full chat history.
-                  <boltArtifact id="restored-project-setup" title="Restored Project & Setup" type="bundled">
+                  <boltArtifact id="restored-project-setup" title="Restored Project & Setup" type="bundled" hidden>
                   ${createEncodedFileActions(snapshotTextFiles(snapshot))}
                   ${commandActionsString}
                   </boltArtifact>

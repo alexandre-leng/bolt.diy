@@ -79,12 +79,16 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
     }
   }, [actions, artifact?.type, showActions]);
 
-  if (!artifact) {
+  /*
+   * The restore's card is noise in a conversation the user reads, and its "Incomplete" title comes
+   * from a snapshot written before the last turn. Its check must come BEFORE the entry lookup: the
+   * card was still drawn in the window where the artifacts map had not caught up yet.
+   */
+  if (restoredSetup) {
     return null;
   }
 
-  /* The restore's card is noise in a conversation the user reads; its actions keep running above. */
-  if (restoredSetup) {
+  if (!artifact) {
     return null;
   }
 
@@ -129,7 +133,10 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
 
   return (
     <>
-      <div className="artifact border border-bolt-elements-borderColor flex flex-col overflow-hidden rounded-lg w-full transition-border duration-150">
+      <div
+        data-artifact-card={artifact.id}
+        className="artifact border border-bolt-elements-borderColor flex flex-col overflow-hidden rounded-lg w-full transition-border duration-150"
+      >
         <div className="flex">
           <button
             className="flex items-stretch bg-bolt-elements-artifacts-background hover:bg-bolt-elements-artifacts-backgroundHover w-full overflow-hidden"

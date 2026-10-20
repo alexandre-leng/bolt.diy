@@ -131,6 +131,50 @@ describe('Artifact', () => {
     },
   );
 
+  /*
+   * Reopening the chat on the device that built the project hit the other order: the card was still
+   * drawn in the window where the artifacts map had not caught up with the parsed message, and it
+   * announced "Project Setup Incomplete" for a setup nobody had started.
+   */
+  /*
+   * The real path: the parser is told not to emit the element at all for a `hidden` artifact, which
+   * covers the card drawn before the workbench map caught up AND the ones already in a stored
+   * message from an older build. Its actions still run, that is the whole point of the artifact.
+   */
+  it('does not emit the card of a hidden artifact but still runs its actions', async () => {
+    const { StreamingMessageParser } = await import('~/lib/runtime/message-parser');
+    const actions: string[] = [];
+
+    const parser = new StreamingMessageParser({
+      callbacks: {
+        onActionClose: (data) => {
+          const action = data.action as { type: string; filePath?: string; content?: string };
+
+          actions.push(`${action.type}:${action.filePath ?? action.content}`);
+        },
+      },
+    });
+
+    const parsed = parser.parse(
+      'message-hidden',
+      '<boltArtifact id="restored-agent-files" title="Restored project files" type="bundled" hidden>\n' +
+        '<boltAction type="file" filePath="/home/project/src/App.tsx">a</boltAction>\n' +
+        '<boltAction type="start">npm run dev</boltAction>\n</boltArtifact>',
+    );
+
+    /* No card element, and the actions are the reason the artifact exists. */
+    expect(parsed).toBe('');
+    expect(actions).toEqual(['file:/home/project/src/App.tsx', 'start:npm run dev']);
+  });
+
+  it('renders no restore card even before its workbench entry exists', () => {
+    artifacts.set({});
+
+    const { container } = render(<Artifact messageId="message" artifactId="restored-project-setup" />);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it('keeps queued setup actions loading until they finish, including a running dev server', () => {
     const actions = map<Record<string, unknown>>({ install: { type: 'shell', status: 'pending' } });
     artifacts.set({

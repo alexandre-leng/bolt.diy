@@ -315,9 +315,19 @@ export class StreamingMessageParser {
                 ...currentArtifact,
               });
 
+              /*
+               * Bolt's own restore artifact writes the files and starts the server; its card is
+               * noise in a transcript the user reads back ("Project Setup Incomplete" above a
+               * conversation that runs fine). The `hidden` attribute keeps the actions and drops
+               * the card, which also covers a card drawn before the workbench map caught up — the
+               * element is never created then.
+               */
+              const hidden = /\bhidden\b/.test(artifactTag);
               const artifactFactory = this._options.artifactElement ?? createArtifactElement;
 
-              output += artifactFactory({ messageId, artifactId });
+              if (!hidden) {
+                output += artifactFactory({ messageId, artifactId });
+              }
 
               i = openTagEnd + 1;
             } else {

@@ -56,7 +56,13 @@ export function buildAgentReplayMessage(
   return create({
     id: generateId(),
     role: 'assistant',
-    text: `<boltArtifact id="${AGENT_REPLAY_ARTIFACT_ID}" title="Restored project files" type="bundled">
+
+    /*
+     * `hidden`: the parser keeps these actions (they write the files and start the server) and
+     * emits no card. The card sat above the conversation on every reopen, labelled "Project Setup
+     * Incomplete" for a setup nobody had started.
+     */
+    text: `<boltArtifact id="${AGENT_REPLAY_ARTIFACT_ID}" title="Restored project files" type="bundled" hidden>
 ${fileActions}
 ${commandActions}
 </boltArtifact>`,

@@ -1,5 +1,27 @@
 # Mémoire Externe Partagée — bolt.diy (fork auto-hébergé)
 
+## 2026-10-20 — Les cartes de restauration ne polluent plus le fil
+
+- **Type** : fix (parsing + composant) + tests + déploiement.
+- **Symptôme** : à chaque réouverture, deux cartes « Project Setup Incomplete / Project Created » en
+  haut de la conversation, pour un montage que personne n'a lancé.
+- **Cause mesurée** (sonde `data-artifact-card`) : le message synthétique du restore portait
+  `id="restored-project-setup"`, mais le parseur ignore l'id écrit par le modèle et fabrique
+  `` `${messageId}-${compteur}` ``. Les deux gardes existantes (`isRestoreArtifact`, `Artifact.tsx`)
+  ne voyaient donc jamais l'id de restauration — les tests existants passaient parce qu'ils
+  fournissaient l'id à la main.
+- **Correctif** : l'artefact du restore est marqué `hidden` dans le message (parseur ET
+  `restoreArtifacts.ts`) ; `StreamingMessageParser` n'émet alors AUCUN élément de carte et exécute
+  quand même les actions (c'est ce qui écrit les fichiers et démarre le serveur). `Artifact.tsx`
+  garde sa garde d'id (ceinture et bretelles) et expose `data-artifact-card={id}` pour la sonde.
+- **Preuve prod** (chat `2-1792397253308-0`) : après rechargement, cartes `restored-*` absentes,
+  aucune carte « Project Setup », narration (« Je vérifie les niveaux », « Les trois niveaux
+  passent ») présente, `[Provider` absent. Un tour de « Creating Project… » puis « Project Created »
+  (artefact `imported-files` du template) reste affiché : c'est le projet, pas la restauration.
+- **Gates** : vitest 1432/1433 (seul échec `ScreenshotToCode.spec.tsx`, fichiers non commités d'une
+  autre session), tsc 0 erreur hors ce fichier, eslint 0 sur les fichiers touchés.
+- **Reste ouvert** : commit + push de ce lot (voir `git log`).
+
 ## 2026-10-20 — Reprise d'une conversation : la narration de l'agent revient dans le fil
 
 - **Type** : fix (client) + tests + déploiement.

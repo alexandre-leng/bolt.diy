@@ -14,6 +14,18 @@ $zIndexMax: 999;
   z-index: $zIndexMax - 1;
 }
 
+/*
+ * The sticky header wrapper sets `position: sticky` through UnoCSS, but `.z-above-sidebar` is a
+ * plain class emitted AFTER the utilities in the cascade and hardcodes `position: relative`, so it
+ * won every time: measured on the deployed build, the wrapper computed `position: relative`,
+ * scrolled away, and the bar looked non-sticky. A positioning utility on the same element must
+ * not be overridden by the z-index helper it also carries.
+ */
+.z-above-sidebar.sticky,
+.sticky.z-above-sidebar {
+  position: sticky;
+}
+
 .z-port-dropdown {
   z-index: $zIndexMax - 3;
 }

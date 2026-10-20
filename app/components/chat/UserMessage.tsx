@@ -96,5 +96,17 @@ export const UserMessage = memo(({ content, parts }: UserMessageProps) => {
 
 function stripMetadata(content: string) {
   const artifactRegex = /<boltArtifact\s+[^>]*>[\s\S]*?<\/boltArtifact>/gm;
-  return content.replace(MODEL_REGEX, '').replace(PROVIDER_REGEX, '').replace(artifactRegex, '');
+
+  /*
+   * `MODEL_REGEX` anchors on the line break after the tag and `PROVIDER_REGEX` does not, so a
+   * prompt re-read from storage kept its provider line (and an orphan blank line) above the text:
+   * every user bubble of a reopened chat opened on `[Provider: OpenCodeGo]`.
+   */
+  const withoutHeader = content
+    .replace(/^\[Model:[^\]]*\](\r?\n)*/i, '')
+    .replace(/^\[Provider:[^\]]*\](\r?\n)*/i, '')
+    .replace(MODEL_REGEX, '')
+    .replace(PROVIDER_REGEX, '');
+
+  return withoutHeader.replace(artifactRegex, '').trim();
 }

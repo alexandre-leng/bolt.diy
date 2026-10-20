@@ -98,6 +98,7 @@ const DOM_TESTS = [
   'app/lib/accountSettings.spec.ts',
   'app/lib/persistence/syncClient.spec.ts',
   'app/lib/persistence/historySync.spec.ts',
+  'app/lib/persistence/chatRestore.spec.ts',
   'app/lib/persistence/chatCache.spec.ts',
   'app/lib/services/importExportService.spec.ts',
   'app/lib/stores/workbench.spec.ts',

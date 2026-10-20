@@ -12,6 +12,7 @@ export function Header() {
 
   return (
     <header
+      data-testid="app-header"
       className={classNames(
         'flex items-center gap-2 px-2 sm:px-4 border-b h-[var(--header-height)]',
 

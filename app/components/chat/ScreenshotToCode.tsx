@@ -364,14 +364,18 @@ export function ScreenshotToCode({
               role="radio"
               aria-checked={active}
               aria-label={option.title}
+              data-testid={`mode-${option.value}`}
               disabled={busy}
               onClick={() => switchMode(option.value)}
               className={classNames(
+                // A bare <button> keeps the UA's light grey fill, so the fill must be explicit.
                 'relative flex items-start gap-3 rounded-xl border p-3 text-left transition-all',
                 'disabled:cursor-not-allowed disabled:opacity-60',
+                // The dialog already paints depth-2, so depth-2 on the card was invisible:
+                // an unchecked card looked identical to the dialog surface (i.e. "greyed out").
                 active
-                  ? 'border-bolt-elements-borderColorActive bg-bolt-elements-background-depth-2 shadow-sm'
-                  : 'border-bolt-elements-borderColor hover:border-bolt-elements-borderColorActive hover:bg-bolt-elements-background-depth-2',
+                  ? 'border-bolt-elements-borderColorActive bg-bolt-elements-background-depth-3 shadow-sm'
+                  : 'border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 hover:border-bolt-elements-borderColorActive hover:bg-bolt-elements-background-depth-3',
               )}
             >
               <span

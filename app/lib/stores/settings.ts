@@ -1,9 +1,9 @@
+import Cookies from 'js-cookie';
 import { atom, map } from 'nanostores';
 import { create } from 'zustand';
 import { toggleTheme } from './theme';
 import { DEFAULT_TAB_CONFIG } from '~/components/@settings/core/constants';
 import type { TabVisibilityConfig, TabWindowConfig, UserTabConfig } from '~/components/@settings/core/types';
-import Cookies from 'js-cookie';
 import type { IProviderConfig, IProviderSetting } from '~/types/model';
 import { PROVIDER_LIST } from '~/utils/constants';
 

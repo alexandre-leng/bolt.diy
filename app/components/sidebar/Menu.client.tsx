@@ -606,6 +606,7 @@ export const Menu = () => {
       <motion.div
         ref={menuRef}
         id="sidebar-panel"
+        data-settings-open={isSettingsOpen ? 'true' : 'false'}
         initial="closed"
         animate={open ? 'open' : 'closed'}
         variants={menuVariants}

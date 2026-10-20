@@ -67,15 +67,17 @@ function PasswordField({
   value,
   onChange,
   autoComplete = 'current-password',
+  hint,
 }: {
   id: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
   autoComplete?: string;
+  hint?: string;
 }) {
   const [visible, setVisible] = useState(false);
-  const labelId = useId();
+  const hintId = useId();
 
   return (
     <div className="space-y-1.5">
@@ -86,7 +88,7 @@ function PasswordField({
           type={visible ? 'text' : 'password'}
           value={value}
           autoComplete={autoComplete}
-          aria-describedby={labelId}
+          aria-describedby={hint ? hintId : undefined}
           onChange={(event) => onChange(event.target.value)}
           className={classNames(FIELD_CLASSES, 'pr-11')}
         />
@@ -105,9 +107,16 @@ function PasswordField({
           <span className={visible ? 'i-ph:eye-slash text-base' : 'i-ph:eye text-base'} aria-hidden="true" />
         </button>
       </div>
-      <span id={labelId} className="sr-only">
-        {label}
-      </span>
+      {/*
+       * The hint is a real description, not a copy of the label. A `<span class="sr-only">` that
+       * repeats the label text makes a screen reader announce every field twice ("Mot de passe
+       * actuel, Mot de passe actuel"), which is what the first version of this component did.
+       */}
+      {hint ? (
+        <span id={hintId} className="block text-xs text-bolt-elements-textTertiary">
+          {hint}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -316,6 +325,7 @@ export default function AccountTab() {
             value={newPassword}
             onChange={setNewPassword}
             autoComplete="new-password"
+            hint="8 caractères minimum."
           />
           <PasswordField
             id="account-confirm-password"

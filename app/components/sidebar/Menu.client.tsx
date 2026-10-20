@@ -30,7 +30,7 @@ import {
   type ChatHistoryItem,
   useChatHistory,
 } from '~/lib/persistence';
-import { migrateLocalHistoryToServer, markDeleted } from '~/lib/persistence/historySync';
+import { PULL_BATCH_SIZE, migrateLocalHistoryToServer, markDeleted } from '~/lib/persistence/historySync';
 import { deleteHistory } from '~/lib/persistence/syncClient';
 import { chatStore } from '~/lib/stores/chat';
 import {
@@ -76,6 +76,13 @@ const menuVariants = {
     },
   },
 } satisfies Variants;
+
+/*
+ * Delay before resuming a partial download of the server history. The batch applies at most
+ * `PULL_BATCH_SIZE` conversations per pass, so a large account fills in progressively instead of
+ * waiting on one long sync that can time out.
+ */
+const PULL_RETRY_DELAY_MS = 1500;
 
 type DialogContent =
   { type: 'delete'; item: ChatHistoryItem } | { type: 'bulkDelete'; items: ChatHistoryItem[] } | null;
@@ -136,6 +143,13 @@ export const Menu = () => {
    */
   const [syncState, setSyncState] = useState<'unknown' | 'syncing' | 'synced' | 'offline'>('unknown');
 
+  /* Server conversations still to download on this device; shown so "empty" is never a dead end. */
+  const [pendingPulls, setPendingPulls] = useState(0);
+  const pendingPullsRef = useRef(0);
+
+  /* `loadEntries` is defined below and the retry timer needs the latest one. */
+  const loadEntriesRef = useRef<() => void>(() => undefined);
+
   /*
    * Sidebar visibility lives in a shared store (not useState) so the toggle
    * icon in the header — a sibling component — can drive it. Touch devices
@@ -180,6 +194,7 @@ export const Menu = () => {
      * silent by design — an unreachable server must not empty a list the user can see.
      */
     setSyncState('syncing');
+    setPendingPulls(pendingPullsRef.current);
 
     getAll(database)
       .then((all) => {
@@ -190,24 +205,49 @@ export const Menu = () => {
         setList(listableChats(all));
 
         // setList returns void, so keep the list in scope rather than chaining it through.
-        return migrateLocalHistoryToServer(database, syncableChatIds(all)).then((result) => {
-          setSyncState(result.offline ? 'offline' : 'synced');
+        return migrateLocalHistoryToServer(database, syncableChatIds(all), { batchSize: PULL_BATCH_SIZE }).then(
+          (result) => {
+            setSyncState(result.offline ? 'offline' : 'synced');
 
-          if (result.pulled > 0 || result.pushed > 0) {
-            // Chats arrived from the server, or a local one got its urlId: re-read.
-            void getAll(database).then((list) => setList(listableChats(list)));
-          }
+            if (result.pulled > 0 || result.pushed > 0) {
+              // Chats arrived from the server, or a local one got its urlId: re-read.
+              void getAll(database).then((list) => setList(listableChats(list)));
+            }
 
-          if (result.offline) {
-            logger.debug('history sync offline; showing the local cache only');
-          }
-        });
+            /*
+             * The server holds conversations this device still lacks, and the next pass continues
+             * from them. Without this loop a large account stayed on "Aucune conversation": the
+             * first pass pulled a few, and the ones that missed the download window were retried
+             * only on the next visit.
+             */
+            if (result.pending.length > 0 && !result.offline) {
+              pendingPullsRef.current = result.pending.length;
+              window.setTimeout(() => loadEntriesRef.current(), PULL_RETRY_DELAY_MS);
+            } else {
+              pendingPullsRef.current = 0;
+            }
+
+            setPendingPulls(pendingPullsRef.current);
+
+            if (result.offline) {
+              logger.debug('history sync offline; showing the local cache only');
+            }
+          },
+        );
       })
       .catch((error) => {
         setSyncState('offline');
         toast.error(error.message);
       });
   }, []);
+
+  /*
+   * `loadEntries` is re-created when its dependencies change; the retry timer must always call
+   * the current one, so it is parked in a ref rather than captured by the timeout.
+   */
+  useEffect(() => {
+    loadEntriesRef.current = loadEntries;
+  }, [loadEntries]);
 
   const deleteChat = useCallback(
     async (id: string): Promise<void> => {
@@ -684,6 +724,14 @@ export const Menu = () => {
                   aria-hidden="true"
                 />
               )}
+              {pendingPulls > 0 && (
+                <span
+                  data-testid="history-sync-pending"
+                  className="rounded-full border border-bolt-elements-borderColor px-2 py-0.5 text-[11px] text-bolt-elements-textTertiary"
+                >
+                  {pendingPulls} en cours de téléchargement
+                </span>
+              )}
             </div>
             {selectionMode && (
               <div className="flex items-center gap-2">
@@ -704,7 +752,13 @@ export const Menu = () => {
           <div className="flex-1 overflow-auto modern-scrollbar px-3 pb-3">
             {filteredList.length === 0 && (
               <div className="px-4 text-gray-500 dark:text-gray-400 text-sm">
-                {list.length === 0 ? 'Aucune conversation' : 'Aucun résultat'}
+                {list.length === 0
+                  ? syncState === 'offline'
+                    ? 'Aucune conversation en local — historique hors ligne'
+                    : pendingPulls > 0
+                      ? 'Chargement de vos conversations…'
+                      : 'Aucune conversation'
+                  : 'Aucun résultat'}
               </div>
             )}
             {/* onOpenChange: Radix closes on Escape (and Android back) only through it. */}

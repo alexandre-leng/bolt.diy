@@ -2,7 +2,6 @@ import { useStore } from '@nanostores/react';
 import { ClientOnly } from 'remix-utils/client-only';
 import { HeaderActionButtons } from './HeaderActionButtons.client';
 import { MobilePreviewButton } from './MobilePreviewButton.client';
-import { ProjectBackButton } from './ProjectBackButton.client';
 import { ChatDescription } from '~/lib/persistence/ChatDescription.client';
 import { chatStore } from '~/lib/stores/chat';
 import { sidebarOpenStore, toggleSidebar } from '~/lib/stores/sidebar';
@@ -33,10 +32,10 @@ export function Header() {
        */}
       <div className="flex items-center gap-1 min-w-0 z-above-sidebar text-bolt-elements-textPrimary">
         {/*
-         * Visible back control while a conversation is open (user-reported gap).
-         * Renders nothing on the landing page, where there is nowhere to go back to.
+         * No back control here: the user removed it as redundant. The logo already returns to the
+         * landing page (it is a link, labelled), and the sidebar leads to the conversation list.
+         * `ProjectBackButton` is kept in the repository but no longer mounted.
          */}
-        <ClientOnly>{() => <ProjectBackButton />}</ClientOnly>
 
         {/*
          * Sidebar toggle: the ONLY control that opens and closes the panel. It used to compete
@@ -135,7 +134,7 @@ function SidebarToggle() {
       aria-controls="sidebar-panel"
       title={label}
       data-testid="sidebar-toggle"
-      className="header-icon-control header-icon-control--separated"
+      className="header-icon-control"
     >
       <span className={classNames('text-xl', isOpen ? 'i-ph:x' : 'i-ph:list-dashes')} aria-hidden="true" />
     </button>

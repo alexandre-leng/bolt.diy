@@ -67,7 +67,9 @@ describe('Header sidebar controls', () => {
 
     const toggles = container.querySelectorAll('[data-testid="sidebar-toggle"]');
     expect(toggles.length).toBe(1);
-    expect(container.querySelectorAll('[data-testid="back-to-projects"]').length).toBe(1);
+
+    // The back control was removed at the user's request: the logo and the panel cover the need.
+    expect(container.querySelectorAll('[data-testid="back-to-projects"]').length).toBe(0);
   });
 
   it('opens and closes the panel with the same button', () => {
@@ -103,16 +105,20 @@ describe('Header sidebar controls', () => {
     expect(glyph?.className).not.toContain('caret');
     expect(glyph?.className).not.toContain('sidebar-simple');
 
-    // The back control keeps the only directional chevron of the pair.
-    expect(screen.getByTestId('back-to-projects').querySelector('span')?.className).toContain('i-ph:caret-left');
+    // No directional chevron is left in the header: the back control that owned it is gone.
+    expect(screen.queryByTestId('back-to-projects')).toBeNull();
   });
 
   it('marks the toggle as a separate control family from the back button', () => {
     chatStore.setKey('started', true);
     renderHeader();
 
-    expect(screen.getByTestId('sidebar-toggle').className).toContain('header-icon-control--separated');
-    expect(screen.getByTestId('back-to-projects').className).not.toContain('header-icon-control--separated');
+    /*
+     * The separation only existed to tell the toggle apart from the back button. With the back
+     * button gone, the toggle must no longer claim to be a separate family: a lone control with a
+     * separator next to nothing reads as a broken border.
+     */
+    expect(screen.getByTestId('sidebar-toggle').className).not.toContain('header-icon-control--separated');
   });
 
   it('points aria-controls at the panel element', () => {

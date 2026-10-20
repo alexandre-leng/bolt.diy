@@ -603,8 +603,6 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
               disabled={props.isStreaming}
               supported={props.speechSupported ?? true}
               engine={props.speechEngine ?? null}
-              language={props.dictationSettings?.language}
-              onLanguageChange={(language) => props.updateDictationSettings?.({ language })}
             />
             <IconButton
               title="Réglages du modèle"

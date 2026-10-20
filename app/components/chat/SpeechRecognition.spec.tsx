@@ -64,24 +64,16 @@ describe('SpeechRecognitionButton', () => {
     expect(onStart).not.toHaveBeenCalled();
   });
 
-  it('offers the language next to the mic and cycles it', () => {
-    const onLanguageChange = vi.fn();
+  it('keeps the composer free of a language control: the language lives in Settings > Voix', () => {
+    /*
+     * The chip was added here, then removed at the user's request to keep the composer minimal.
+     * The setting it used to change is still there, one place: the Voice settings tab writes the
+     * same stored value the dictation hook reads.
+     */
+    render(<SpeechRecognitionButton isListening={false} onStart={vi.fn()} onStop={vi.fn()} disabled={false} />);
 
-    render(
-      <SpeechRecognitionButton
-        isListening={false}
-        onStart={vi.fn()}
-        onStop={vi.fn()}
-        disabled={false}
-        language="fr-FR"
-        onLanguageChange={onLanguageChange}
-      />,
-    );
-
-    const languageButton = screen.getByRole('button', { name: /Changer la langue de dictée/ });
-    fireEvent.click(languageButton);
-
-    expect(onLanguageChange).toHaveBeenCalledWith('fr-CA');
+    expect(screen.queryByRole('button', { name: /langue de dictée/i })).toBeNull();
+    expect(screen.getAllByRole('button')).toHaveLength(1);
   });
 });
 

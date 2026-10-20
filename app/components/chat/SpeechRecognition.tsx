@@ -1,6 +1,6 @@
 import React from 'react';
 import { IconButton } from '~/components/ui/IconButton';
-import { DICTATION_LANGUAGES, type DictationEngine, languageBadge, nextDictationLanguage } from '~/lib/dictation';
+import type { DictationEngine } from '~/lib/dictation';
 import { classNames } from '~/utils/classNames';
 
 /*
@@ -20,8 +20,6 @@ export const SpeechRecognitionButton = ({
   onStop,
   disabled,
   supported = true,
-  language,
-  onLanguageChange,
   engine,
 }: {
   isListening: boolean;
@@ -33,9 +31,6 @@ export const SpeechRecognitionButton = ({
   /** False without any usable engine: the button is disabled and says why. */
   supported?: boolean;
 
-  /** Current dictation language (BCP-47, e.g. `fr-FR`). */
-  language?: string;
-  onLanguageChange?: (language: string) => void;
   engine?: DictationEngine | null;
 }) => {
   const title = !supported
@@ -77,25 +72,11 @@ export const SpeechRecognitionButton = ({
         )}
       </IconButton>
 
-      {language && onLanguageChange ? (
-        <button
-          type="button"
-          className={classNames(
-            'min-h-[44px] min-w-[2.5rem] rounded-md px-1 text-[11px] font-medium uppercase',
-            'text-bolt-elements-textSecondary transition-colors',
-            'hover:bg-bolt-elements-item-backgroundActive hover:text-bolt-elements-textPrimary',
-            'focus:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-focus',
-            'touch-manipulation',
-          )}
-          title={`Langue de dictée : ${DICTATION_LANGUAGES.find((entry) => entry.value === language)?.label ?? language}`}
-          aria-label={`Changer la langue de dictée (actuelle : ${
-            DICTATION_LANGUAGES.find((entry) => entry.value === language)?.label ?? language
-          })`}
-          onClick={() => onLanguageChange(nextDictationLanguage(language))}
-        >
-          {languageBadge(language)}
-        </button>
-      ) : null}
+      {/*
+       * No language chip here: the user asked for the composer to stay minimal. The language is
+       * set in Settings > Voix, which writes the same stored value the hook reads, so a change
+       * there applies to the next dictation without this control.
+       */}
     </div>
   );
 };

@@ -1,5 +1,30 @@
 # Mémoire Externe Partagée — bolt.diy (fork auto-hébergé)
 
+## 2026-10-20 — Règle des clés : aucune clé OpenAI, aucune clé Groq côté serveur
+
+- **Type** : decision (règle permanente demandée par Alex). Aucun code modifié, aucun déploiement.
+- **Règle** : le déploiement bolt.diy ne doit porter **aucune clé OpenAI** et **aucune clé Groq**, ni dans
+  `.env.local`, ni dans l'environnement du conteneur, ni en `vars`/`dev.vars` du Worker. Seules les clés
+  qu'Alex a saisies lui-même à la main comptent ; toute clé apparue autrement est à retirer.
+- **État mesuré le 2026-10-20** (`docker inspect bolt-diy`, `/opt/bolt/.env.local`) :
+  - `GROQ_API_KEY` : **absente** partout (env conteneur et `.env.local`). `entrypoint.sh:49` la relaie
+    seulement si elle existe ; `providers/groq.ts` et `dictation-config.ts` restent dans le code mais
+    inactifs sans clé. Rien à supprimer côté serveur.
+  - `OPENAI_API_KEY` : **présente**, en clair dans `/opt/bolt/.env.local`, injectée au Worker au démarrage.
+    C'est une violation de la règle, pas une configuration voulue.
+  - Fournisseur réellement utilisé : `OPENCODE_GO_API_KEY` / `_2` + `OPENCODE_GO_API_BASE_URL`
+    (`https://opencode.ai/zen/go/v1`), défaut `VITE_DEFAULT_PROVIDER=OpenCodeGo`.
+- **Conséquence** : retirer `OPENAI_API_KEY` de `.env.local` puis `docker restart bolt-diy` suffit
+  (l'entrypoint relit l'environnement au démarrage, aucun rebuild). Ensuite Groq et OpenAI ne sont
+  utilisables que par une clé collée dans l'UI (cookie `apiKeys`, jamais persistée côté serveur).
+- **OAuth** : le mécanisme OAuth de Hermes n'est pas transposable tel quel ; bolt.diy lit une clé statique
+  par provider (`getProviderBaseUrlAndKey`), sans route de callback. Un flux OAuth demanderait un chantier
+  dédié (callback, stockage et rotation des refresh tokens).
+- **Reste ouvert** : la suppression effective de `OPENAI_API_KEY` attend le feu vert d'Alex.
+- **Piège de méthode** : une variable listée dans `entrypoint.sh` n'est pas une clé présente ; la boucle
+  saute les valeurs vides. Toujours croiser `docker inspect` (env réel) et la liste des noms de
+  `.env.local` (`grep -o '^[A-Z_]*='`), jamais la seule présence d'un nom dans le code.
+
 ## 2026-10-19 — Traque de bugs : six pistes mesurées, aucun défaut confirmé
 
 - **Type** : audit sans correctif. Rien à corriger = rien de modifié ; pas de commit de code.

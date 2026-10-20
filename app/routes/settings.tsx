@@ -83,7 +83,7 @@ export default function SettingsRoute() {
   }, [navigate]);
 
   return (
-    <div className="flex flex-col h-full w-full bg-bolt-elements-background-depth-1">
+    <div className="has-sticky-header flex flex-col h-full w-full overflow-y-auto overflow-x-hidden bg-bolt-elements-background-depth-1">
       {/* Same sticky contract as the landing route, see app/routes/_index.tsx. */}
       <div className="sticky top-0 z-above-sidebar shrink-0 bg-bolt-elements-background-depth-1">
         <Header />

@@ -119,7 +119,7 @@ export function PerformanceDashboard({ onClose }: { onClose?: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
-      <div className="bg-bolt-elements-bg-depth-1 border border-bolt-elements-borderColor rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-bolt-elements-borderColor">
           <h2 className="text-xl font-semibold text-bolt-elements-textPrimary">⚡ Performance Dashboard</h2>
@@ -159,7 +159,7 @@ export function PerformanceDashboard({ onClose }: { onClose?: () => void }) {
 
         {/* FPS Monitor */}
         {isMonitoringFps && (
-          <div className="p-4 bg-bolt-elements-bg-depth-2 border-b border-bolt-elements-borderColor">
+          <div className="p-4 bg-bolt-elements-background-depth-2 border-b border-bolt-elements-borderColor">
             <div className="flex items-center gap-6">
               <div>
                 <div className="text-sm text-bolt-elements-textSecondary">Current FPS</div>
@@ -171,7 +171,7 @@ export function PerformanceDashboard({ onClose }: { onClose?: () => void }) {
               </div>
               <div className="flex-1">
                 <div className="text-sm text-bolt-elements-textSecondary mb-1">Performance</div>
-                <div className="h-2 bg-bolt-elements-bg-depth-3 rounded-full overflow-hidden">
+                <div className="h-2 bg-bolt-elements-background-depth-3 rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all ${
                       fps >= 55 ? 'bg-green-500' : fps >= 45 ? 'bg-yellow-500' : 'bg-red-500'
@@ -205,7 +205,7 @@ export function PerformanceDashboard({ onClose }: { onClose?: () => void }) {
                 return (
                   <div
                     key={journey.name}
-                    className="bg-bolt-elements-bg-depth-2 border border-bolt-elements-borderColor rounded-lg p-4"
+                    className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg p-4"
                   >
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="font-semibold text-bolt-elements-textPrimary">{journey.name}</h3>
@@ -264,7 +264,7 @@ export function PerformanceDashboard({ onClose }: { onClose?: () => void }) {
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-bolt-elements-borderColor bg-bolt-elements-bg-depth-2">
+        <div className="p-4 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
           <p className="text-sm text-bolt-elements-textSecondary">
             Performance data is stored locally in your browser. Export to save or share with the team.
           </p>

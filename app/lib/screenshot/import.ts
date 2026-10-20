@@ -1,8 +1,24 @@
 import { validateGeneratedHtml } from './generate';
 import { WORK_DIR } from '~/utils/constants';
 
+/*
+ * What makes generated markup DANGEROUS once it lands in a project we then run.
+ *
+ * A `<script src="...">` is not, on its own, in that class: the pipeline emits
+ * `<script src="https://cdn.tailwindcss.com">` on essentially every HTML+Tailwind
+ * generation, so rejecting every `<script>` made the import fail 100% of the time on the
+ * default stack. Dangerous shapes are the ones that execute code we cannot review: inline
+ * script bodies, event handlers, `javascript:` URLs and active embeds. Script tags are
+ * stripped from the imported output instead of aborting the whole import.
+ */
+const INLINE_SCRIPT = /<script(?![^>]*\bsrc\s*=)[^>]*>[\s\S]*?<\/script\s*>/gi;
+const ANY_SCRIPT = /<script\b[^>]*>[\s\S]*?<\/script\s*>|<script\b[^>]*\/>/gi;
+
 const ACTIVE_MARKUP =
-  /<\s*(?:script|iframe|object|embed|base|form|svg|math|applet)\b|\bon[a-z]+\s*=|\b(?:javascript:|data:text\/html|@import|expression\s*\()/i;
+  /\bon[a-z]+\s*=|\b(?:javascript:|data:text\/html|@import|expression\s*\()|<\s*(?:iframe|object|embed|base|form|applet)\b/i;
+
+/** An inline script body is code we cannot review, that is the one hard failure. */
+const hasInlineScript = (html: string) => INLINE_SCRIPT.test(html);
 
 const GENERATED_PATH = `${WORK_DIR}/screenshot-generated.html`;
 
@@ -17,13 +33,24 @@ type Project = {
 export function validateImportableHtml(code: string): string {
   const html = validateGeneratedHtml(code);
 
+  if (hasInlineScript(html)) {
+    throw new Error(
+      'Generated HTML contains an inline script. Review the source and remove it before importing into Bolt.',
+    );
+  }
+
   if (ACTIVE_MARKUP.test(html)) {
     throw new Error(
       'Generated HTML contains active content. Review the source and remove scripts before importing into Bolt.',
     );
   }
 
-  return html;
+  /*
+   * External script tags (the Tailwind CDN, a font loader) are dropped rather than
+   * refused: the page keeps its markup and classes, and nothing remote executes inside
+   * the project. Without this, every HTML+Tailwind generation was un-importable.
+   */
+  return html.replace(ANY_SCRIPT, '');
 }
 
 /** Never create an artifact or start a process from untrusted model output. */

@@ -385,7 +385,7 @@ export function SelectionDialog({
           'flex items-start space-x-3 p-2 rounded-md transition-colors',
           selectedItems.includes(item.id)
             ? 'bg-bolt-elements-item-backgroundAccent'
-            : 'bg-bolt-elements-bg-depth-2 hover:bg-bolt-elements-item-backgroundActive',
+            : 'bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-item-backgroundActive',
         )}
         style={{
           ...style,
@@ -436,14 +436,14 @@ export function SelectionDialog({
                 size="sm"
                 onClick={handleSelectAll}
                 disabled={items.length === 0}
-                className="text-xs h-8 px-2 text-bolt-elements-textPrimary hover:text-bolt-elements-item-contentAccent hover:bg-bolt-elements-item-backgroundAccent bg-bolt-elements-bg-depth-2 dark:bg-transparent"
+                className="text-xs h-8 px-2 text-bolt-elements-textPrimary hover:text-bolt-elements-item-contentAccent hover:bg-bolt-elements-item-backgroundAccent bg-bolt-elements-background-depth-2 dark:bg-transparent"
               >
                 {selectAll ? 'Tout désélectionner' : 'Tout sélectionner'}
               </Button>
             </div>
 
             <div
-              className="pr-2 border rounded-md border-bolt-elements-borderColor bg-bolt-elements-bg-depth-2"
+              className="pr-2 border rounded-md border-bolt-elements-borderColor bg-bolt-elements-background-depth-2"
               style={{
                 maxHeight,
               }}

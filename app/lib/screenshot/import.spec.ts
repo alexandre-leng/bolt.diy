@@ -7,7 +7,7 @@ function project(files: Record<string, { type: 'file' | 'folder'; content?: stri
   return {
     files: { get: () => files },
     queueProjectMutation: async <T>(callback: () => Promise<T>) => callback(),
-    createFile: vi.fn(async () => true),
+    createFile: vi.fn(async (_path: string, _content: string) => true),
     showWorkbench: { set: vi.fn() },
     setSelectedFile: vi.fn(),
   };
@@ -31,8 +31,35 @@ describe('screenshot HTML import', () => {
   it('rejects active HTML in an existing Bolt project before any write', async () => {
     const workbench = project();
     const active = '<!doctype html><html><body><script>alert(1)</script></body></html>';
-    await expect(importScreenshotHtml(active, workbench)).rejects.toThrow(/active content/i);
+    await expect(importScreenshotHtml(active, workbench)).rejects.toThrow(/inline script|active content/i);
     expect(workbench.createFile).not.toHaveBeenCalled();
+  });
+
+  it('rejects event handlers and embeds before any write', async () => {
+    const workbench = project();
+    await expect(
+      importScreenshotHtml('<!doctype html><html><body><img src="x" onerror="alert(1)"></body></html>', workbench),
+    ).rejects.toThrow(/active content/i);
+    await expect(
+      importScreenshotHtml('<!doctype html><html><body><iframe src="x"></iframe></body></html>', workbench),
+    ).rejects.toThrow(/active content/i);
+    expect(workbench.createFile).not.toHaveBeenCalled();
+  });
+
+  it('imports HTML+Tailwind output by dropping the CDN script instead of refusing it', async () => {
+    const workbench = project();
+
+    // Every HTML+Tailwind generation carries this tag; refusing it made import impossible.
+    const tailwind =
+      '<!doctype html><html><head><script src="https://cdn.tailwindcss.com"></script>' +
+      '<style>body{margin:0}</style></head><body><h1 class="text-3xl">Bakery</h1></body></html>';
+
+    await importScreenshotHtml(tailwind, workbench);
+
+    const written = workbench.createFile.mock.calls[0][1] as unknown as string;
+    expect(written).not.toContain('<script');
+    expect(written).toContain('text-3xl');
+    expect(written).toContain('body{margin:0}');
   });
 
   it('preserves static CSS and images in a Bolt project', async () => {

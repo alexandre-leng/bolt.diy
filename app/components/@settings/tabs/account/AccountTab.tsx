@@ -59,7 +59,7 @@ async function postJson<T>(url: string, body: unknown, method: 'POST' | 'PATCH' 
 }
 
 const FIELD_CLASSES =
-  'w-full rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-3 py-2 text-sm text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-accent-500';
+  'w-full rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-3 py-2 text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-bolt-elements-borderColorActive';
 
 function PasswordField({
   id,
@@ -102,7 +102,7 @@ function PasswordField({
           aria-pressed={visible}
           aria-label={visible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
           title={visible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-          className="absolute right-1 top-1 grid h-8 w-8 place-items-center rounded-md text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500"
+          className="absolute right-1 top-1 grid h-8 w-8 place-items-center rounded-md bg-transparent text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500"
         >
           <span className={visible ? 'i-ph:eye-slash text-base' : 'i-ph:eye text-base'} aria-hidden="true" />
         </button>

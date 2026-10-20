@@ -48,6 +48,14 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
    */
   const actionStates = artifact ? artifact.runner.actions : EMPTY_ACTIONS_STORE;
 
+  /*
+   * A restore artifact is Bolt's own message, never the user's project: on a reopened chat it added
+   * a "Project Setup Incomplete" card above the conversation, describing a setup nobody started.
+   * Its actions still run (they write the files and start the server), so this hides the card only —
+   * the runner below keeps the action states subscribed.
+   */
+  const restoredSetup = isRestoreArtifact(artifactId);
+
   const actions = useStore(
     computed(actionStates, (actions) => {
       // Filter out Supabase actions except for migrations
@@ -72,6 +80,11 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
   }, [actions, artifact?.type, showActions]);
 
   if (!artifact) {
+    return null;
+  }
+
+  /* The restore's card is noise in a conversation the user reads; its actions keep running above. */
+  if (restoredSetup) {
     return null;
   }
 

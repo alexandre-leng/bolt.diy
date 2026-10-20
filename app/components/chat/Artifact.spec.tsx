@@ -107,6 +107,30 @@ describe('Artifact', () => {
     },
   );
 
+  /*
+   * A restore artifact is Bolt's own synthetic message: on a reopened chat it added a "Project Setup
+   * Incomplete" card above the conversation, describing a setup the user never started. It writes
+   * real files and starts the server, so it must keep running — only its card disappears.
+   */
+  it.each([['restored-project-setup'], ['restored-agent-files']])(
+    'renders no card for %s but keeps its actions registered',
+    (id) => {
+      const actions = map<Record<string, unknown>>({
+        write: { type: 'file', status: 'complete' },
+        server: { type: 'start', status: 'running' },
+      });
+
+      artifacts.set({
+        [id]: { id, title: 'Restored Project & Setup', type: 'bundled', closed: true, runner: { actions } },
+      });
+
+      const { container } = render(<Artifact messageId="message" artifactId={id} />);
+
+      expect(container).toBeEmptyDOMElement();
+      expect(actions.get().server).toBeDefined();
+    },
+  );
+
   it('keeps queued setup actions loading until they finish, including a running dev server', () => {
     const actions = map<Record<string, unknown>>({ install: { type: 'shell', status: 'pending' } });
     artifacts.set({

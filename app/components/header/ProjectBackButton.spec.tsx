@@ -33,21 +33,33 @@ describe('ProjectBackButton', () => {
     chatStore.setKey('started', true);
     render(<ProjectBackButton />);
 
-    const button = screen.getByRole('button', { name: 'Retour aux projets' });
-    expect(button.getAttribute('aria-label')).toBe('Retour aux projets');
+    const link = screen.getByRole('link', { name: 'Retour aux projets' });
+    expect(link.getAttribute('aria-label')).toBe('Retour aux projets');
   });
 
-  it('returns to the projects list and closes the workbench when clicked', () => {
+  it('navigates back to the projects list without opening the sidebar panel', () => {
     chatStore.setKey('started', true);
     workbenchStore.showWorkbench.set(true);
     render(<ProjectBackButton />);
 
+    const link = screen.getByTestId('back-to-projects');
+
+    // A real destination, not a dead button: this is what "back" means.
+    expect(link.tagName).toBe('A');
+    expect(link.getAttribute('href')).toBe('/');
+
     act(() => {
-      fireEvent.click(screen.getByTestId('back-to-projects'));
+      fireEvent.click(link);
     });
 
-    // Opening the panel alone would leave the preview covering it on a phone.
-    expect(sidebarOpenStore.get()).toBe(true);
+    /*
+     * The control sits 4px from the sidebar toggle, which already opens the panel. Sharing
+     * that behaviour made two adjacent icons look like a duplicate and left the user inside
+     * the conversation they asked to leave.
+     */
+    expect(sidebarOpenStore.get()).toBe(false);
+
+    // The preview must not stay on top of the projects list on a phone.
     expect(workbenchStore.showWorkbench.get()).toBe(false);
   });
 
@@ -55,9 +67,9 @@ describe('ProjectBackButton', () => {
     chatStore.setKey('started', true);
     render(<ProjectBackButton />);
 
-    const button = screen.getByTestId('back-to-projects');
-    expect(button.tagName).toBe('BUTTON');
-    button.focus();
-    expect(document.activeElement).toBe(button);
+    const link = screen.getByTestId('back-to-projects');
+    expect(link.getAttribute('href')).toBe('/');
+    link.focus();
+    expect(document.activeElement).toBe(link);
   });
 });

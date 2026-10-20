@@ -1,6 +1,5 @@
 import { useStore } from '@nanostores/react';
 import { chatStore } from '~/lib/stores/chat';
-import { openSidebar } from '~/lib/stores/sidebar';
 import { workbenchStore } from '~/lib/stores/workbench';
 
 /*
@@ -25,19 +24,31 @@ export function ProjectBackButton() {
 
   const label = 'Retour aux projets';
 
+  /*
+   * This control must NOT do what the sidebar toggle beside it does.
+   *
+   * Measured on the deployed build: this button called `openSidebar()`, exactly like the
+   * panel toggle 4px to its right. Two adjacent icon buttons with one behaviour read as a
+   * duplicate ("quand je charge une conversation, deux boutons apparaissent"), and the
+   * labelled "Retour aux projets" never left the conversation it claimed to leave. It is
+   * now a real link to the landing page, which is where the projects list lives.
+   *
+   * A link rather than a button keeps middle-click, ctrl-click and the browser's own back
+   * affordance working. The workbench is closed first so a phone does not land on a
+   * leftover preview overlay.
+   */
   return (
-    <button
-      type="button"
+    <a
+      href="/"
       data-testid="back-to-projects"
       aria-label={label}
       title={label}
       onClick={() => {
         workbenchStore.showWorkbench.set(false);
-        openSidebar();
       }}
       className="header-icon-control"
     >
       <span className="i-ph:caret-left text-xl" aria-hidden="true" />
-    </button>
+    </a>
   );
 }

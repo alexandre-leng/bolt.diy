@@ -10,6 +10,7 @@ import { TabTile } from '~/components/@settings/shared/components/TabTile';
 import type { ConnectorCredentialRequest } from '~/components/@settings/tabs/connectors/ConnectorsTab';
 
 // Import all tab components
+import AccountTab from '~/components/@settings/tabs/account/AccountTab';
 import ConnectorsTab from '~/components/@settings/tabs/connectors/ConnectorsTab';
 import { DataTab } from '~/components/@settings/tabs/data/DataTab';
 import { EventLogsTab } from '~/components/@settings/tabs/event-logs/EventLogsTab';
@@ -53,7 +54,7 @@ const BetaLabel = () => (
 
 const NAV_GROUPS: { label: string; tabs: TabType[] }[] = [
   { label: 'Préférences', tabs: ['settings', 'voice'] },
-  { label: 'Compte', tabs: ['profile', 'notifications'] },
+  { label: 'Compte', tabs: ['account', 'profile', 'notifications'] },
   { label: 'Espace de travail', tabs: ['features', 'data', 'event-logs'] },
   { label: 'Fournisseurs IA', tabs: ['cloud-providers', 'local-providers'] },
   { label: 'Intégrations', tabs: ['connectors', 'mcp'] },
@@ -190,6 +191,8 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
     switch (tabId) {
       case 'profile':
         return <ProfileTab />;
+      case 'account':
+        return <AccountTab />;
       case 'settings':
         return <SettingsTab />;
       case 'notifications':

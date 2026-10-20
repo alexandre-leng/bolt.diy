@@ -12,6 +12,13 @@ import {
 } from './agentFileReplay';
 import { getCachedMessages, getCachedSnapshot, invalidateChatCache } from './chatCache';
 import {
+  annotateTurn,
+  buildAgentRestoreActions,
+  missingTurnContext,
+  replayFilesFromSnapshot,
+  withChatNarration,
+} from './chatRestore';
+import {
   getMessagesByIdRaw,
   getMessagesByUrlIdRaw,
   openDatabase,
@@ -119,17 +126,7 @@ export interface ChatHistoryItem {
 const persistenceEnabled = !import.meta.env.VITE_DISABLE_PERSISTENCE;
 
 /** Text files of a snapshot, by absolute path. Binary entries are written by restoreSnapshot only. */
-function snapshotTextFiles(snapshot: Snapshot | undefined): Record<string, string> {
-  const files: Record<string, string> = {};
-
-  for (const [path, value] of Object.entries(snapshot?.files || {})) {
-    if (value?.type === 'file' && !value.isBinary) {
-      files[path] = value.content;
-    }
-  }
-
-  return files;
-}
+const snapshotTextFiles = replayFilesFromSnapshot;
 
 /**
  * A never-stored assistant message that writes back the files Agent-mode tool calls
@@ -333,6 +330,17 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
             const validSnapshot: Snapshot = snapshot || { chatIndex: '', files: {} }; // Ensure snapshot is not undefined
             const summary = validSnapshot.summary;
 
+            /*
+             * A chat is only "back" if it reads back. Reopened ones used to show a timeline of tool
+             * rows and empty assistant bubbles, because the agent's narration lives in text parts
+             * that the bubble never renders. The narration is folded into the rendered `content`,
+             * so a turn shows what was said around its tool calls.
+             *
+             * The catalog replay below still reads `storedMessages`: same messages, and the reading
+             * helpers fall back to the parts when `content` is empty.
+             */
+            const repairedMessages = withChatNarration(storedMessages.messages) as UIMessage[];
+
             const requestedRewind = searchParams.get('rewindTo');
             const rewindKey = `${storedMessages.id}:${requestedRewind}`;
 
@@ -363,9 +371,9 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
 
             let startingIdx = -1;
 
-            const endingIdx = rewindId ? rewindIndex + 1 : storedMessages.messages.length;
+            const endingIdx = rewindId ? rewindIndex + 1 : repairedMessages.length;
 
-            const snapshotIndex = storedMessages.messages.findIndex((m) => m.id === validSnapshot.chatIndex);
+            const snapshotIndex = repairedMessages.findIndex((m) => m.id === validSnapshot.chatIndex);
 
             if (snapshotIndex >= 0 && snapshotIndex < endingIdx) {
               startingIdx = snapshotIndex;
@@ -376,12 +384,12 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
               startingIdx = -1;
             }
 
-            let filteredMessages = storedMessages.messages.slice(startingIdx + 1, endingIdx);
+            let filteredMessages = repairedMessages.slice(startingIdx + 1, endingIdx);
             let archivedMessages: UIMessage[] = [];
             let setupMessage: UIMessage | undefined;
 
             if (startingIdx >= 0) {
-              archivedMessages = storedMessages.messages.slice(0, startingIdx + 1);
+              archivedMessages = repairedMessages.slice(0, startingIdx + 1);
             }
 
             if (startingIdx >= 0 && validSnapshot.preserveMessagesOnRestore) {
@@ -436,7 +444,7 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
                 }
               }
 
-              filteredMessages = storedMessages.messages.slice(0, endingIdx);
+              filteredMessages = repairedMessages.slice(0, endingIdx);
 
               if (setupMessage) {
                 filteredMessages = [...filteredMessages, setupMessage];
@@ -589,9 +597,14 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
                * artifacts re-run, but the agent's tool writes and its `npm run dev` do not,
                * so the preview stayed on the starter template (or showed nothing at all).
                */
-              const replayed = storedMessages.messages.slice(0, endingIdx);
+              const replayed = repairedMessages.slice(0, endingIdx) as typeof storedMessages.messages;
               const agentReplay = replayAgentFileOps(replayed);
 
+              /*
+               * This device has none of the project's files: the replay is all it will ever get,
+               * and in Agent mode no artifact ever started the server, so a project came back
+               * empty. The detected commands are the only source of a start command here.
+               */
               if (agentReplay.hasAgentWrites || agentReplay.deleted.length > 0) {
                 let commandActions = '';
                 let startsProject = messagesContainStartAction(replayed);
@@ -607,26 +620,27 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
                     return;
                   }
 
-                  if (startsProject) {
-                    /*
-                     * The template's own install ran on the template's package.json, before
-                     * this message writes the agent's: install again, then restart.
-                     */
-                    commandActions = replayCommandActions({
-                      deleted: agentReplay.deleted,
+                  /*
+                   * A project whose only "run" was an Agent tool call has no start action in its
+                   * record, and a manifest the agent rewrote makes the template's install stale.
+                   * Both are covered by the same builder: what is missing is written, and a setup is
+                   * chained in front of the start instead of being a separate action that can be
+                   * skipped.
+                   */
+                  const agentStart = lastAgentStartCommand(replayed);
+
+                  commandActions = [
+                    createDeleteActions(agentReplay.deleted),
+                    buildAgentRestoreActions({
+                      commands: projectCommands,
+                      agentStartCommand: agentStart,
                       reinstall,
-                      setupCommand: projectCommands.setupCommand,
-                      startCommand: projectCommands.startCommand || lastAgentStartCommand(replayed),
-                    });
-                  } else {
-                    commandActions = [
-                      createDeleteActions(agentReplay.deleted),
-                      createCommandActionsString(projectCommands),
-                    ]
-                      .filter(Boolean)
-                      .join('\n');
-                    startsProject = Boolean(projectCommands.startCommand);
-                  }
+                      hasStart: startsProject && !reinstall,
+                    }),
+                  ]
+                    .filter(Boolean)
+                    .join('\n');
+                  startsProject = startsProject || Boolean(projectCommands.startCommand) || Boolean(agentStart);
                 }
 
                 const agentReplayMessage = createAgentReplayMessage(agentReplay.files, commandActions);
@@ -639,6 +653,22 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
                   workbenchStore.showPreviewAfterRestore();
                 }
               }
+
+              /*
+               * The turn that lost its context (summary, selected files, token usage) gets it back
+               * from the previous turns of the same chat, so the recap and the next request are not
+               * blinder than the conversation they belong to.
+               */
+              const lastIndex = filteredMessages.length - 1;
+              const lastTurn = filteredMessages[lastIndex];
+              const recovered = missingTurnContext(replayed, lastTurn?.id);
+
+              if (lastTurn && Object.keys(recovered).length > 0) {
+                filteredMessages = [
+                  ...filteredMessages.slice(0, lastIndex),
+                  annotateTurn(lastTurn, recovered) as UIMessage,
+                ];
+              }
             }
 
             if (!isCurrentLoad()) {
@@ -649,7 +679,7 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
             knownTimestampRef.current = storedMessages.timestamp;
             conflictChatIdRef.current = undefined;
             lastCheckedCountRef.current = 0;
-            lastPersistedMessageIdRef.current = storedMessages.messages[endingIdx - 1]?.id;
+            lastPersistedMessageIdRef.current = repairedMessages[endingIdx - 1]?.id;
             setArchivedMessages(archivedMessages);
             setChatChanged(switchedChat);
             setInitialMessages(filteredMessages);

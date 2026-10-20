@@ -454,15 +454,28 @@ describe('useChatHistory — lot 3 regressions', () => {
     const { result } = renderHook(() => useChatHistory());
     await waitFor(() => expect(result.current.ready).toBe(true));
 
-    const replay = textOf(result.current.initialMessages.at(-1)!);
-    const remove = replay.indexOf('rm -rf "/home/project/src/App.css"');
-    const install = replay.indexOf('npm install');
-    const start = replay.indexOf('<boltAction type="start">');
+    /*
+     * The replayed message now also carries the narration of the turn, so the order to read is the
+     * order of the ARTIFACT's actions, not the first occurrence of each string in the whole text.
+     */
+    const last = result.current.initialMessages.at(-1)!;
+    const replay = textOf(last);
+    const artifactStart = replay.indexOf('<boltArtifact');
+    const actions = artifactStart === -1 ? replay : replay.slice(artifactStart);
+    const remove = actions.indexOf('rm -rf "/home/project/src/App.css"');
+    const install = actions.indexOf('npm install');
+    const start = actions.indexOf('<boltAction type="start">');
 
     expect(replay).toContain('restored-agent-files');
     expect(remove).toBeGreaterThan(-1);
+
+    /*
+     * Install and start are now ONE chained action (`npm install && npm run dev`): two separate
+     * actions could be separated by anything the runner decided to do in between, and the server
+     * then started on a tree whose dependencies were not there yet.
+     */
     expect(install).toBeGreaterThan(remove);
-    expect(start).toBeGreaterThan(install);
+    expect(actions.slice(install, install + 200)).toContain('&& npm run dev</boltAction>');
   });
 
   /*

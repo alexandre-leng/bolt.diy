@@ -1,5 +1,6 @@
 import { useStore } from '@nanostores/react';
 import { useEffect, useRef, useState } from 'react';
+import { requestOpenSettings } from '~/components/mobile/MobileNav';
 import { displayName, fetchSession, signOut, type Session } from '~/lib/auth/session';
 import { DEFAULT_AVATAR, profileStore } from '~/lib/stores/profile';
 import { classNames } from '~/utils/classNames';
@@ -72,6 +73,15 @@ export function AccountMenu() {
 
   const label = displayName(session.user) || profile?.username || 'Invité';
 
+  /*
+   * Open the account tab inside the app's settings panel. Same event the mobile bottom
+   * navigation uses, so there is ONE way to open a settings tab from anywhere in the app.
+   */
+  const openAccountTab = () => {
+    setOpen(false);
+    requestOpenSettings('account');
+  };
+
   const handleSignOut = () => {
     setSigningOut(true);
     signOut();
@@ -139,10 +149,23 @@ export function AccountMenu() {
 
           {session.authenticated ? (
             <>
-              <a role="menuitem" href="/settings" data-testid="account-settings" className={MENU_ITEM_CLASSES}>
-                <span className="i-ph:gear-six h-4 w-4" aria-hidden="true" />
+              {/*
+               * Opens the NATIVE account tab inside the app's own settings panel, not the
+               * server-rendered /settings page: that page carried its own header, its own
+               * accent and its own navigation, so following it left the product entirely.
+               * The /settings URL still resolves (nginx, for bookmarks), but nothing in the
+               * UI points at it any more.
+               */}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={openAccountTab}
+                data-testid="account-settings"
+                className={MENU_ITEM_CLASSES}
+              >
+                <span className="i-ph:user-circle h-4 w-4" aria-hidden="true" />
                 Mon compte
-              </a>
+              </button>
               <button
                 type="button"
                 role="menuitem"

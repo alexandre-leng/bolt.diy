@@ -626,6 +626,13 @@ export const Menu = () => {
   const handleSettingsClose = () => {
     setIsSettingsOpen(false);
     setSettingsInitialTab(undefined);
+
+    /*
+     * Tell the /settings route the panel is gone. That route only exists to keep a URL working;
+     * once the panel closes it must hand the address back to `/`, or the address bar keeps
+     * claiming a settings page that is no longer on screen.
+     */
+    window.dispatchEvent(new CustomEvent('bolt:settings-closed'));
   };
 
   const setDialogContentWithLogging = useCallback((content: DialogContent) => {
@@ -639,6 +646,7 @@ export const Menu = () => {
       <motion.div
         ref={menuRef}
         id="sidebar-panel"
+        data-settings-open={isSettingsOpen ? 'true' : 'false'}
         initial="closed"
         animate={open ? 'open' : 'closed'}
         variants={menuVariants}

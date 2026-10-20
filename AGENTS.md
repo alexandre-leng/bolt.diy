@@ -105,6 +105,10 @@ le vérifier avec `awk '$9==404' /var/log/nginx/access.log`.
 ## 6. Sécurité et secrets
 
 - **Jamais** dans le dépôt : clés API, mot de passe de session, `secret.key`, hash de mot de passe.
+- **Règle des clés (Alex, 2026-10-20)** : le déploiement ne porte **ni clé OpenAI ni clé Groq**, ni dans
+  `.env.local`, ni dans l'environnement du conteneur, ni en `vars`/`dev.vars`. Une clé qui n'a pas été
+  saisie manuellement par Alex est retirée, pas conservée « au cas où ». Fournisseur par défaut :
+  OpenCode Go (`OPENCODE_GO_API_KEY` + `OPENCODE_GO_API_BASE_URL`).
 - Les secrets vivent dans `/opt/bolt/.env.local` (mode 600) et `/opt/bolt/.bolt_password`.
 - Les variables d'environnement sont transmises au Worker par `--var` dans `entrypoint.sh` :
   un Worker **ne lit pas** `process.env`. Une clé absente de `--var` est invisible de l'application

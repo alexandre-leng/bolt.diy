@@ -361,3 +361,17 @@ body {
     touch-action: manipulation;
   }
 }
+
+/*
+ * Sticky header (every route that mounts <Header />: /, /settings, /starter, /git).
+ *
+ * A sticky element pins only while its containing block's ENTIRE area crosses the scrollport
+ * edge, so a scroller needs empty space under its last child or the bar is carried off the top
+ * for the final screenful. Measured on this fork before the class existed: scrolling a long
+ * conversation to the bottom took the header away again, which reads as "the header is not
+ * sticky after all". Apply it to the page column that owns `overflow-y-auto`; 4rem clears the
+ * 54px bar plus a comfortable gap.
+ */
+.has-sticky-header {
+  padding-bottom: 4rem;
+}

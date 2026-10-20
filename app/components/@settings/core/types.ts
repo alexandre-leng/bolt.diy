@@ -5,6 +5,7 @@ export type SettingCategory = 'profile' | 'file_sharing' | 'connectivity' | 'sys
 
 export type TabType =
   | 'profile'
+  | 'account'
   | 'settings'
   | 'notifications'
   | 'features'
@@ -70,6 +71,7 @@ export interface TabWindowConfig {
 }
 
 export const TAB_LABELS: Record<TabType, string> = {
+  account: 'Mon compte',
   profile: 'Profile',
   settings: 'Settings',
   notifications: 'Notifications',

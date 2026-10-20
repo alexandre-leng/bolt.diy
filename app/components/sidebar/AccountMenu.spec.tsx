@@ -34,7 +34,7 @@ describe('AccountMenu', () => {
 
   const admin = { id: 'u1', email: 'alexandre@lengereau.fr', emailVerified: true, isAdmin: true };
 
-  it('offers a sign-out and the account link when the session is valid', async () => {
+  it('offers a sign-out and the account entry when the session is valid', async () => {
     withSession(admin);
     render(<AccountMenu />);
 
@@ -42,8 +42,35 @@ describe('AccountMenu', () => {
 
     await waitFor(() => expect(screen.getByTestId('account-signout')).toBeTruthy());
     expect(screen.getByText('Connecté')).toBeTruthy();
-    expect(screen.getByTestId('account-settings').getAttribute('href')).toBe('/settings');
+
+    /*
+     * "Mon compte" must NOT navigate to /settings any more: that left the app for a
+     * server-rendered page with its own header. It opens the native account tab instead,
+     * through the same event the mobile navigation uses.
+     */
+    const accountEntry = screen.getByTestId('account-settings');
+    expect(accountEntry.tagName).toBe('BUTTON');
+    expect(accountEntry.getAttribute('href')).toBeNull();
+
     expect(screen.queryByTestId('account-signin')).toBeNull();
+  });
+
+  it('asks the app to open the account tab, not a URL', async () => {
+    withSession(admin);
+
+    const opened = vi.fn();
+    window.addEventListener('bolt:open-settings', opened);
+
+    render(<AccountMenu />);
+    await userEvent.click(screen.getByTestId('account-menu-trigger'));
+    await waitFor(() => expect(screen.getByTestId('account-settings')).toBeTruthy());
+
+    await userEvent.click(screen.getByTestId('account-settings'));
+
+    await waitFor(() => expect(opened).toHaveBeenCalled());
+    expect((opened.mock.calls[0][0] as CustomEvent).detail?.tab).toBe('account');
+
+    window.removeEventListener('bolt:open-settings', opened);
   });
 
   it('shows the admin badge only for an admin', async () => {

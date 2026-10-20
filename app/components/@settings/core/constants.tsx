@@ -1,4 +1,5 @@
 import {
+  CircleUserRound,
   User,
   Settings,
   Bell,
@@ -53,6 +54,7 @@ const SupabaseIcon = () => (
 );
 
 export const TAB_ICONS: Record<TabType, React.ComponentType<{ className?: string }>> = {
+  account: CircleUserRound,
   profile: User,
   settings: Settings,
   notifications: Bell,
@@ -73,6 +75,7 @@ export const TAB_ICONS: Record<TabType, React.ComponentType<{ className?: string
 };
 
 export const TAB_LABELS: Record<TabType, string> = {
+  account: 'Mon compte',
   profile: 'Profile',
   settings: 'Preferences',
   notifications: 'Notifications',
@@ -93,6 +96,7 @@ export const TAB_LABELS: Record<TabType, string> = {
 };
 
 export const TAB_DESCRIPTIONS: Record<TabType, string> = {
+  account: 'Profil, email, mot de passe, appareils connectés et suppression du compte',
   profile: 'Manage your profile and account settings',
   settings: 'Customize application settings and preferences',
   notifications: 'View and manage your notifications',
@@ -114,7 +118,8 @@ export const TAB_DESCRIPTIONS: Record<TabType, string> = {
 
 export const DEFAULT_TAB_CONFIG = [
   // User Window Tabs (Always visible by default)
-  { id: 'settings', visible: true, window: 'user' as const, order: 0 },
+  { id: 'account', visible: true, window: 'user' as const, order: 0 },
+  { id: 'settings', visible: true, window: 'user' as const, order: 1 },
   { id: 'features', visible: true, window: 'user' as const, order: 1 },
   { id: 'data', visible: true, window: 'user' as const, order: 2 },
   { id: 'cloud-providers', visible: true, window: 'user' as const, order: 3 },

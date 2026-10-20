@@ -363,6 +363,17 @@
 
   // Function to activate/deactivate inspector
   function setInspectorActive(active) {
+    /*
+     * This script is injected into the preview document as early as possible, so the parent
+     * can post INSPECTOR_ACTIVATE before <body>/<head> exist. Touching document.body then
+     * threw and the preview surfaced "Error occurred at / Port: 443" with a setInspectorActive
+     * stack, which looks like a network failure and is not one. Nothing to decorate yet means
+     * nothing to activate: stay inert and let the next message arrive once the DOM is there.
+     */
+    if (active && (!document.body || !document.head)) {
+      return;
+    }
+
     isInspectorActive = active;
 
     if (active) {
@@ -382,14 +393,14 @@
         document.head.appendChild(inspectorStyle);
       }
 
-      document.body.classList.add('inspector-active');
+      document.body?.classList.add('inspector-active');
 
       // Add event listeners
       document.addEventListener('mousemove', handleMouseMove, true);
       document.addEventListener('click', handleClick, true);
       document.addEventListener('mouseleave', handleMouseLeave, true);
     } else {
-      document.body.classList.remove('inspector-active');
+      document.body?.classList.remove('inspector-active');
 
       // Remove highlight
       if (currentHighlight) {
@@ -415,7 +426,7 @@
     if (event.source !== window.parent) return;
 
     if (event.data.type === 'INSPECTOR_ACTIVATE') {
-      setInspectorActive(event.data.active);
+      setInspectorActive(Boolean(event.data.active));
     } else if (
       event.data.type === 'INSPECTOR_EDIT_STYLE' ||
       event.data.type === 'INSPECTOR_EDIT_TEXT' ||

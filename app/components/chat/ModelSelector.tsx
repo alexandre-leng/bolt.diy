@@ -1096,23 +1096,38 @@ export const ModelSelector = ({
         <div className="relative flex w-full min-w-[70%] sm:min-w-[60%]">
           <label className="w-full">
             <span className="sr-only">Niveau de réflexion</span>
-            <select
-              aria-label="Niveau de réflexion"
-              value={effort}
-              onChange={(event) => changeEffort(event.target.value as ModelEffort)}
-              className={classNames(
-                'w-full p-2 rounded-lg border border-bolt-elements-borderColor',
-                'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary',
-                'focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus',
-                'transition-all cursor-pointer text-sm',
-              )}
-            >
-              {effortChoices.map((choice) => (
-                <option key={choice.value} value={choice.value}>
-                  {choice.label}
-                </option>
-              ))}
-            </select>
+            {/*
+             * Styled to match the two comboboxes above it. A bare <select> rendered 37px tall at
+             * 14px with the browser's own arrow, next to 42px/16px Phosphor-chevron controls
+             * (measured on the live host). `appearance: none` removes the native arrow so the same
+             * chevron can be drawn, and the padding/height/type now match the neighbours.
+             */}
+            <div className="relative w-full">
+              <select
+                aria-label="Niveau de réflexion"
+                value={effort}
+                onChange={(event) => changeEffort(event.target.value as ModelEffort)}
+                className={classNames(
+                  'w-full p-2 pr-8 rounded-lg border border-bolt-elements-borderColor',
+                  'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary',
+                  'focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus',
+                  'transition-all cursor-pointer text-base leading-6',
+                  'appearance-none truncate',
+                )}
+              >
+                {effortChoices.map((choice) => (
+                  <option key={choice.value} value={choice.value}>
+                    {choice.label}
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2">
+                <div
+                  className="i-ph:caret-down w-4 h-4 text-bolt-elements-textSecondary opacity-75"
+                  aria-hidden="true"
+                />
+              </div>
+            </div>
           </label>
         </div>
       )}

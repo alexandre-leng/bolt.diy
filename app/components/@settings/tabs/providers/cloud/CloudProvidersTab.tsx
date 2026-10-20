@@ -322,24 +322,33 @@ const CloudProvidersTab = () => {
                         <div className="i-ph:brain text-sm" />
                         <span>Réflexion (raisonnement)</span>
                       </label>
-                      <select
-                        aria-label={`Niveau de réflexion pour ${provider.name}`}
-                        value={provider.settings.effort ?? 'auto'}
-                        onChange={(event) => handleUpdateEffort(provider, event.target.value)}
-                        className={classNames(
-                          'mt-1.5 w-full px-3 py-1.5 rounded-lg text-sm',
-                          'bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor',
-                          'text-bolt-elements-textPrimary',
-                          'focus:outline-none focus:ring-2 focus:ring-purple-500/30',
-                          'transition-all duration-200',
-                        )}
-                      >
-                        {REASONING_CHOICES.map((choice) => (
-                          <option key={choice.value} value={choice.value}>
-                            {choice.label}
-                          </option>
-                        ))}
-                      </select>
+                      {/* Same control shape as the composer: no native arrow, one chevron, fixed height. */}
+                      <div className="relative mt-1.5">
+                        <select
+                          aria-label={`Niveau de réflexion pour ${provider.name}`}
+                          value={provider.settings.effort ?? 'auto'}
+                          onChange={(event) => handleUpdateEffort(provider, event.target.value)}
+                          className={classNames(
+                            'w-full px-3 py-1.5 pr-9 rounded-lg text-sm',
+                            'bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor',
+                            'text-bolt-elements-textPrimary',
+                            'focus:outline-none focus:ring-2 focus:ring-purple-500/30',
+                            'transition-all duration-200 appearance-none cursor-pointer truncate',
+                          )}
+                        >
+                          {REASONING_CHOICES.map((choice) => (
+                            <option key={choice.value} value={choice.value}>
+                              {choice.label}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2">
+                          <div
+                            className="i-ph:caret-down w-4 h-4 text-bolt-elements-textSecondary opacity-75"
+                            aria-hidden="true"
+                          />
+                        </div>
+                      </div>
                       <p className="mt-1 text-xs text-bolt-elements-textTertiary">
                         Automatique garde le réglage qui laisse l'agent écrire des fichiers ; un niveau plus élevé fait
                         réfléchir le modèle davantage (plus lent, plus cher).

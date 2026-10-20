@@ -8,6 +8,12 @@ $zIndexMax: 999;
   z-index: $zIndexMax - 2;
 }
 
+/* Chromeless header controls (the one sidebar toggle, the back control) sit above the panel. */
+.z-above-sidebar {
+  position: relative;
+  z-index: $zIndexMax - 1;
+}
+
 .z-port-dropdown {
   z-index: $zIndexMax - 3;
 }

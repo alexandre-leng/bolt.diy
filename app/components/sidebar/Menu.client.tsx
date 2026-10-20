@@ -145,6 +145,11 @@ export const Menu = () => {
   const { started: chatStarted } = useStore(chatStore);
 
   // Explicit open/close (buttons): remembered. Hover peeks use peek/unpeekSidebar.
+  /*
+   * Closing the history panel no longer has an in-panel button: the header toggle owns it
+   * (see Header.tsx). `closeSidebar` is kept because `setOpen` is still the single explicit
+   * open/close helper used by the effects below.
+   */
   const setOpen = useCallback((next: boolean) => (next ? openSidebar() : closeSidebar()), []);
   const [dialogContent, setDialogContent] = useState<DialogContent>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -593,6 +598,7 @@ export const Menu = () => {
       {/* Full screen on phones (Lovable's Projects tab), a 340px panel from 768px. */}
       <motion.div
         ref={menuRef}
+        id="sidebar-panel"
         initial="closed"
         animate={open ? 'open' : 'closed'}
         variants={menuVariants}
@@ -604,28 +610,12 @@ export const Menu = () => {
         )}
       >
         {/*
-         * Panel header. Both controls used to paint the browser's default light-grey button
-         * surface (measured rgb(239,239,239)) on top of this rgb(52,55,70) bar, in BOTH
-         * themes — two light rectangles that read as broken. `header-icon-control` sets an
-         * explicit transparent surface and one shared 36px round geometry, the same control
-         * used by the app header, so the two bars finally match.
+         * Panel header. It holds only the help and account controls: the close button that used
+         * to sit on the left painted the same left chevron as the header's back control while
+         * meaning the opposite action. Closing is the header toggle's job (it stays above this
+         * panel, see `z-above-sidebar`), so there is exactly one close handle and no look-alike.
          */}
-        <div className="h-12 flex items-center justify-between px-3 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 md:rounded-tr-2xl">
-          {/*
-           * In-panel close control. Without it the sidebar could only be closed
-           * by a mouse leaving it (hover) — impossible on touch, where the
-           * panel would then trap the user with the chat hidden behind it.
-           */}
-          <button
-            type="button"
-            onClick={() => setOpen(false)}
-            aria-label="Fermer le panneau"
-            title="Fermer le panneau"
-            data-testid="sidebar-close"
-            className="header-icon-control text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary"
-          >
-            <span className="i-ph:caret-left text-lg" aria-hidden="true" />
-          </button>
+        <div className="h-12 flex items-center justify-end px-3 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 md:rounded-tr-2xl">
           <div className="flex items-center gap-1">
             <HelpButton onClick={() => setIsDocumentationOpen(true)} />
             <AccountMenu />
@@ -857,23 +847,14 @@ export const Menu = () => {
         </div>
       </motion.div>
 
-      {/* Persistent sidebar trigger when closed — desktop only; phones use the bottom navigation. */}
-      {!open && !isSettingsOpen && (
-        <button
-          onClick={() => setOpen(true)}
-          className={classNames(
-            'hidden md:block fixed left-0 top-[72px] z-sidebar',
-            'bg-bolt-elements-background-depth-1',
-            'border border-l-0 border-bolt-elements-borderColor',
-            'rounded-r-lg p-1.5 shadow-sm',
-            'hover:bg-bolt-elements-background-depth-2',
-            'transition-colors',
-          )}
-          aria-label="Ouvrir le panneau"
-        >
-          <div className="i-ph:caret-right text-gray-500 dark:text-gray-400" />
-        </button>
-      )}
+      {/*
+       * There is deliberately no floating "open" chevron pinned to the left edge here.
+       * It duplicated the header toggle (the only thing it added was a second, unlabelled
+       * surface glued to the viewport edge, hard-coded at top-[72px], and it only existed on
+       * desktop), while the hover-at-edge peek below already offers the same shortcut to a
+       * mouse user. One open handle in the header, one close handle (the same toggle), plus
+       * the hover peek: nothing to reconcile.
+       */}
 
       <Suspense fallback={null}>
         <LazyControlPanel open={isSettingsOpen} onClose={handleSettingsClose} initialTab={settingsInitialTab as any} />

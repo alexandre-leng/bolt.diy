@@ -169,3 +169,48 @@ describe('Menu: French chrome (U13)', () => {
     expect(screen.getByLabelText('Rechercher une conversation')).toBeTruthy();
   });
 });
+
+/*
+ * One close handle (user: "3 boutons qui font la même tâche, on pourrait fusionner").
+ *
+ * The panel carried its own close chevron AND a floating edge chevron; both duplicated the
+ * header toggle, and the close chevron drew the same icon as the header's back control while
+ * doing the opposite. The panel must now expose neither: closing happens in the header, which
+ * is painted above the panel.
+ */
+describe('Menu: a single open/close handle', () => {
+  it('has no close button of its own', async () => {
+    const { container } = await renderMenu();
+
+    expect(container.querySelector('[data-testid="sidebar-close"]')).toBeNull();
+    expect(screen.queryByLabelText('Fermer le panneau')).toBeNull();
+  });
+
+  it('renders no floating trigger pinned to the left edge', async () => {
+    const { container } = await renderMenu();
+
+    /*
+     * The panel is open here: the old trigger only appeared when closed, so check the markup
+     * for the class signature instead of relying on state.
+     */
+    expect(container.innerHTML).not.toContain('top-[72px]');
+    expect(screen.queryByLabelText('Ouvrir le panneau')).toBeNull();
+  });
+
+  it('exposes the panel id the header toggle points at', async () => {
+    const { container } = await renderMenu();
+
+    expect(container.querySelector('#sidebar-panel')).toBeTruthy();
+  });
+
+  it('keeps a single exit from selection mode, labelled', async () => {
+    await renderMenu();
+
+    act(() => {
+      fireEvent.click(screen.getByLabelText('Sélectionner des conversations'));
+    });
+
+    const exits = screen.getAllByLabelText('Quitter la sélection');
+    expect(exits.length).toBe(1);
+  });
+});

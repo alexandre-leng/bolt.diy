@@ -24,8 +24,14 @@ export function Header() {
        * Left cluster. One gap for the whole group (`gap-1`) so the back control, the
        * sidebar toggle and the logo read as a single unit instead of three items placed
        * by accident: measured before this change, the internal gaps were 8 / 8 / 630 px.
+       *
+       * `z-above-sidebar` is deliberate: the sidebar is a `fixed` panel at z-index 997 and the
+       * header is static, so when the panel opened it covered this whole cluster except the
+       * logo (the only child that carried a z-index). The header toggle then promised to close
+       * a panel it was buried under. This cluster holds the one toggle and the one back control,
+       * so it must stay painted above the panel.
        */}
-      <div className="flex items-center gap-1 min-w-0 z-logo text-bolt-elements-textPrimary">
+      <div className="flex items-center gap-1 min-w-0 z-above-sidebar text-bolt-elements-textPrimary">
         {/*
          * Visible back control while a conversation is open (user-reported gap).
          * Renders nothing on the landing page, where there is nowhere to go back to.
@@ -33,9 +39,11 @@ export function Header() {
         <ClientOnly>{() => <ProjectBackButton />}</ClientOnly>
 
         {/*
-         * Sidebar toggle. This used to be a bare <div> holding an icon: no
-         * onClick, no button semantics, no accessible name — it merely looked
-         * like a control, so clicking it did nothing on every browser.
+         * Sidebar toggle: the ONLY control that opens and closes the panel. It used to compete
+         * with three others (a close button inside the panel, a floating chevron pinned to the
+         * left edge on desktop, and the "back to projects" chevron which silently opened the
+         * panel), so one intention had four handles and two of them showed the same chevron for
+         * opposite actions. The icon now states the action instead of the widget type.
          */}
         <ClientOnly>{() => <SidebarToggle />}</ClientOnly>
 
@@ -102,18 +110,20 @@ export function Header() {
  */
 function SidebarToggle() {
   const isOpen = useStore(sidebarOpenStore);
+  const label = isOpen ? 'Fermer le panneau' : 'Ouvrir le panneau';
 
   return (
     <button
       type="button"
       onClick={toggleSidebar}
-      aria-label={isOpen ? 'Fermer le panneau' : 'Ouvrir le panneau'}
+      aria-label={label}
       aria-expanded={isOpen}
-      title={isOpen ? 'Fermer le panneau' : 'Ouvrir le panneau'}
+      aria-controls="sidebar-panel"
+      title={label}
       data-testid="sidebar-toggle"
       className="header-icon-control"
     >
-      <span className="i-ph:sidebar-simple-duotone text-xl" aria-hidden="true" />
+      <span className={classNames('text-xl', isOpen ? 'i-ph:caret-left' : 'i-ph:sidebar-simple')} aria-hidden="true" />
     </button>
   );
 }

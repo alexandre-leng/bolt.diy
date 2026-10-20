@@ -1,23 +1,23 @@
 import { useStore } from '@nanostores/react';
+import { useNavigate } from 'react-router';
 import { chatStore } from '~/lib/stores/chat';
-import { openSidebar } from '~/lib/stores/sidebar';
+import { closeSidebar } from '~/lib/stores/sidebar';
 import { workbenchStore } from '~/lib/stores/workbench';
 
 /*
- * Visible "back" control (user-reported: "il faut que les boutons apparents de
- * retour soient disponibles").
+ * Visible "back" control inside a conversation.
  *
- * Measured on the deployed build: inside a conversation the header held only
- * the sidebar toggle and the logo <a href="/">. No chevron, no label, desktop
- * OR phone — the logo was the only way out and nothing marked it clickable.
- * A user landing on /chat/<id> had no explicit way back to the projects list.
+ * What it must NOT do: open the history panel. It used to call `openSidebar()`, so one click
+ * ran two commands and the label promised a destination it never reached — the user stayed on
+ * the same chat with a panel over it, and that panel already had two other ways to open it.
  *
- * This renders one labelled chevron that returns to the projects list. It also
- * closes the workbench, so on a phone it lands on a usable surface rather than
- * leaving the preview open over the chat.
+ * What it does now: leaves the conversation (`/` shows the prompt plus "Vos conversations"),
+ * closes the preview so a phone lands on a usable surface instead of a split screen, and hides
+ * the panel so the landing page is not half covered by a list the user just left.
  */
 export function ProjectBackButton() {
   const { started } = useStore(chatStore);
+  const navigate = useNavigate();
 
   if (!started) {
     return null;
@@ -33,7 +33,8 @@ export function ProjectBackButton() {
       title={label}
       onClick={() => {
         workbenchStore.showWorkbench.set(false);
-        openSidebar();
+        closeSidebar();
+        navigate('/');
       }}
       className="header-icon-control"
     >

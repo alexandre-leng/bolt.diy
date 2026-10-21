@@ -1,5 +1,6 @@
 import { useStore } from '@nanostores/react';
 import * as RadixDialog from '@radix-ui/react-dialog';
+import { Users } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { AvatarDropdown } from './AvatarDropdown';
 import { TAB_LABELS, TAB_ICONS, DEFAULT_TAB_CONFIG, TAB_DESCRIPTIONS } from './constants';
@@ -15,6 +16,7 @@ import { EventLogsTab } from '~/components/@settings/tabs/event-logs/EventLogsTa
 import FeaturesTab from '~/components/@settings/tabs/features/FeaturesTab';
 import GitHubTab from '~/components/@settings/tabs/github/GitHubTab';
 import GitLabTab from '~/components/@settings/tabs/gitlab/GitLabTab';
+import { IaAccessTab } from '~/components/@settings/tabs/ia/IaAccessTab';
 import McpTab from '~/components/@settings/tabs/mcp/McpTab';
 import NetlifyTab from '~/components/@settings/tabs/netlify/NetlifyTab';
 import NotificationsTab from '~/components/@settings/tabs/notifications/NotificationsTab';
@@ -51,11 +53,36 @@ const BetaLabel = () => (
   </div>
 );
 
-const NAV_GROUPS: { label: string; tabs: TabType[] }[] = [
+interface NavGroup {
+  label: string;
+  tabs: TabType[];
+  adminOnly?: boolean;
+
+  /** Render the link to the server-rendered accounts page under this group. */
+  accountsLink?: boolean;
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  /*
+   * Administration sits FIRST in the sidebar, above Préférences: it is the section an operator
+   * comes to Settings for, and at the bottom of the grid (its first position) it was still below
+   * the fold. A sidebar entry is always one click away.
+   */
+  { label: 'Administration', tabs: ['admin-keys'], adminOnly: true, accountsLink: true },
   { label: 'Préférences', tabs: ['settings', 'voice'] },
   { label: 'Compte', tabs: ['account', 'profile', 'notifications'] },
   { label: 'Espace de travail', tabs: ['features', 'data', 'event-logs'] },
-  { label: 'Fournisseurs IA', tabs: ['cloud-providers', 'local-providers'] },
+
+  /* The user-facing view of the admin policy: read-only, so it is in the sidebar for everybody. */
+  { label: 'Fournisseurs IA', tabs: ['ia-access'], adminOnly: false },
+
+  /*
+   * The editable provider screens are ADMIN ONLY. They carry a key field, a base-URL field and
+   * the reasoning-effort selector per provider: leaving them in reach of a normal account is
+   * exactly what made "the settings are hidden" untrue, since the keys they write land in the
+   * `apiKeys` cookie and are then spent by that account.
+   */
+  { label: 'Configuration des fournisseurs', tabs: ['cloud-providers', 'local-providers'], adminOnly: true },
   { label: 'Intégrations', tabs: ['connectors', 'mcp'] },
   { label: 'Extensions', tabs: ['plugins'] },
 ];
@@ -248,6 +275,8 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
         return <PluginTab />;
       case 'admin-keys':
         return <AdminKeysTab />;
+      case 'ia-access':
+        return <IaAccessTab />;
 
       default:
         return null;
@@ -325,10 +354,21 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
     setTimeout(() => setLoadingTab(null), 500);
   };
 
+  /*
+   * The sidebar list: drop the notification tab when the user turned it off, drop the whole
+   * Administration group when the caller is not an administrator, and drop a group that ended
+   * up empty so no bare section heading is left behind.
+   */
   const navigationTabs = NAV_GROUPS.map((group) => ({
     ...group,
     tabs: group.tabs.filter((id) => id !== 'notifications' || profile?.preferences?.notifications !== false),
-  }));
+  })).filter((group) => {
+    if (group.adminOnly && !isAdmin) {
+      return false;
+    }
+
+    return group.tabs.length > 0;
+  });
 
   return (
     <RadixDialog.Root open={open}>
@@ -356,6 +396,21 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
               )}
             >
               <div className="relative z-10 flex h-full min-h-0">
+                {/*
+                 * A permanent close control. On desktop "Retour au projet" and outside-click are the
+                 * only exits, and on phones that link scrolls away with the navigation list, which
+                 * reads as a panel you cannot close. Sits above both panes, outside the scroll areas.
+                 */}
+                <button
+                  type="button"
+                  data-testid="settings-close"
+                  aria-label="Fermer les réglages"
+                  title="Fermer"
+                  onClick={handleClose}
+                  className="absolute right-3 top-3 z-20 flex h-11 w-11 items-center justify-center rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary transition-colors hover:bg-bolt-elements-item-backgroundActive hover:text-bolt-elements-textPrimary focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500 sm:h-10 sm:w-10"
+                >
+                  <span className="i-ph:x h-5 w-5" aria-hidden="true" />
+                </button>
                 <aside
                   ref={navigationRef}
                   data-testid="settings-navigation"
@@ -366,11 +421,11 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
                 >
                   <button
                     onClick={handleClose}
-                    className="mx-4 mt-4 flex appearance-none items-center gap-2 border-0 border-b border-solid border-bolt-elements-borderColor bg-transparent px-2 pb-5 pt-2 text-left text-sm font-semibold text-bolt-elements-textPrimary hover:text-bolt-elements-item-contentAccent"
+                    className="mx-4 mt-4 mr-16 flex appearance-none items-center gap-2 border-0 border-b border-solid border-bolt-elements-borderColor bg-transparent px-2 pb-5 pt-2 text-left text-sm font-semibold text-bolt-elements-textPrimary hover:text-bolt-elements-item-contentAccent sm:mr-4"
                   >
                     <span className="i-ph:arrow-left w-4 h-4" /> Retour au projet
                   </button>
-                  <nav className="min-h-0 flex-1 overflow-y-auto modern-scrollbar px-3 py-4">
+                  <nav className="min-h-0 flex-1 overflow-y-auto modern-scrollbar px-3 py-4 pt-5">
                     {navigationTabs.map((group) => (
                       <div key={group.label} className="mb-5">
                         <p className="mb-2 px-2 text-[11px] font-medium uppercase tracking-wide text-bolt-elements-textTertiary">
@@ -403,6 +458,17 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
                             </button>
                           );
                         })}
+                        {/* Comptes is a server-rendered page on the accounts service, not a
+                            tab of this panel: an anchor, because it leaves the app shell. */}
+                        {group.accountsLink && (
+                          <a
+                            href="/admin/users"
+                            data-testid="nav-admin-users"
+                            className="flex w-full appearance-none items-center gap-3 rounded-md border-0 px-2 py-2 text-left text-sm transition-colors bg-transparent text-bolt-elements-textSecondary hover:bg-bolt-elements-item-backgroundActive hover:text-bolt-elements-textPrimary"
+                          >
+                            <Users className="h-4 w-4" aria-hidden="true" /> Comptes
+                          </a>
+                        )}
                       </div>
                     ))}
                   </nav>
@@ -416,7 +482,7 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
                   aria-label="Contenu des réglages"
                   data-testid="settings-content"
                   className={classNames(
-                    'min-w-0 flex-1 overflow-y-auto modern-scrollbar p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 md:px-10 md:py-8',
+                    'min-w-0 flex-1 overflow-y-auto modern-scrollbar px-4 pt-8 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-10 sm:pb-6 md:px-10 md:pt-12 md:pb-8',
                     mobileNavigationOpen ? 'hidden sm:block' : 'block',
                   )}
                 >

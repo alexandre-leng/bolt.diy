@@ -22,7 +22,8 @@ export type TabType =
   | 'mcp'
   | 'voice'
   | 'plugins'
-  | 'admin-keys';
+  | 'admin-keys'
+  | 'ia-access';
 
 export type WindowType = 'user' | 'developer';
 
@@ -94,6 +95,7 @@ export const TAB_LABELS: Record<TabType, string> = {
   voice: 'Voix',
   plugins: 'Plugins',
   'admin-keys': "Clés API de l'instance",
+  'ia-access': 'Mon accès IA',
 };
 
 export const categoryLabels: Record<SettingCategory, string> = {

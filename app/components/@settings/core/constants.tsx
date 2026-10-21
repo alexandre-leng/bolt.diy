@@ -14,6 +14,7 @@ import {
   Blocks,
   Mic,
   KeyRound,
+  Sparkles,
 } from 'lucide-react';
 import type { TabType } from './types';
 
@@ -74,6 +75,7 @@ export const TAB_ICONS: Record<TabType, React.ComponentType<{ className?: string
   voice: Mic,
   plugins: Blocks,
   'admin-keys': KeyRound,
+  'ia-access': Sparkles,
 };
 
 export const TAB_LABELS: Record<TabType, string> = {
@@ -96,6 +98,7 @@ export const TAB_LABELS: Record<TabType, string> = {
   voice: 'Voix',
   plugins: 'Plugins',
   'admin-keys': "Clés API de l'instance",
+  'ia-access': 'Mon accès IA',
 };
 
 export const TAB_DESCRIPTIONS: Record<TabType, string> = {
@@ -118,6 +121,7 @@ export const TAB_DESCRIPTIONS: Record<TabType, string> = {
   voice: 'Dictée au micro et synthèse vocale',
   plugins: 'Discover, install, and manage plugins',
   'admin-keys': "Clés API configurees pour toute l'instance (administrateurs uniquement)",
+  'ia-access': "Les modèles et les fournisseurs que l'administrateur vous a ouverts",
 };
 
 export const DEFAULT_TAB_CONFIG = [
@@ -136,13 +140,20 @@ export const DEFAULT_TAB_CONFIG = [
   { id: 'plugins', visible: true, window: 'user' as const, order: 10 },
 
   /*
-   * Administration, FIRST in the grid: it is the setting an administrator comes here for, and
-   * at order 11 it sat below the fold behind nine other tiles, which read as "the feature is
-   * missing". `visible` only means "not hidden by the user configuration": the real gate is
-   * `isAdminOnly`, applied in ControlPanel against /api/auth/me, so an ordinary account never
-   * sees the tile even though it is in the catalogue.
+   * Administration lives in the SIDEBAR (see NAV_GROUPS), not as a grid tile: the operator asked
+   * for it there, and a tile at the bottom of a two-column grid was below the fold. `visible:
+   * false` keeps the id in the catalogue — the sidebar group needs it, and `getTabComponent`
+   * resolves it — while removing it from the grid, which renders only `visible` tabs.
+   * The role gate is `isAdminOnly`, applied in ControlPanel against /api/auth/me.
    */
-  { id: 'admin-keys', visible: true, window: 'user' as const, order: -1, isAdminOnly: true },
+  { id: 'admin-keys', visible: false, window: 'user' as const, order: -1, isAdminOnly: true },
+
+  /*
+   * The user-facing counterpart of the admin policy: what the administrator opened to this
+   * account. It is a read-only view, so everybody gets the tile, and it is where a locked
+   * setting explains itself instead of simply being missing.
+   */
+  { id: 'ia-access', visible: true, window: 'user' as const, order: 2, isAdminOnly: false },
 
   // Legacy individual connector tabs (hidden by default, kept for backward compatibility)
   { id: 'github', visible: false, window: 'user' as const, order: 10 },

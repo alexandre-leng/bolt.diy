@@ -20,6 +20,16 @@ vi.mock('~/components/@settings/tabs/connectors/ConnectorsTab', () => ({ default
 vi.mock('~/components/@settings/tabs/mcp/McpTab', () => ({ default: () => <div>mcp-body</div> }));
 vi.mock('~/components/@settings/tabs/plugins/PluginTab', () => ({ default: () => <div>plugin-body</div> }));
 vi.mock('~/components/@settings/tabs/event-logs/EventLogsTab', () => ({ EventLogsTab: () => <div>logs-body</div> }));
+
+const sessionState = vi.hoisted(() => ({ isAdmin: false }));
+
+vi.mock('~/lib/auth/session', () => ({
+  fetchSession: async () => ({
+    loading: false,
+    authenticated: true,
+    user: { id: 'u1', email: 'someone@example.test', emailVerified: true, isAdmin: sessionState.isAdmin },
+  }),
+}));
 vi.mock('~/components/@settings/core/AvatarDropdown', () => ({ AvatarDropdown: () => <div /> }));
 vi.mock('~/components/ui/DocumentationPanel', () => ({ DocumentationPanel: () => null }));
 vi.mock('~/lib/hooks/useConnectionStatus', () => ({
@@ -59,6 +69,34 @@ const setViewport = (mobile: boolean) => {
       }) as unknown as MediaQueryList,
   );
 };
+
+/*
+ * The model settings are the administrator's. These cases pin which SURFACE a normal account
+ * gets, because the old arrangement was the bug: the provider screens, with their key field,
+ * were one click away from every account while the panel looked "restricted".
+ */
+describe('control panel: model settings are administrator-only', () => {
+  beforeEach(() => {
+    setViewport(false);
+  });
+
+  it('shows the editable provider screens to an administrator', async () => {
+    sessionState.isAdmin = true;
+    render(<ControlPanel open onClose={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /cloud providers/i })).toBeInTheDocument());
+  });
+
+  it('hides the editable provider screens from a normal account, keeping the read-only view', async () => {
+    sessionState.isAdmin = false;
+    render(<ControlPanel open onClose={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /mon accès ia/i })).toBeInTheDocument());
+
+    expect(screen.queryByRole('button', { name: /cloud providers/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /local providers/i })).toBeNull();
+  });
+});
 
 describe('ControlPanel accessibility', () => {
   beforeEach(() => {
@@ -118,5 +156,40 @@ describe('ControlPanel accessibility', () => {
     expect(screen.getByTestId('settings-content')).not.toHaveFocus();
     expect(document.activeElement).not.toBe(screen.getByTestId('settings-content'));
     void before;
+  });
+
+  it('closes from the dedicated close control', () => {
+    const onClose = vi.fn();
+    render(<ControlPanel open onClose={onClose} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer les réglages' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes from the mobile navigation pane, where the return link is the only other exit', () => {
+    setViewport(true);
+
+    const onClose = vi.fn();
+    render(<ControlPanel open onClose={onClose} />);
+
+    // On phones the navigation pane fills the dialog and "Retour au projet" scrolls with it.
+    expect(screen.getByTestId('settings-navigation')).toBeVisible();
+
+    fireEvent.click(screen.getByTestId('settings-close'));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the close control reachable after opening a sub-tab', async () => {
+    const onClose = vi.fn();
+    render(<ControlPanel open onClose={onClose} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /profil|profile/i }));
+    await waitFor(() => expect(screen.getByText('profile-body')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId('settings-close'));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

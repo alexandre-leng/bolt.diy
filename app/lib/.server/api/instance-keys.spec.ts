@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { __resetKeyCacheForTests, resolveProviderKeys } from './instance-keys';
+import { __resetKeyCacheForTests, modelPolicyViolation, NO_POLICY, resolveProviderKeys } from './instance-keys';
 
 /*
  * The key ORDER is the whole feature: an administrator configures providers for everybody, so a
@@ -113,5 +113,78 @@ describe('resolveProviderKeys', () => {
 
     await resolveProviderKeys({ userId: 'user-e' });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('model policy', () => {
+  beforeEach(() => {
+    __resetKeyCacheForTests();
+  });
+
+  const MANAGED = {
+    managedMode: true,
+    allowedProviders: ['OpenCodeGo'],
+    allowedModels: { OpenCodeGo: ['deepseek-v4.1-flash'] },
+    effortPolicy: 'auto-only' as const,
+    defaultModel: { provider: 'OpenCodeGo', model: 'deepseek-v4.1-flash' },
+  };
+
+  it('allows everything when no policy was ever set', () => {
+    /*
+     * The deployment that predates the policy must keep working: an absent policy is not an
+     * empty allow list.
+     */
+    expect(modelPolicyViolation(NO_POLICY, 'OpenAI', 'gpt-4o')).toBe('');
+    expect(modelPolicyViolation(NO_POLICY, 'OpenCodeGo', 'whatever')).toBe('');
+  });
+
+  it('refuses a provider the administrator closed', () => {
+    const policy = { ...NO_POLICY, managedMode: true, allowedProviders: ['OpenCodeGo'] };
+
+    expect(modelPolicyViolation(policy, 'OpenAI', 'gpt-4o')).toContain("n'est pas autorisé");
+    expect(modelPolicyViolation(policy, 'OpenCodeGo', 'deepseek-v4.1-flash')).toBe('');
+  });
+
+  it('refuses a model outside the allowed list for an open provider', () => {
+    const policy = { ...NO_POLICY, ...MANAGED };
+
+    expect(modelPolicyViolation(policy, 'OpenCodeGo', 'glm-4.6')).toContain("n'est pas autorisé");
+    expect(modelPolicyViolation(policy, 'OpenCodeGo', 'deepseek-v4.1-flash')).toBe('');
+  });
+
+  it('lets every model through on an open provider with no model list', () => {
+    const policy = { ...NO_POLICY, managedMode: true, allowedProviders: ['OpenCodeGo'] };
+
+    expect(modelPolicyViolation(policy, 'OpenCodeGo', 'any-model')).toBe('');
+  });
+
+  it('carries the policy through the resolution, and keeps the cache honest', async () => {
+    const fetchMock = vi.fn(async () => ACCOUNTS_ANSWER({ policy: MANAGED }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resolved = await resolveProviderKeys({ userId: 'user-policy' });
+
+    expect(resolved.policy.managedMode).toBe(true);
+    expect(resolved.policy.allowedProviders).toEqual(['OpenCodeGo']);
+    expect(resolved.policy.effortPolicy).toBe('auto-only');
+
+    vi.unstubAllGlobals();
+  });
+
+  it('falls back to the permissive policy when the service sends a malformed one', async () => {
+    const fetchMock = vi.fn(async () => ACCOUNTS_ANSWER({ policy: 'not-an-object' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resolved = await resolveProviderKeys({ userId: 'user-bad' });
+
+    /*
+     * Failing OPEN here is the opposite of the key rule, and deliberately so: a malformed
+     * policy decides PERMISSIONS, and denying every model to everybody because one field was
+     * unreadable would take the whole product down. Keys still fail closed above.
+     */
+    expect(resolved.policy.managedMode).toBe(false);
+    expect(resolved.policy.allowedProviders).toEqual([]);
+
+    vi.unstubAllGlobals();
   });
 });

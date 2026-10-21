@@ -40,9 +40,37 @@ interface ResolvedKeys {
   baseUrls: Record<string, string>;
   allowUserKeys: string[];
   source: Record<string, 'instance' | 'user'>;
+
+  /**
+   * What the administrator allows, as opposed to what happens to work. The chat routes read
+   * this to refuse a provider/model pair, and the composer reads it to list only what is
+   * permitted. Absent (older accounts service) means "no policy": see NO_POLICY.
+   */
+  policy: ModelPolicy;
 }
 
-const EMPTY: ResolvedKeys = { apiKeys: {}, baseUrls: {}, allowUserKeys: [], source: {} };
+export interface ModelPolicy {
+  managedMode: boolean;
+  defaultModel: { provider: string; model: string };
+  allowedProviders: string[];
+  allowedModels: Record<string, string[]>;
+  effortPolicy: 'free' | 'auto-only';
+}
+
+/**
+ * The policy when the service does not send one. It keeps the behaviour that predates the
+ * policy (every provider usable, effort free, personal keys closed), because silently
+ * switching an existing deployment to "managed" would lock accounts out of working models.
+ */
+export const NO_POLICY: ModelPolicy = {
+  managedMode: false,
+  defaultModel: { provider: '', model: '' },
+  allowedProviders: [],
+  allowedModels: {},
+  effortPolicy: 'free',
+};
+
+const EMPTY: ResolvedKeys = { apiKeys: {}, baseUrls: {}, allowUserKeys: [], source: {}, policy: NO_POLICY };
 
 const cache = new Map<string, { at: number; value: ResolvedKeys }>();
 
@@ -99,6 +127,7 @@ export async function resolveProviderKeys(args: {
         baseUrls: isStringMap(body.baseUrls) ? body.baseUrls : {},
         allowUserKeys: Array.isArray(body.allowUserKeys) ? body.allowUserKeys.filter(isString) : [],
         source: (body.source && typeof body.source === 'object' ? body.source : {}) as ResolvedKeys['source'],
+        policy: normalisePolicy(body.policy),
       };
     } else {
       logger.warn(`accounts service answered ${response.status}; using cookie and environment keys`);
@@ -141,7 +170,7 @@ function mergeLocalKeys(remote: ResolvedKeys, cookieKeys?: Record<string, string
     source[provider] = 'instance';
   }
 
-  return { apiKeys, baseUrls: remote.baseUrls, allowUserKeys: remote.allowUserKeys, source };
+  return { apiKeys, baseUrls: remote.baseUrls, allowUserKeys: remote.allowUserKeys, source, policy: remote.policy };
 }
 
 /** Which providers a user may key themselves. Empty means "the admin decides for everyone". */
@@ -149,6 +178,83 @@ export async function allowedUserKeyProviders(env?: Record<string, unknown>): Pr
   const resolved = await resolveProviderKeys({ env });
 
   return resolved.allowUserKeys;
+}
+
+/**
+ * Clamp the policy a service sends into the documented shape.
+ *
+ * The service validates on write, but this value decides whether a chat is refused, so a
+ * malformed or truncated body must resolve to the permissive default rather than to an
+ * empty list that would deny every model to everybody.
+ */
+function normalisePolicy(raw: unknown): ModelPolicy {
+  if (!raw || typeof raw !== 'object') {
+    return NO_POLICY;
+  }
+
+  const value = raw as Partial<ModelPolicy> & { defaultModel?: unknown };
+  const allowedModels: Record<string, string[]> = {};
+
+  if (value.allowedModels && typeof value.allowedModels === 'object') {
+    for (const [provider, models] of Object.entries(value.allowedModels)) {
+      if (Array.isArray(models)) {
+        allowedModels[provider] = models.filter(isString);
+      }
+    }
+  }
+
+  const defaultModel =
+    value.defaultModel && typeof value.defaultModel === 'object'
+      ? {
+          provider: isString((value.defaultModel as { provider?: unknown }).provider)
+            ? String((value.defaultModel as { provider?: string }).provider)
+            : '',
+          model: isString((value.defaultModel as { model?: unknown }).model)
+            ? String((value.defaultModel as { model?: string }).model)
+            : '',
+        }
+      : { provider: '', model: '' };
+
+  return {
+    managedMode: Boolean(value.managedMode),
+    defaultModel,
+    allowedProviders: Array.isArray(value.allowedProviders) ? value.allowedProviders.filter(isString) : [],
+    allowedModels,
+    effortPolicy: value.effortPolicy === 'auto-only' ? 'auto-only' : 'free',
+  };
+}
+
+/**
+ * Why this provider/model pair must be refused, or an empty string when it is allowed.
+ *
+ * This is the server-side guard. Hiding a provider in the composer is convenience; a request
+ * posted straight to `/api/chat` must meet the same rule, or the policy is decoration.
+ * A permissive policy (nothing configured) allows everything, which keeps a deployment that
+ * never set one working exactly as before.
+ */
+export function modelPolicyViolation(policy: ModelPolicy, provider: string, model?: string): string {
+  if (!policy.managedMode) {
+    return '';
+  }
+
+  if (!policy.allowedProviders.includes(provider)) {
+    return `Le fournisseur ${provider} n'est pas autorisé sur cette instance.`;
+  }
+
+  const allowed = policy.allowedModels[provider];
+
+  if (allowed && allowed.length > 0 && model && !allowed.includes(model)) {
+    return `Le modèle ${model} n'est pas autorisé pour ${provider}.`;
+  }
+
+  return '';
+}
+
+/** The single model policy, for the composer and for tests. */
+export async function modelPolicy(env?: Record<string, unknown>): Promise<ModelPolicy> {
+  const resolved = await resolveProviderKeys({ env });
+
+  return resolved.policy;
 }
 
 /** Base URLs an admin set for a provider (self-hosted gateways); never sent to a browser. */

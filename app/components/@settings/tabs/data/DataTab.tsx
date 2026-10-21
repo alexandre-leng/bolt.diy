@@ -1,5 +1,4 @@
 import { motion } from 'framer-motion';
-import Cookies from 'js-cookie';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Button } from '~/components/ui/Button';
 import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from '~/components/ui/Card';
@@ -81,9 +80,7 @@ export function DataTab() {
   const chatFileInputRef = useRef<HTMLInputElement>(null);
 
   // State for confirmation dialogs
-  const [showResetInlineConfirm, setShowResetInlineConfirm] = useState(false);
   const [showDeleteInlineConfirm, setShowDeleteInlineConfirm] = useState(false);
-  const [showDeleteAPIKeysConfirm, setShowDeleteAPIKeysConfirm] = useState(false);
   const [showSettingsSelection, setShowSettingsSelection] = useState(false);
   const [showChatsSelection, setShowChatsSelection] = useState(false);
 
@@ -105,7 +102,6 @@ export function DataTab() {
   const {
     isExporting,
     isImporting,
-    isResetting,
     isDownloadingTemplate,
     handleExportSettings,
     handleExportSelectedSettings,
@@ -113,7 +109,6 @@ export function DataTab() {
     handleExportSelectedChats,
     handleImportSettings,
     handleImportChats,
-    handleResetSettings,
     handleResetChats,
     handleDownloadTemplate,
     handleImportAPIKeys,
@@ -131,7 +126,6 @@ export function DataTab() {
         });
       }
     },
-    onResetSettings: () => setShowResetInlineConfirm(false),
     onResetChats: () => setShowDeleteInlineConfirm(false),
   });
 
@@ -207,13 +201,6 @@ export function DataTab() {
     handleResetChats().finally(() => setIsDeleting(false));
   }, [handleResetChats]);
 
-  const handleDeleteAllAPIKeys = useCallback(() => {
-    Cookies.remove('apiKeys', { path: '/' });
-    setShowDeleteAPIKeysConfirm(false);
-    toast.success('All saved API keys were deleted');
-    window.location.reload();
-  }, []);
-
   return (
     <div className="space-y-12">
       {/* Hidden file inputs */}
@@ -233,19 +220,6 @@ export function DataTab() {
         className="hidden"
       />
 
-      {/* Reset Settings Confirmation Dialog */}
-      <ConfirmationDialog
-        isOpen={showResetInlineConfirm}
-        onClose={() => setShowResetInlineConfirm(false)}
-        title="Reset All Settings?"
-        description="This will reset all your settings to their default values. This action cannot be undone."
-        confirmLabel="Reset Settings"
-        cancelLabel="Cancel"
-        variant="destructive"
-        isLoading={isResetting}
-        onConfirm={handleResetSettings}
-      />
-
       {/* Delete Chats Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={showDeleteInlineConfirm}
@@ -257,17 +231,6 @@ export function DataTab() {
         variant="destructive"
         isLoading={isDeleting}
         onConfirm={handleResetChatsWithState}
-      />
-
-      <ConfirmationDialog
-        isOpen={showDeleteAPIKeysConfirm}
-        onClose={() => setShowDeleteAPIKeysConfirm(false)}
-        title="Delete All API Keys?"
-        description="This permanently removes API keys saved in this browser. Keys provided through environment variables are not affected."
-        confirmLabel="Delete All API Keys"
-        cancelLabel="Cancel"
-        variant="destructive"
-        onConfirm={handleDeleteAllAPIKeys}
       />
 
       {/* Settings Selection Dialog */}
@@ -665,49 +628,6 @@ export function DataTab() {
                 className="w-full justify-center"
               >
                 {isDeleting ? 'Deleting...' : 'Delete All Chats'}
-              </Button>
-            </CardFooter>
-          </Card>
-
-          <Card className="border-red-500/30 bg-bolt-elements-background-depth-2">
-            <CardHeader>
-              <div className="flex items-center mb-2">
-                <div className="i-ph-arrow-counter-clockwise-duotone w-5 h-5 text-red-500 dark:text-red-400 mr-2" />
-                <CardTitle className="text-lg">Reset All Settings</CardTitle>
-              </div>
-              <CardDescription>Restore all settings to their default values.</CardDescription>
-            </CardHeader>
-            <CardFooter>
-              <Button
-                onClick={() => setShowResetInlineConfirm(true)}
-                disabled={isResetting}
-                variant="destructive"
-                size="sm"
-                className="w-full justify-center"
-              >
-                {isResetting ? 'Resetting...' : 'Reset All Settings'}
-              </Button>
-            </CardFooter>
-          </Card>
-
-          <Card className="border-red-500/30 bg-bolt-elements-background-depth-2">
-            <CardHeader>
-              <div className="flex items-center mb-2">
-                <div className="i-ph-key-duotone w-5 h-5 text-red-500 dark:text-red-400 mr-2" />
-                <CardTitle className="text-lg">Delete All API Keys</CardTitle>
-              </div>
-              <CardDescription>
-                Remove API keys saved in this browser. Environment keys are not affected.
-              </CardDescription>
-            </CardHeader>
-            <CardFooter>
-              <Button
-                onClick={() => setShowDeleteAPIKeysConfirm(true)}
-                variant="destructive"
-                size="sm"
-                className="w-full justify-center"
-              >
-                Delete All API Keys
               </Button>
             </CardFooter>
           </Card>

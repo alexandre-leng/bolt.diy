@@ -8,7 +8,7 @@ import {
   toMissingCredentialError,
   toTokenLimitError,
 } from '~/lib/.server/api/errors';
-import { resolveProviderKeys } from '~/lib/.server/api/instance-keys';
+import { modelPolicyViolation, resolveProviderKeys } from '~/lib/.server/api/instance-keys';
 import { readJsonBody } from '~/lib/.server/api/read-body';
 import { REQUEST_LIMITS, asProviderInfo, llmCallRequestSchema, parseBody } from '~/lib/.server/api/schemas';
 import { MAX_TOKENS, PROVIDER_COMPLETION_LIMITS, isReasoningModel } from '~/lib/.server/llm/constants';
@@ -112,6 +112,16 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
   });
 
   const apiKeys = { ...cookieApiKeys, ...resolvedKeys.apiKeys };
+
+  /* Same guard as /api/chat: a prompt-enhancement call must not reach a model the admin closed. */
+  const violation = modelPolicyViolation(resolvedKeys.policy, providerName, model);
+
+  if (violation) {
+    return toApiErrorResponse(
+      new ApiError(violation, { status: 400, code: 'policy_denied', isRetryable: false, provider: providerName }),
+      providerName,
+    );
+  }
 
   for (const [provider, baseUrl] of Object.entries(resolvedKeys.baseUrls)) {
     providerSettings[provider] = { ...providerSettings[provider], baseUrl };

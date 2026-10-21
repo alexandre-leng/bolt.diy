@@ -11,13 +11,14 @@ import {
 import type { ActionFunctionArgs } from 'react-router';
 import { createChatUIMessageStream } from '~/lib/.server/api/chat-stream';
 import {
+  ApiError,
   describeErrorForLog,
   redactForLog,
   toApiErrorResponse,
   toMissingCredentialError,
   toSafeStreamErrorMessage,
 } from '~/lib/.server/api/errors';
-import { resolveProviderKeys } from '~/lib/.server/api/instance-keys';
+import { modelPolicyViolation, resolveProviderKeys } from '~/lib/.server/api/instance-keys';
 import { readJsonBody } from '~/lib/.server/api/read-body';
 import {
   REQUEST_LIMITS,
@@ -116,6 +117,38 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
   });
 
   const apiKeys = { ...cookieApiKeys, ...resolvedKeys.apiKeys };
+
+  /*
+   * The model policy is enforced HERE, before any provider work. The composer already lists
+   * only what the admin opened, but a request posted straight to this route would otherwise
+   * reach any model: hiding a choice is not a guard. The markers at the head of the last user
+   * message are what the app itself uses to route, so the same pair is what gets checked.
+   */
+  try {
+    const lastUser = [...messages].reverse().find((message) => message.role === 'user');
+
+    if (lastUser) {
+      const { model: requestedModel, provider: requestedProvider } = extractPropertiesFromMessage(lastUser);
+      const violation = modelPolicyViolation(resolvedKeys.policy, requestedProvider, requestedModel);
+
+      if (violation) {
+        logger.warn(`model policy refused ${requestedProvider}/${requestedModel} for user ${userId || 'anonymous'}`);
+
+        return toApiErrorResponse(
+          new ApiError(violation, {
+            status: 400,
+            code: 'policy_denied',
+            isRetryable: false,
+            provider: requestedProvider,
+          }),
+          requestedProvider,
+        );
+      }
+    }
+  } catch (error) {
+    /* A malformed message must not become a 500: let the existing validation report it. */
+    logger.debug('model policy pre-check skipped', error);
+  }
 
   /*
    * A base URL set by the admin is applied for every user. It is combined with the provider

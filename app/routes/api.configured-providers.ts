@@ -35,8 +35,22 @@ export const loader: LoaderFunction = async ({ context, request }) => {
       userId: request?.headers?.get('X-Bolt-User-Id'),
     });
 
-    // Check each local provider for environment configuration
-    for (const providerName of LOCAL_PROVIDERS) {
+    /*
+     * Check each registered provider, not only the local ones: the composer reads this map to
+     * decide whether to show "clé API requise", so a provider the admin configured counted as
+     * missing a key for every remote provider, which made a working instance look unset.
+     */
+    const names = new Set<string>([...LOCAL_PROVIDERS]);
+
+    for (const provider of llmManager.getAllProviders()) {
+      names.add(provider.name);
+    }
+
+    for (const name of resolved.policy.allowedProviders) {
+      names.add(name);
+    }
+
+    for (const providerName of names) {
       const providerInstance = llmManager.getProvider(providerName);
 
       let isConfigured = false;

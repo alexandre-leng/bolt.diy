@@ -13,7 +13,6 @@ import GitCloneButton from './GitCloneButton';
 import LlmErrorAlert from './LLMApiAlert';
 import { Messages, type DisplayMessage } from './Messages.client';
 import ProgressCompilation from './ProgressCompilation';
-import StarterTemplates from './StarterTemplates';
 import { ToolApprovalTray } from './ToolApprovalTray';
 import { ExamplePrompts } from '~/components/chat/ExamplePrompts';
 import { ImportFolderButton } from '~/components/chat/ImportFolderButton';
@@ -574,7 +573,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   <ImportZipButton importChat={importChat} className={SECONDARY_ACTION} />
                   <GitCloneButton importChat={importChat} className={SECONDARY_ACTION} />
                 </div>
-                <StarterTemplates />
               </div>
             )}
           </div>

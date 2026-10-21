@@ -11,8 +11,18 @@ interface APIKeyManagerProps {
   labelForGetApiKey?: string;
 }
 
-// cache which stores whether the provider's API key is set via environment variable
-const providerEnvKeyStatusCache: Record<string, boolean> = {};
+interface KeyStatus {
+  isSet: boolean;
+
+  /** The key is set by an administrator for the whole instance: the user cannot change it. */
+  managed?: boolean;
+
+  /** Whether this user may still supply their own key for this provider. */
+  userKeyAllowed?: boolean;
+}
+
+// cache which stores whether the provider's API key is set, and by whom
+const providerEnvKeyStatusCache: Record<string, KeyStatus> = {};
 
 const apiKeyMemoizeCache: { [k: string]: Record<string, string> } = {};
 
@@ -43,9 +53,13 @@ export const APIKeyManager: React.FC<APIKeyManagerProps> = ({ provider, apiKey, 
    * request returned, and a failed request (401 after the Basic Auth session
    * expired, network error) was reported as a missing key.
    */
-  const [isEnvKeySet, setIsEnvKeySet] = useState<boolean | null>(
-    () => providerEnvKeyStatusCache[provider.name] ?? null,
-  );
+  const [keyStatus, setKeyStatus] = useState<KeyStatus | null>(() => providerEnvKeyStatusCache[provider.name] ?? null);
+
+  const isEnvKeySet = keyStatus ? keyStatus.isSet : null;
+  const managed = Boolean(keyStatus?.managed);
+
+  // A managed key is displayed, not editable, unless the admin explicitly allowed a personal one.
+  const canEdit = !managed || Boolean(keyStatus?.userKeyAllowed);
 
   // Reset states and load saved key when provider changes
   useEffect(() => {
@@ -61,11 +75,11 @@ export const APIKeyManager: React.FC<APIKeyManagerProps> = ({ provider, apiKey, 
   const checkEnvApiKey = useCallback(async () => {
     // Check cache first
     if (providerEnvKeyStatusCache[provider.name] !== undefined) {
-      setIsEnvKeySet(providerEnvKeyStatusCache[provider.name]);
+      setKeyStatus(providerEnvKeyStatusCache[provider.name]);
       return;
     }
 
-    setIsEnvKeySet(null);
+    setKeyStatus(null);
 
     try {
       const response = await fetch(`/api/check-env-key?provider=${encodeURIComponent(provider.name)}`);
@@ -77,13 +91,19 @@ export const APIKeyManager: React.FC<APIKeyManagerProps> = ({ provider, apiKey, 
       const data = await response.json();
       const isSet = (data as { isSet: boolean }).isSet;
 
+      const status: KeyStatus = {
+        isSet,
+        managed: Boolean((data as KeyStatus).managed),
+        userKeyAllowed: Boolean((data as KeyStatus).userKeyAllowed),
+      };
+
       // Cache the result
-      providerEnvKeyStatusCache[provider.name] = isSet;
-      setIsEnvKeySet(isSet);
+      providerEnvKeyStatusCache[provider.name] = status;
+      setKeyStatus(status);
     } catch (error) {
       // Unknown, not "missing": do not cache, do not claim the key is absent.
       console.error('Failed to check environment API key:', error);
-      setIsEnvKeySet(null);
+      setKeyStatus(null);
     }
   }, [provider.name]);
 
@@ -114,6 +134,15 @@ export const APIKeyManager: React.FC<APIKeyManagerProps> = ({ provider, apiKey, 
                 <>
                   <div className="i-ph:check-circle-fill text-green-500 w-4 h-4" />
                   <span className="text-xs text-green-500">Set via UI</span>
+                </>
+              ) : managed ? (
+                <>
+                  <div className="i-ph:shield-check-fill text-green-500 w-4 h-4" />
+                  <span className="text-xs text-green-500" data-testid="api-key-managed">
+                    {canEdit
+                      ? 'Managed by the administrator (your own key overrides it)'
+                      : 'Managed by the administrator'}
+                  </span>
                 </>
               ) : isEnvKeySet ? (
                 <>
@@ -164,7 +193,12 @@ export const APIKeyManager: React.FC<APIKeyManagerProps> = ({ provider, apiKey, 
           </div>
         ) : (
           <>
-            {
+            {/*
+              A managed provider is not editable: the administrator owns that key. Offering the
+              pencil invited the user to paste a key the server would ignore, which reads as a
+              broken save. It only appears if the admin opened the provider to personal keys.
+            */}
+            {canEdit && (
               <IconButton
                 onClick={() => setIsEditing(true)}
                 title="Edit API Key"
@@ -172,7 +206,7 @@ export const APIKeyManager: React.FC<APIKeyManagerProps> = ({ provider, apiKey, 
               >
                 <div className="i-ph:pencil-simple w-4 h-4" />
               </IconButton>
-            }
+            )}
             {provider?.getApiKeyLink && !apiKey && (
               <IconButton
                 onClick={() => window.open(provider?.getApiKeyLink)}

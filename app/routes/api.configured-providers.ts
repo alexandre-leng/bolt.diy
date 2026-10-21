@@ -1,5 +1,6 @@
 import type { LoaderFunction } from 'react-router';
 
+import { resolveProviderKeys } from '~/lib/.server/api/instance-keys';
 import { LLMManager } from '~/lib/modules/llm/manager';
 import { LOCAL_PROVIDERS } from '~/lib/stores/settings';
 
@@ -7,16 +8,32 @@ interface ConfiguredProvider {
   name: string;
   isConfigured: boolean;
   configMethod: 'environment' | 'none';
+
+  /** Key set by an administrator for the whole instance: the user cannot change it. */
+  managed?: boolean;
+
+  /** Whether a user may also supply their own key for this provider. */
+  userKeyAllowed?: boolean;
 }
 
 /**
  * API endpoint that detects which providers are configured via environment variables
  * This helps auto-enable providers that have been set up by the user
  */
-export const loader: LoaderFunction = async ({ context }) => {
+export const loader: LoaderFunction = async ({ context, request }) => {
   try {
     const llmManager = LLMManager.getInstance(context?.cloudflare?.env as any);
     const configuredProviders: ConfiguredProvider[] = [];
+
+    /*
+     * A provider the administrator configured for the whole instance counts as configured,
+     * even with no environment variable. Before this, the screens driven by this endpoint
+     * treated a managed provider as unavailable and asked the user for a key.
+     */
+    const resolved = await resolveProviderKeys({
+      env: context?.cloudflare?.env as unknown as Record<string, unknown>,
+      userId: request?.headers?.get('X-Bolt-User-Id'),
+    });
 
     // Check each local provider for environment configuration
     for (const providerName of LOCAL_PROVIDERS) {
@@ -83,10 +100,17 @@ export const loader: LoaderFunction = async ({ context }) => {
         }
       }
 
+      if (!isConfigured && resolved.apiKeys[providerName]) {
+        isConfigured = true;
+        configMethod = 'environment';
+      }
+
       configuredProviders.push({
         name: providerName,
         isConfigured,
         configMethod,
+        managed: resolved.source[providerName] === 'instance',
+        userKeyAllowed: resolved.allowUserKeys.includes(providerName),
       });
     }
 

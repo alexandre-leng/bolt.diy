@@ -8,6 +8,7 @@ import {
   toMissingCredentialError,
   toTokenLimitError,
 } from '~/lib/.server/api/errors';
+import { resolveProviderKeys } from '~/lib/.server/api/instance-keys';
 import { readJsonBody } from '~/lib/.server/api/read-body';
 import { REQUEST_LIMITS, asProviderInfo, llmCallRequestSchema, parseBody } from '~/lib/.server/api/schemas';
 import { MAX_TOKENS, PROVIDER_COMPLETION_LIMITS, isReasoningModel } from '~/lib/.server/llm/constants';
@@ -100,8 +101,21 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
   const { name: providerName } = provider;
 
   const cookieHeader = request.headers.get('Cookie');
-  const apiKeys = getApiKeysFromCookie(cookieHeader);
+  const cookieApiKeys = getApiKeysFromCookie(cookieHeader);
   const providerSettings = getProviderSettingsFromCookie(cookieHeader);
+
+  /* Same resolution as /api/chat: a managed key must work here too, not only in chat. */
+  const resolvedKeys = await resolveProviderKeys({
+    env: context?.cloudflare?.env as unknown as Record<string, unknown>,
+    userId: request.headers.get('X-Bolt-User-Id'),
+    cookieKeys: cookieApiKeys,
+  });
+
+  const apiKeys = { ...cookieApiKeys, ...resolvedKeys.apiKeys };
+
+  for (const [provider, baseUrl] of Object.entries(resolvedKeys.baseUrls)) {
+    providerSettings[provider] = { ...providerSettings[provider], baseUrl };
+  }
 
   if (streamOutput) {
     try {

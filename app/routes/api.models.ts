@@ -1,3 +1,4 @@
+import { resolveProviderKeys } from '~/lib/.server/api/instance-keys';
 import { getApiKeysFromCookie, getProviderSettingsFromCookie } from '~/lib/api/cookies';
 import { LLMManager } from '~/lib/modules/llm/manager';
 import type { ModelInfo } from '~/lib/modules/llm/types';
@@ -48,8 +49,26 @@ export async function loader({
 
   // Get client side maintained API keys and provider settings from cookies
   const cookieHeader = request.headers.get('Cookie');
-  const apiKeys = getApiKeysFromCookie(cookieHeader);
+  const cookieApiKeys = getApiKeysFromCookie(cookieHeader);
   const providerSettings = getProviderSettingsFromCookie(cookieHeader);
+
+  /*
+   * Instance keys resolved on the server, so the model list reflects what the administrator
+   * configured. Without this the picker showed a provider as needing a key while every chat
+   * call actually worked with the managed one.
+   */
+  const resolvedKeys = await resolveProviderKeys({
+    env: context?.cloudflare?.env as Record<string, unknown>,
+    userId: request.headers.get('X-Bolt-User-Id'),
+    cookieKeys: cookieApiKeys,
+  });
+
+  const apiKeys = { ...cookieApiKeys, ...resolvedKeys.apiKeys };
+
+  for (const [provider, baseUrl] of Object.entries(resolvedKeys.baseUrls)) {
+    providerSettings[provider] = { ...providerSettings[provider], baseUrl };
+  }
+
   const enabledProviderNames = new URL(request.url).searchParams.get('providers')?.split(',').filter(Boolean);
 
   const { providers, defaultProvider } = getProviderInfo(llmManager);

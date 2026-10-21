@@ -17,6 +17,7 @@ import {
   toMissingCredentialError,
   toSafeStreamErrorMessage,
 } from '~/lib/.server/api/errors';
+import { resolveProviderKeys } from '~/lib/.server/api/instance-keys';
 import { readJsonBody } from '~/lib/.server/api/read-body';
 import {
   REQUEST_LIMITS,
@@ -96,8 +97,34 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
   const designScheme = asDesignScheme(body.designScheme);
 
   const cookieHeader = request.headers.get('Cookie');
-  const apiKeys = getApiKeysFromCookie(cookieHeader);
+  const cookieApiKeys = getApiKeysFromCookie(cookieHeader);
   const providerSettings: Record<string, IProviderSetting> = getProviderSettingsFromCookie(cookieHeader);
+
+  /*
+   * Keys the request may use, in the operator's order: an administrator-managed instance key
+   * first, the user's own cookie only for a provider the admin opened, then the environment.
+   * Resolved on the SERVER so a managed key never has to reach the browser; `npm run` on this
+   * host previously read the cookie only, so a key configured by an admin was stored and used
+   * by nobody.
+   */
+  const userId = request.headers.get('X-Bolt-User-Id');
+
+  const resolvedKeys = await resolveProviderKeys({
+    env: context?.cloudflare?.env as unknown as Record<string, unknown>,
+    userId,
+    cookieKeys: cookieApiKeys,
+  });
+
+  const apiKeys = { ...cookieApiKeys, ...resolvedKeys.apiKeys };
+
+  /*
+   * A base URL set by the admin is applied for every user. It is combined with the provider
+   * settings the client may also carry, and the admin's value wins: it is what makes the key
+   * valid (e.g. a self-hosted gateway).
+   */
+  for (const [provider, baseUrl] of Object.entries(resolvedKeys.baseUrls)) {
+    providerSettings[provider] = { ...providerSettings[provider], baseUrl };
+  }
 
   /*
    * One provider session per conversation (OpenCode Go pins a backend and a prompt cache to

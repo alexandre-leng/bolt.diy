@@ -41,6 +41,7 @@ const DOM_TESTS = [
   'app/components/chat/Artifact.spec.tsx',
   'app/components/chat/ScreenshotToCode.spec.tsx',
   'app/components/chat/ScreenshotToCode.design.spec.tsx',
+  'app/components/chat/ScreenshotToCode.viewer.spec.tsx',
   'app/components/ui/CloseButton.aria.spec.tsx',
   'app/components/ui/Dialog.audit.spec.tsx',
   'app/components/deploy/PublishButton.spec.tsx',

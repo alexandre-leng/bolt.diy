@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '~/components/ui/Button';
 import { Dialog, DialogDescription, DialogRoot, DialogTitle } from '~/components/ui/Dialog';
 import { IconButton } from '~/components/ui/IconButton';
@@ -121,7 +122,27 @@ const TILE =
   'flex flex-col overflow-hidden rounded-xl border bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary transition-colors';
 
 /** The mockup viewer is wide: it needs the full screen, not the dialog's 520px. */
-const VIEWER_DIALOG = 'w-[min(1400px,calc(100vw-1.5rem))] max-w-none !max-h-[92vh] overflow-hidden !rounded-2xl';
+/*
+ * Width has to be an arbitrary value, not `max-w-*`: the shared Dialog also carries
+ * `w-[min(520px,...)]` and Tailwind orders utilities by class name, so a competing `w-[...]`
+ * loses to it (measured 520px in production). `min()` with 100vw keeps it on screen on mobile.
+ */
+const VIEWER_DIALOG = 'w-full max-w-none max-h-[92vh] min-h-[60vh] overflow-hidden rounded-2xl';
+
+/**
+ * Widens the viewer past the shared Dialog's own `w-[min(520px,...)]`.
+ *
+ * The dialog's width utility wins the cascade against ours (measured: 520px in production),
+ * so the rule is injected unlayered and scoped to `.viewer-dialog`. It goes in <head> so it
+ * is never announced as content.
+ */
+function ViewerWidth() {
+  /* Portalled to <head>: a <style> left in the dialog body would be read out as text. */
+  return createPortal(
+    <style>{`@media (min-width: 640px) { .viewer-dialog { width: min(1400px, calc(100vw - 1.5rem)); } }`}</style>,
+    document.head,
+  );
+}
 
 /**
  * One mockup, full screen, with zoom.
@@ -167,14 +188,22 @@ function MockupViewer({
     reset();
   }, [index, reset]);
 
+  /**
+   * How far the image may be dragged at this zoom level.
+   *
+   * Measured on the UNSCALED image box (offsetWidth/Height ignore the CSS transform) times the
+   * zoom, against the stage. A dimension that still fits clamps to 0, so the mockup can never be
+   * dragged out of its own frame; at 150 % a portrait mockup overflows sideways only, which is
+   * exactly what the drag should allow.
+   */
   const clamp = useCallback((x: number, y: number, level: number) => {
     const el = image.current;
-    const width = (el?.offsetWidth ?? 0) * level;
-    const height = (el?.offsetHeight ?? 0) * level;
+    const width = el?.offsetWidth ?? 0;
+    const height = el?.offsetHeight ?? 0;
     const stageWidth = stage.current?.clientWidth ?? 0;
     const stageHeight = stage.current?.clientHeight ?? 0;
-    const maxX = Math.max(0, (width - stageWidth) / 2);
-    const maxY = Math.max(0, (height - stageHeight) / 2);
+    const maxX = Math.max(0, (width * level - stageWidth) / 2);
+    const maxY = Math.max(0, (height * level - stageHeight) / 2);
 
     return { x: Math.max(-maxX, Math.min(maxX, x)), y: Math.max(-maxY, Math.min(maxY, y)) };
   }, []);
@@ -266,7 +295,10 @@ function MockupViewer({
   return (
     <DialogRoot open onOpenChange={(next) => !next && onClose()}>
       <Dialog className={VIEWER_DIALOG} showCloseButton={false} onClose={onClose} onEscapeKeyDown={() => onClose()}>
-        <div className="flex flex-col" onKeyDown={onKeyDown}>
+        <ViewerWidth />
+
+        {/* role=presentation: a plain layout box, so the dialog keeps its own semantics. */}
+        <div role="presentation" className="viewer-dialog flex w-full flex-col" onKeyDown={onKeyDown}>
           <div className="flex flex-wrap items-center gap-2 border-b border-bolt-elements-borderColor px-3 py-2">
             <div className="min-w-0 flex-1">
               <DialogTitle className="truncate text-base">{design.direction}</DialogTitle>
@@ -321,7 +353,7 @@ function MockupViewer({
           <div
             ref={stage}
             className={classNames(
-              'relative flex-1 overflow-hidden bg-[repeating-conic-gradient(#0000_0%_25%,rgba(128,128,128,0.14)_0%_50%)] bg-[length:20px_20px]',
+              'relative overflow-hidden bg-bolt-elements-background-depth-1',
               zoom > 1 ? (dragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-zoom-in',
             )}
             style={{ height: 'min(78vh, 900px)' }}

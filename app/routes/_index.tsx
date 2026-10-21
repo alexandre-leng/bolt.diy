@@ -43,7 +43,7 @@ export default function Index() {
   return (
     <div className="has-sticky-header flex flex-col h-full min-h-0 w-full overflow-y-auto overflow-x-hidden bg-bolt-elements-background-depth-1">
       <HeroGlow />
-      <div className="shrink-0">
+      <div className="sticky top-0 z-above-sidebar shrink-0 bg-bolt-elements-background-depth-1">
         <Header />
       </div>
       <div className="flex flex-col flex-1">

@@ -1,4 +1,3 @@
-import { useStore } from '@nanostores/react';
 import { AlertTriangle, CheckCircle2, Eye, EyeOff, KeyRound, Loader2, ShieldCheck, Trash2 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchSession, type Session } from '~/lib/auth/session';
@@ -248,9 +247,8 @@ export function AdminKeysTab() {
           </span>
         </div>
         <p className="mt-1 text-xs text-bolt-elements-textSecondary">
-          Ces clés servent à <strong>tous les comptes</strong>. Elles sont chiffrées en base, et une clé
-          enregistrée n'est jamais renvoyée au navigateur : l'œil ne montre que ce que vous êtes en train de
-          taper.
+          Ces clés servent à <strong>tous les comptes</strong>. Elles sont chiffrées en base, et une clé enregistrée
+          n'est jamais renvoyée au navigateur : l'œil ne montre que ce que vous êtes en train de taper.
         </p>
       </header>
 

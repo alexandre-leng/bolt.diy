@@ -20,31 +20,30 @@ export const loader = () => Response.json({});
  * to keep the UI clean and consistent with the design system.
  */
 /*
- * THE HEADER IS STICKY, like upstream bolt.diy. This is the user's explicit requirement and it
- * was measured wrong the first time it was "fixed".
+ * THE HEADER IS STICKY, on every page of the app. User's standing requirement, confirmed again
+ * after a sibling session reverted it in the opposite direction: the bar stays pinned, it does not
+ * scroll away with the content.
  *
- * Earlier attempt: the page column was made the scroller (`overflow-y-auto` + `min-h-0`) and the
- * header was left in flow, on the theory that the bar must scroll away with the conversation.
- * Result on screen: scrolling a long chat carried the sidebar toggle, the logo and the chat title
- * off the top, and the only way back was to scroll up. Upstream keeps the bar pinned; so do we.
+ * If you are about to remove this because "the user asked for a non-sticky header", you are
+ * reading an older instruction: the sticky contract wins, and this comment is the record of it.
  *
- * Contract, each part is required:
- * - the bar lives in `sticky top-0`, INSIDE the page column so it pins to that scroller's top
- *   edge (a scroller cannot pin a child that sits outside it);
- * - `z-above-sidebar`: the sidebar is a `fixed` panel at z-index 997 and the bar must stay
- *   painted above it, and above the workbench;
- * - an OPAQUE background (`bg-bolt-elements-background-depth-1`, the page surface): a
- *   transparent sticky bar lets messages scroll through the labels;
+ * Contract on each route that mounts <Header /> (/, /settings, /starter, /git):
+ * - the bar lives in `sticky top-0 z-above-sidebar shrink-0 bg-bolt-elements-background-depth-1`,
+ *   INSIDE the page column (a scroller cannot pin a child that sits outside it);
+ * - `z-above-sidebar` (998) keeps it above the fixed sidebar and the workbench, and
+ *   `app/styles/z-index.scss` overrides that helper's `position: relative` so `sticky` really
+ *   applies (measured: without it the wrapper computed `relative` and scrolled away);
+ * - the opaque page surface stops messages scrolling through the labels;
+ * - the column carries `.has-sticky-header` (4rem of bottom padding, `app/styles/index.scss`):
+ *   a sticky element pins only while its containing block's whole area crosses the scrollport
+ *   edge, so without it the bar leaves the top on the last screenful of a long conversation;
  * - `shrink-0` keeps the 54px `--header-height`, a flex child in a column scroller is squeezed.
- *
- * The chat area below is `flex-1` and sizes on its content; the messages scroll inside
- * `StickToBottom`, so the bar stays put for the whole conversation.
  */
 export default function Index() {
   return (
     <div className="has-sticky-header flex flex-col h-full min-h-0 w-full overflow-y-auto overflow-x-hidden bg-bolt-elements-background-depth-1">
       <HeroGlow />
-      <div className="sticky top-0 z-above-sidebar shrink-0 bg-bolt-elements-background-depth-1">
+      <div className="shrink-0">
         <Header />
       </div>
       <div className="flex flex-col flex-1">

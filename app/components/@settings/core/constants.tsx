@@ -136,11 +136,13 @@ export const DEFAULT_TAB_CONFIG = [
   { id: 'plugins', visible: true, window: 'user' as const, order: 10 },
 
   /*
-   * Administration. `visible` only means "not hidden by the user configuration": the real
-   * gate is `isAdminOnly`, applied in ControlPanel against /api/auth/me, so an ordinary
-   * account never sees the tile even though it is in the catalogue.
+   * Administration, FIRST in the grid: it is the setting an administrator comes here for, and
+   * at order 11 it sat below the fold behind nine other tiles, which read as "the feature is
+   * missing". `visible` only means "not hidden by the user configuration": the real gate is
+   * `isAdminOnly`, applied in ControlPanel against /api/auth/me, so an ordinary account never
+   * sees the tile even though it is in the catalogue.
    */
-  { id: 'admin-keys', visible: true, window: 'user' as const, order: 11, isAdminOnly: true },
+  { id: 'admin-keys', visible: true, window: 'user' as const, order: -1, isAdminOnly: true },
 
   // Legacy individual connector tabs (hidden by default, kept for backward compatibility)
   { id: 'github', visible: false, window: 'user' as const, order: 10 },

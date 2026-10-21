@@ -166,6 +166,29 @@ export function AccountMenu() {
                 <span className="i-ph:user-circle h-4 w-4" aria-hidden="true" />
                 Mon compte
               </button>
+              {/*
+                Administration, for admins only. These are server-rendered pages on the accounts
+                service: the badge alone told an administrator they had rights without giving
+                them a way to use them, so the only route was typing the URL. A plain link, not a
+                button, because the destination is a full page outside this app shell.
+              */}
+              {session.user?.isAdmin && (
+                <>
+                  <a role="menuitem" href="/admin/keys" data-testid="account-admin-keys" className={MENU_ITEM_CLASSES}>
+                    <span className="i-ph:key h-4 w-4" aria-hidden="true" />
+                    Clés API
+                  </a>
+                  <a
+                    role="menuitem"
+                    href="/admin/users"
+                    data-testid="account-admin-users"
+                    className={MENU_ITEM_CLASSES}
+                  >
+                    <span className="i-ph:users h-4 w-4" aria-hidden="true" />
+                    Comptes
+                  </a>
+                </>
+              )}
               <button
                 type="button"
                 role="menuitem"

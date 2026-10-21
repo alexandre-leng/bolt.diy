@@ -176,10 +176,38 @@ describe('AccountMenu', () => {
     await userEvent.click(screen.getByTestId('account-menu-trigger'));
     await waitFor(() => expect(screen.getByTestId('account-menu-panel')).toBeTruthy());
 
-    for (const id of ['account-settings', 'account-signout']) {
+    for (const id of ['account-settings', 'account-admin-keys', 'account-admin-users', 'account-signout']) {
       const item = screen.getByTestId(id);
 
       expect(item.className, `${id} must not rely on the browser's button fill`).toContain('bg-transparent');
     }
+  });
+
+  /*
+   * The admin badge alone told an administrator they had rights but offered no way to reach
+   * the admin pages: /admin/keys existed and the only route to it was typing the URL. These
+   * links are the entry point, and they must not appear for an ordinary account.
+   */
+  it('gives an administrator a link to the instance keys and the accounts page', async () => {
+    withSession(admin);
+    render(<AccountMenu />);
+
+    await userEvent.click(screen.getByTestId('account-menu-trigger'));
+    await waitFor(() => expect(screen.getByTestId('account-menu-panel')).toBeTruthy());
+
+    expect(screen.getByTestId('account-admin-keys').getAttribute('href')).toBe('/admin/keys');
+    expect(screen.getByTestId('account-admin-users').getAttribute('href')).toBe('/admin/users');
+  });
+
+  it('hides the administration links from an ordinary account', async () => {
+    withSession({ ...admin, isAdmin: false });
+    render(<AccountMenu />);
+
+    await userEvent.click(screen.getByTestId('account-menu-trigger'));
+    await waitFor(() => expect(screen.getByTestId('account-menu-panel')).toBeTruthy());
+
+    expect(screen.queryByTestId('account-admin-keys')).toBeNull();
+    expect(screen.queryByTestId('account-admin-users')).toBeNull();
+    expect(screen.queryByTestId('account-admin-badge')).toBeNull();
   });
 });

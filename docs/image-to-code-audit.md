@@ -28,12 +28,12 @@ L’import interactif requiert une autorisation explicite dans le panneau. Cette
 - [x] Reproduire le contournement du prédicat à la répétition.
 - [x] Conserver exactement le HTML interactif après consentement, sans exécution automatique.
 - [x] Choisir un nom libre pour un nouvel import.
-- [ ] Ajouter autorisation explicite, avertissement d’aperçu et récupération HTML.
-- [ ] Regrouper la progression, corriger les états obsolètes et les maquettes progressives.
-- [ ] Vérifier tests ciblés, suite complète, typecheck, lint et build.
-- [ ] Vérifier navigateur à 360, 768 et 1440 px, clavier et absence de débordement.
+- [x] Ajouter autorisation explicite, avertissement d’aperçu et récupération HTML.
+- [x] Regrouper la progression, corriger les états obsolètes et les maquettes progressives.
+- [x] Vérifier tests ciblés, typecheck, lint et build. Suite complète exécutée : deux seuils de performance restent rouges sous charge.
+- [x] Vérifier navigateur à 360, 768, 1280 et 1440 px, boutons atteignables et absence de débordement.
 - [ ] Après confirmation du VPS : déploiement unique, comparaison de l’ID image et marqueur du bundle servi.
-- [ ] Lire le fichier réellement créé dans un projet et vérifier sa persistance.
+- [x] Lire les fichiers réellement créés et vérifier la persistance du fichier modifié après fermeture du navigateur. Rechargement de conversation synchronisée au compte : non vérifié dans le proxy local.
 
 ## Résultats vérifiés avant déploiement
 
@@ -43,7 +43,10 @@ L’import interactif requiert une autorisation explicite dans le panneau. Cette
 - Typecheck et build production : code 0. Le lot ciblé incluant panneau, ChatBox, génération, import et directions : 69 tests verts avant l’ajout du dernier test de variante, puis 17 tests du module génération verts.
 - Suite générale initiale : 174 fichiers verts, 2 fichiers de performance rouges (1446 tests verts, 2 rouges), plus une rejection de flux dans `api.transcribe.spec.ts`. Les mêmes specs sur le HEAD de départ passent dans une exécution séparée ; la charge influence ces mesures. La suite complète n’est donc pas déclarée verte sur cette seule base.
 - Génération réelle via le backend actif : capture de test Pagia 1280×800, quatre variantes terminées en environ 50 secondes, rendues dans Chromium sans identifiants. Aucun débordement horizontal. La meilleure variante conserve les textes (à espaces normalisés), et le titre commence aux mêmes coordonnées (64, 206). Erreur absolue moyenne RGB : 3,73 sur l’échelle 0–255, valeur non nulle, donc pas de fidélité pixel parfaite ni de pourcentage marketing déduit de cette mesure.
-- Le raccordement « Continuer avec Bolt » prépare un brouillon en mode Agent contenant exactement la source et le chemin, sans soumission automatique. Le test de raccordement passe. L’édition réelle par le modèle et la persistance restent des vérifications distinctes.
+- Le raccordement « Continuer avec Bolt » prépare un brouillon en mode Agent contenant exactement la source et le chemin, sans soumission automatique. Le test de raccordement passe.
+- Vérification locale sur un conteneur de test, pas sur l’URL de production : deux sorties réelles archivées du moteur sont rejouées pour le panneau ; les écritures du runtime et les appels à l’agent sont réels, sous une identité de test sans accès au compte utilisateur. Le React/Babel fourni est relu identique octet pour octet après import. La modification du titre par DeepSeek V4.1 Flash / OpenCodeGo est relue dans le runtime, puis après fermeture du navigateur ; la différence avec le HTML d’origine est exactement le remplacement demandé, sans autre modification. Le HTML relu est rendu dans Chromium. Les API de compte/historique, non relayées dans le proxy local, ne constituent pas une preuve de synchronisation de conversation.
+- La vérification réelle a révélé deux défauts supplémentaires corrigés : ne pas lancer de starter template sur un projet déjà importé ; ne pas accepter comme satisfaisant un appel natif à un outil absent de l’étape. Dans ce dernier cas, le wrapper redemande un appel correct une seule fois avant tout effet, sans contourner le plan ni rejouer une écriture déjà acceptée. Le test reproduit exactement `AI_NoSuchToolError` avant le correctif, puis passe.
+- Dernière suite complète avant ces deux correctifs : 176 fichiers passent, 2 fichiers de performance échouent ; 1456 tests verts, 2 seuils de temps rouges. Aucune erreur non gérée sur cette exécution.
 
 ## Limites à communiquer
 

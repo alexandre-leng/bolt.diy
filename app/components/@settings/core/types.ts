@@ -21,7 +21,8 @@ export type TabType =
   | 'event-logs'
   | 'mcp'
   | 'voice'
-  | 'plugins';
+  | 'plugins'
+  | 'admin-keys';
 
 export type WindowType = 'user' | 'developer';
 
@@ -56,6 +57,9 @@ export interface TabVisibilityConfig {
   order: number;
   isExtraDevTab?: boolean;
   locked?: boolean;
+
+  /** Only rendered for an administrator (`/api/auth/me` reports isAdmin). */
+  isAdminOnly?: boolean;
 }
 
 export interface DevTabConfig extends TabVisibilityConfig {
@@ -89,6 +93,7 @@ export const TAB_LABELS: Record<TabType, string> = {
   mcp: 'MCP Servers',
   voice: 'Voix',
   plugins: 'Plugins',
+  'admin-keys': "Clés API de l'instance",
 };
 
 export const categoryLabels: Record<SettingCategory, string> = {

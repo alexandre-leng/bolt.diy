@@ -8,6 +8,7 @@ import { TabTile } from '~/components/@settings/shared/components/TabTile';
 
 // Import all tab components
 import AccountTab from '~/components/@settings/tabs/account/AccountTab';
+import AdminKeysTab from '~/components/@settings/tabs/admin/AdminKeysTab';
 import ConnectorsTab from '~/components/@settings/tabs/connectors/ConnectorsTab';
 import { DataTab } from '~/components/@settings/tabs/data/DataTab';
 import { EventLogsTab } from '~/components/@settings/tabs/event-logs/EventLogsTab';
@@ -27,6 +28,7 @@ import VercelTab from '~/components/@settings/tabs/vercel/VercelTab';
 import VoiceTab from '~/components/@settings/tabs/voice/VoiceTab';
 import { DialogTitle } from '~/components/ui/Dialog';
 import { DocumentationPanel } from '~/components/ui/DocumentationPanel';
+import { fetchSession, type Session } from '~/lib/auth/session';
 import { useConnectionStatus } from '~/lib/hooks/useConnectionStatus';
 import { useFeatures } from '~/lib/hooks/useFeatures';
 import { useNotifications } from '~/lib/hooks/useNotifications';
@@ -101,6 +103,23 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
   const tabConfiguration = useStore(tabConfigurationStore);
   const profile = useStore(profileStore) as Profile;
 
+  /*
+   * Administration tabs need the caller's role. It comes from the server (`/api/auth/me`), never
+   * from a stored flag, and it starts as "unknown" so the panel does not briefly show an admin
+   * tab to everyone or flash "reserved" at the administrator while the request is in flight.
+   */
+  const [session, setSession] = useState<Session>({ loading: true, authenticated: false, user: null });
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetchSession(controller.signal).then(setSession);
+
+    return () => controller.abort();
+  }, []);
+
+  const isAdmin = Boolean(session.user?.isAdmin);
+
   // Status hooks
   const { hasNewFeatures, unviewedFeatures, acknowledgeAllFeatures } = useFeatures();
   const { hasUnreadNotifications, unreadNotifications, markAllAsRead } = useNotifications();
@@ -133,10 +152,19 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
           return false;
         }
 
+        /*
+         * An administration tab is shown only to an administrator. Until the session answers,
+         * it stays hidden: revealing it to everybody for a frame then removing it is worse than
+         * a tab appearing a moment later for the one person entitled to it.
+         */
+        if (baseTabConfig.get(tab.id)?.isAdminOnly && !isAdmin) {
+          return false;
+        }
+
         return tab.visible && tab.window === 'user';
       })
       .sort((a, b) => a.order - b.order);
-  }, [tabConfiguration, profile?.preferences?.notifications, baseTabConfig]);
+  }, [tabConfiguration, profile?.preferences?.notifications, baseTabConfig, isAdmin]);
 
   // Keep the floating mobile navigation out of the settings dialog.
   useEffect(() => {
@@ -218,6 +246,8 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
         return <VoiceTab />;
       case 'plugins':
         return <PluginTab />;
+      case 'admin-keys':
+        return <AdminKeysTab />;
 
       default:
         return null;

@@ -13,6 +13,7 @@ import {
   Plug,
   Blocks,
   Mic,
+  KeyRound,
 } from 'lucide-react';
 import type { TabType } from './types';
 
@@ -72,6 +73,7 @@ export const TAB_ICONS: Record<TabType, React.ComponentType<{ className?: string
   mcp: Wrench,
   voice: Mic,
   plugins: Blocks,
+  'admin-keys': KeyRound,
 };
 
 export const TAB_LABELS: Record<TabType, string> = {
@@ -93,6 +95,7 @@ export const TAB_LABELS: Record<TabType, string> = {
   mcp: 'MCP Servers',
   voice: 'Voix',
   plugins: 'Plugins',
+  'admin-keys': "Clés API de l'instance",
 };
 
 export const TAB_DESCRIPTIONS: Record<TabType, string> = {
@@ -114,6 +117,7 @@ export const TAB_DESCRIPTIONS: Record<TabType, string> = {
   mcp: 'Configure MCP (Model Context Protocol) servers',
   voice: 'Dictée au micro et synthèse vocale',
   plugins: 'Discover, install, and manage plugins',
+  'admin-keys': "Clés API configurees pour toute l'instance (administrateurs uniquement)",
 };
 
 export const DEFAULT_TAB_CONFIG = [
@@ -130,6 +134,13 @@ export const DEFAULT_TAB_CONFIG = [
   { id: 'mcp', visible: true, window: 'user' as const, order: 8 },
   { id: 'voice', visible: true, window: 'user' as const, order: 9 },
   { id: 'plugins', visible: true, window: 'user' as const, order: 10 },
+
+  /*
+   * Administration. `visible` only means "not hidden by the user configuration": the real
+   * gate is `isAdminOnly`, applied in ControlPanel against /api/auth/me, so an ordinary
+   * account never sees the tile even though it is in the catalogue.
+   */
+  { id: 'admin-keys', visible: true, window: 'user' as const, order: 11, isAdminOnly: true },
 
   // Legacy individual connector tabs (hidden by default, kept for backward compatibility)
   { id: 'github', visible: false, window: 'user' as const, order: 10 },

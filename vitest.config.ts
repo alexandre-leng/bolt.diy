@@ -56,6 +56,7 @@ const DOM_TESTS = [
   'app/components/mobile/MobileNav.spec.tsx',
   'app/components/sidebar/AccountMenu.spec.tsx',
   'app/components/@settings/tabs/account/AccountTab.spec.tsx',
+  'app/components/@settings/tabs/admin/AdminKeysTab.spec.tsx',
   'app/components/sidebar/Menu.client.spec.ts',
   'app/components/sidebar/Menu.bulkDelete.spec.tsx',
   'app/components/header/ProjectBackButton.spec.tsx',

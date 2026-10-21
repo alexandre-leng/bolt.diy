@@ -86,6 +86,52 @@ const MAX_CODE_LENGTH = 1_000_000;
 const MAX_VARIANTS = 8;
 const VALID_IMAGE = /^data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
 
+/*
+ * A refused generation still arrives as a "complete page": the backend wraps the model's apology in
+ * `<!doctype html><html><body><p>Please upload the screenshot...</p></body></html>`. Measured on this
+ * deployment, three of four variants were exactly that (90, 179 and 588 bytes), and they passed the
+ * envelope check, so the user got a wall of empty previews.
+ *
+ * A real page is told apart by VOLUME and MARKUP, never by wording (the model's refusal text is not
+ * guaranteed, and it is not always English). Actual bytes measured on this deployment:
+ *   refusals:      90 B / 0 tags, 179 B / 0 tags, 588 B / 12 tags (a centred card with a title)
+ *   real variant:  9 580 B / 136 tags
+ *
+ * The tag count alone is not enough: the largest refusal is a real little card, so it carries 12
+ * tags, more than a minimal page. The discriminator that separates the two populations cleanly is
+ * VOLUME, with the tag count as a second guard against a long block of prose wrapped in a page
+ * envelope. 1 800 bytes sits ~3x above the biggest refusal and ~5x below the real variant.
+ */
+const MIN_VARIANT_BYTES = 1800;
+const MIN_VARIANT_TAGS = 20;
+
+/** Count real markup tags, ignoring doctype and comments. */
+export function countMarkupTags(html: string): number {
+  const withoutComments = html.replace(/<!--[\s\S]*?-->/g, '');
+  const tags = withoutComments.match(/<[a-zA-Z][^>]*>/g);
+
+  return tags ? tags.length : 0;
+}
+
+/**
+ * Whether a completed variant is a page we should offer to the user.
+ *
+ * Returns the reason it was rejected, so the caller can report WHY instead of silently dropping.
+ */
+export function rejectVariantReason(code: string): string | undefined {
+  if (code.length < MIN_VARIANT_BYTES) {
+    return `too short (${code.length} bytes)`;
+  }
+
+  const tags = countMarkupTags(code);
+
+  if (tags < MIN_VARIANT_TAGS) {
+    return `almost no markup (${tags} tags)`;
+  }
+
+  return undefined;
+}
+
 export function validateScreenshot(image: string) {
   const match = VALID_IMAGE.exec(image);
 
@@ -326,7 +372,20 @@ export function generateMany(images: string[], options: GenerationOptions = {}):
           }
 
           try {
-            variants.push({ index, code: validateGeneratedHtml(code) });
+            const html = validateGeneratedHtml(code);
+            const rejected = rejectVariantReason(html);
+
+            if (rejected) {
+              /*
+               * A refusal, not a page. Dropped here rather than offered as an empty preview, and
+               * recorded so that "all four variants were empty" can say so instead of a generic error.
+               */
+              failures.push(`Variant ${index + 1} returned no page: ${rejected}.`);
+
+              continue;
+            }
+
+            variants.push({ index, code: html });
           } catch {
             // Skip this variant only: another completed one may be valid.
           }

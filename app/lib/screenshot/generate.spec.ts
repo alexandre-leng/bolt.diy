@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { generateMany, generateScreenshotCode, validateGeneratedHtml } from './generate';
+import {
+  countMarkupTags,
+  generateMany,
+  generateScreenshotCode,
+  rejectVariantReason,
+  validateGeneratedHtml,
+} from './generate';
 
 class FakeSocket {
   static latest: FakeSocket;
@@ -29,7 +35,40 @@ class FakeSocket {
 }
 
 const image = 'data:image/png;base64,aGVsbG8=';
-const html = '<!doctype html><html><head><title>Example</title></head><body><h1>Hello</h1></body></html>';
+
+/*
+ * A realistic variant: the filter rejects refusals by volume (>= 1800 bytes) and markup (>= 20 tags),
+ * so this fixture is shaped like a page the backend actually produces. It is generated rather than
+ * hand-written so it stays above the thresholds without repeating markup by hand.
+ */
+const page = (heading: string) => {
+  const cards = ['One', 'Two', 'Three', 'Four', 'Five', 'Six']
+    .map(
+      (title, index) =>
+        `<article class="rounded-2xl border p-6"><h2 class="text-xl font-semibold">${title}</h2>` +
+        `<p class="mt-2 text-sm text-gray-600">Card ${index + 1} of a generated grid: enough copy to ` +
+        'look like a real product page rather than a placeholder.</p>' +
+        '<a class="mt-4 inline-block text-sm font-medium" href="#">Read more</a></article>',
+    )
+    .join('');
+
+  return (
+    '<!doctype html><html lang="en"><head><meta charset="UTF-8"><title>Example</title>' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+    '<script src="https://cdn.tailwindcss.com"></script></head><body class="bg-white text-gray-900">' +
+    '<header class="flex items-center justify-between px-6 py-4"><a href="#" class="font-bold">Brand</a>' +
+    '<nav class="flex gap-6"><a href="#">Home</a><a href="#">About</a><a href="#">Pricing</a>' +
+    '<a href="#">Contact</a></nav><button class="rounded-full px-4 py-2">Sign up</button></header>' +
+    `<main class="mx-auto max-w-4xl px-6 py-16"><h1 class="text-4xl font-bold">${heading}</h1>` +
+    '<p class="mt-4 max-w-2xl text-lg">A paragraph of real page copy, long enough to be ' +
+    'indistinguishable from a generated landing page, because the client no longer accepts a ' +
+    'two-line document as a design.</p>' +
+    `<section class="mt-12 grid gap-4 md:grid-cols-3">${cards}</section></main>` +
+    '<footer class="px-6 py-8"><p class="text-sm">Footer</p></footer></body></html>'
+  );
+};
+
+const html = page('Hello');
 const connect = vi.fn((url: string) => new FakeSocket(url) as unknown as WebSocket);
 const location = { protocol: 'https:', host: 'bolt.example' };
 
@@ -235,4 +274,69 @@ describe('generated HTML validation', () => {
     'rejects incomplete output: %s',
     (value) => expect(() => validateGeneratedHtml(value)).toThrow(),
   );
+});
+
+describe('empty-variant filter', () => {
+  /*
+   * The three refusals are the REAL bytes measured from this deployment's backend: a model that did
+   * not receive the image still answers in prose, and the backend wraps it in a valid page envelope.
+   * They used to survive validation and reach the UI as empty previews.
+   */
+  const REFUSALS = [
+    '<!doctype html><html><head><meta charset="utf-8"><title>Page</title></head><body><p>Please upload the screenshot(s) you\u2019d like me to replicate. I\u2019ll build the page using HTML and Tailwind CSS.</p></body></html>',
+    '<!doctype html><html><head><title>Page</title></head><body><p>I don\u2019t see a screenshot attached. Please upload it so I can recreate the page accurately.</p></body></html>',
+    '<!doctype html><html><head><meta charset="utf-8"><title>Page</title><script src="https://cdn.tailwindcss.com"></script><style>html,body{height:100%;margin:0}body{font-family:Arial,Helvetica,sans-serif}</style></head><body class="min-h-screen bg-white"><div class="min-h-screen flex items-center justify-center text-gray-500"><div class="text-center"><h1 class="text-2xl font-semibold">Screenshot not provided</h1><p class="mt-2">Please attach a screenshot to recreate.</p></div></div></body></html>',
+  ];
+
+  it.each(REFUSALS)('rejects a refusal wrapped in a page envelope: %s', (refusal) => {
+    expect(rejectVariantReason(refusal)).toBeDefined();
+  });
+
+  it('keeps a real variant', () => {
+    expect(rejectVariantReason(page('Picked design'))).toBeUndefined();
+  });
+
+  it('reports WHY a variant was dropped, so the user is not told "nothing was imported"', () => {
+    expect(rejectVariantReason(REFUSALS[1])).toMatch(/too short|almost no markup/);
+  });
+
+  it('counts markup tags, ignoring the doctype and comments', () => {
+    /* Only opening tags count (a closing tag is the same element), and commented markup is ignored. */
+    expect(countMarkupTags('<!-- <div><div> --><p>hi</p>')).toBe(1);
+    expect(countMarkupTags('<div><p>a</p><span>b</span></div>')).toBe(3);
+  });
+
+  it('drops refusals at the client boundary and keeps the one real variant', async () => {
+    /*
+     * End to end through the websocket contract: four completed variants, only one is a page. The
+     * previous behaviour returned all four and the UI offered three empty previews.
+     */
+    const { task, socket } = start();
+
+    socket.message({ type: 'variantCount', value: 4 });
+
+    /* Three refusals on indices 1..3, the real page on index 0 (refusals only has three entries). */
+    REFUSALS.forEach((refusal, i) => {
+      socket.message({ type: 'setCode', variantIndex: i + 1, value: refusal });
+      socket.message({ type: 'variantComplete', variantIndex: i + 1 });
+    });
+    socket.message({ type: 'setCode', variantIndex: 0, value: page('Kept') });
+    socket.message({ type: 'variantComplete', variantIndex: 0 });
+    socket.emit('close', { code: 1000 });
+
+    await expect(task).resolves.toEqual([{ index: 0, code: page('Kept') }]);
+  });
+
+  it('fails with the refusal reasons when every variant is empty', async () => {
+    const { task, socket } = start();
+
+    socket.message({ type: 'variantCount', value: 3 });
+    REFUSALS.forEach((refusal, index) => {
+      socket.message({ type: 'setCode', variantIndex: index, value: refusal });
+      socket.message({ type: 'variantComplete', variantIndex: index });
+    });
+    socket.emit('close', { code: 1000 });
+
+    await expect(task).rejects.toThrow(/returned no page/i);
+  });
 });

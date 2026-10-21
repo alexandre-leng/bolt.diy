@@ -90,7 +90,7 @@ export function IaAccessTab() {
   /* Without a policy every provider the app ships is usable: say so, do not show an empty list. */
   const openProviders = current.managedMode
     ? current.allowedProviders
-    : [...new Set([...current.allowedProviders, ...Object.keys(current.providers)])];
+    : [...new Set([...current.allowedProviders, ...Object.keys(current.providers), ...current.userKeyProviders])];
 
   const stateOf = (name: string): State => {
     const managed = current.providers[name] === true;

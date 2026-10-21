@@ -47,14 +47,25 @@ function readImageAsDataUrl(file: File): Promise<string> {
  * Accessible screenshot-to-code dialog. Rendered through Radix Dialog (portal, focus trap,
  * Escape/close, focus restored to the element that opened it). Mounted only on the client.
  */
+export interface StartProjectArgs {
+  /** The user's description of the page. */
+  prompt: string;
+
+  /** Chosen mockup or uploaded screenshot, as a data URL. */
+  image: string;
+  template: string;
+}
+
 export function ScreenshotDialog({
   open,
   onOpenChange,
   openerRef,
+  onStartProject,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   openerRef: React.MutableRefObject<HTMLElement | null>;
+  onStartProject?: (args: StartProjectArgs) => void;
 }) {
   return (
     <ClientOnly>
@@ -81,14 +92,27 @@ export function ScreenshotDialog({
                 <RadixDialog.Title className="text-sm font-semibold text-bolt-elements-textPrimary">
                   Depuis une capture d’écran
                 </RadixDialog.Title>
-                <RadixDialog.Close aria-label="Fermer le générateur de capture" className="rounded-lg">
-                  <CloseButton size="sm" />
+                {/* One control, not a Radix Close wrapping a second <button>: the nesting painted
+                    the outer button's UA grey fill (rgb(239,239,239)) on the dark theme.
+                    `asChild` keeps Radix's close semantics on this single button. */}
+                <RadixDialog.Close asChild>
+                  <CloseButton
+                    size="sm"
+                    aria-label="Fermer le générateur de capture"
+                    className="border border-bolt-elements-borderColor bg-transparent text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary"
+                  />
                 </RadixDialog.Close>
               </div>
               <RadixDialog.Description className="sr-only">
                 Générez une application à partir d’une capture d’écran ou d’une maquette.
               </RadixDialog.Description>
-              <ScreenshotToCode />
+              <ScreenshotToCode
+                onStartProject={(args) => {
+                  /* Hand off to the chat and get out of the way: the dialog has done its job. */
+                  onOpenChange(false);
+                  onStartProject?.(args);
+                }}
+              />
             </RadixDialog.Content>
           </RadixDialog.Portal>
         </RadixDialog.Root>
@@ -98,6 +122,8 @@ export function ScreenshotDialog({
 }
 
 interface ChatBoxProps {
+  /** Turn a design or a screenshot into a NEW project (React + TypeScript + Tailwind + shadcn). */
+  onStartProject?: (args: StartProjectArgs) => void;
   isModelSettingsCollapsed: boolean;
   setIsModelSettingsCollapsed: (collapsed: boolean) => void;
   provider: any;
@@ -256,9 +282,9 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
         'focus-within:border-bolt-elements-borderColorActive',
 
         /*
-         * {
-         *   'sticky bottom-2': chatStarted,
-         * },
+         * No `sticky` here: the pinning lives on the wrapper in BaseChat
+         * (`[data-testid="composer-sticky"]`), whose scroll container is the composer column.
+         * A sticky child of a non-scroller does nothing, and two sticky layers fight each other.
          */
       )}
     >
@@ -418,14 +444,10 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
               event.preventDefault();
 
               /*
-               * Enter during a generation does nothing. It used to call handleStop(), so typing
-               * the next instruction and pressing Enter aborted the running build (and its file
-               * and shell actions) without sending anything. Stopping stays on the Stop button.
+               * Enter during a generation DELIVERS THE CORRECTION (Hermes' redirect): the parent keeps
+               * the partial answer as context and resumes from these words. It is no longer a silent
+               * no-op (that read as a dropped message) and no longer a plain stop either.
                */
-              if (props.isStreaming) {
-                return;
-              }
-
               props.handleSendMessage?.(event);
             }
           }}
@@ -511,6 +533,7 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
             <ScreenshotDialog
               open={isScreenshotOpen}
               onOpenChange={setIsScreenshotOpen}
+              onStartProject={props.onStartProject}
               openerRef={screenshotOpenerRef}
             />
             <DropdownMenu.Root>
@@ -635,13 +658,19 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
                 isStreaming={props.isStreaming}
                 disabled={!props.providerList || props.providerList.length === 0}
                 onClick={(event) => {
-                  if (props.isStreaming) {
-                    props.handleStop?.();
+                  /*
+                   * With text in the composer, a click while generating sends the correction (the
+                   * parent decides steer vs redirect). With an empty composer it is the stop: that
+                   * is what the square means, and it keeps the explicit stop one click away.
+                   */
+                  if (props.input.trim().length > 0 || props.uploadedFiles.length > 0) {
+                    props.handleSendMessage?.(event);
+
                     return;
                   }
 
-                  if (props.input.length > 0 || props.uploadedFiles.length > 0) {
-                    props.handleSendMessage?.(event);
+                  if (props.isStreaming) {
+                    props.handleStop?.();
                   }
                 }}
               />

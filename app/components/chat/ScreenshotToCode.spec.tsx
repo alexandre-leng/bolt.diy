@@ -51,12 +51,19 @@ describe('mode selection', () => {
     expect(screen.getByRole('radio', { name: 'Utiliser une image' }).getAttribute('aria-checked')).toBe('true');
   });
 
-  it('keeps the output stack selector available in both modes', async () => {
+  it('announces the project stack instead of asking for one', async () => {
     renderPanel();
-    expect(screen.getByLabelText('Stack de sortie')).toBeTruthy();
+
+    /*
+     * No framework selector: the project is React + TypeScript + Tailwind + shadcn/ui, decided
+     * once (or by a framework the user types in the prompt), like Lovable and Bolt.
+     */
+    expect(screen.queryByLabelText('Stack de sortie')).toBeNull();
+    expect(screen.getByText(/React \+ TypeScript \+ Tailwind \+ shadcn\/ui/)).toBeTruthy();
 
     await useImageMode();
-    expect(screen.getByLabelText('Stack de sortie')).toBeTruthy();
+
+    expect(screen.queryByLabelText('Stack de sortie')).toBeNull();
   });
 
   /*
@@ -136,7 +143,7 @@ describe('design mode', () => {
     await screen.findByRole('radio', { name: 'Maquette Affirmé' });
 
     await userEvent.click(screen.getByRole('radio', { name: 'Maquette Affirmé' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette maquette en code' }));
+    await userEvent.click(screen.getByRole('button', { name: /Créer le projet/ }));
 
     await waitFor(() =>
       expect(generate).toHaveBeenCalledWith(expect.stringContaining('data:image/'), expect.anything()),
@@ -163,7 +170,7 @@ describe('screenshot mode', () => {
       target: { files: [new File(['image bytes'], 'example.png', { type: 'image/png' })] },
     });
     expect(await screen.findByText('example.png')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
+    fireEvent.click(screen.getByRole('button', { name: /Créer le projet/ }));
 
     /*
      * The real backend emits frames AFTER the socket opens, asynchronously; emitting
@@ -181,7 +188,7 @@ describe('screenshot mode', () => {
     expect(importCode).toHaveBeenCalledWith(generated);
   });
 
-  it('sends the selected output stack', async () => {
+  it('sends the fixed fallback stack when no project handler is wired', async () => {
     const generate = vi.fn().mockResolvedValue(oneVariant(generated));
     renderPanel({ generate });
     await useImageMode();
@@ -190,12 +197,14 @@ describe('screenshot mode', () => {
       screen.getByLabelText('Image de capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.selectOptions(screen.getByLabelText('Stack de sortie'), 'react_tailwind');
-    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
+    await userEvent.click(screen.getByRole('button', { name: /Créer le projet/ }));
 
-    expect(generate).toHaveBeenCalledWith(
-      expect.stringContaining('data:image/png'),
-      expect.objectContaining({ stack: 'react_tailwind' }),
+    /* The upload is read as a data URL, then handed to the flat-file pipeline. */
+    await vi.waitFor(() =>
+      expect(generate).toHaveBeenCalledWith(
+        expect.stringContaining('data:image/png'),
+        expect.objectContaining({ stack: 'html_tailwind' }),
+      ),
     );
   });
 
@@ -228,7 +237,7 @@ describe('screenshot mode', () => {
       screen.getByLabelText('Image de capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
+    await userEvent.click(screen.getByRole('button', { name: /Créer le projet/ }));
 
     /*
      * The status line also carries the intermediate "Reading the image...", so wait for
@@ -254,7 +263,7 @@ describe('variant selection', () => {
       screen.getByLabelText('Image de capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
+    await userEvent.click(screen.getByRole('button', { name: /Créer le projet/ }));
 
     // All three are offered, not only the last one that completed.
     expect(await screen.findByRole('button', { name: 'Version 1' })).toBeTruthy();
@@ -289,7 +298,7 @@ describe('streamed progress', () => {
       screen.getByLabelText('Image de capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
+    await userEvent.click(screen.getByRole('button', { name: /Créer le projet/ }));
 
     const log = await screen.findByLabelText('Progression de la génération');
     expect(log.textContent).toContain('4 versions');
@@ -305,7 +314,7 @@ describe('streamed progress', () => {
       screen.getByLabelText('Image de capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
+    await userEvent.click(screen.getByRole('button', { name: /Créer le projet/ }));
 
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Screenshot service connection failed.');
     expect(screen.queryByRole('button', { name: 'Importer dans Bolt' })).toBeNull();
@@ -322,7 +331,7 @@ describe('preview safety', () => {
       screen.getByLabelText('Image de capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
+    await userEvent.click(screen.getByRole('button', { name: /Créer le projet/ }));
 
     const frame = await screen.findByTitle('Aperçu de la version 1');
     expect(frame.getAttribute('sandbox')).toBe('');
@@ -340,7 +349,7 @@ describe('preview safety', () => {
       screen.getByLabelText('Image de capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
+    await userEvent.click(screen.getByRole('button', { name: /Créer le projet/ }));
     expect(await screen.findByDisplayValue(active)).toBeTruthy();
     await userEvent.click(screen.getByRole('button', { name: 'Importer dans Bolt' }));
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('active content'));
@@ -358,7 +367,7 @@ describe('preview safety', () => {
       screen.getByLabelText('Image de capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
+    await userEvent.click(screen.getByRole('button', { name: /Créer le projet/ }));
     await screen.findByTitle('Aperçu de la version 1');
     await userEvent.click(screen.getByRole('button', { name: 'Importer dans Bolt' }));
     expect(await screen.findByRole('status')).toHaveProperty('textContent', expect.stringContaining('Imported'));

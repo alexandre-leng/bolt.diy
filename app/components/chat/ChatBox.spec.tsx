@@ -60,14 +60,30 @@ function renderChatBox(overrides: Record<string, unknown> = {}) {
 }
 
 describe('ChatBox: Enter during a generation (U1)', () => {
-  it('does not stop the running generation', () => {
-    const { props, textarea } = renderChatBox({ isStreaming: true });
+  it('delivers the correction on Enter during a generation, it does not stop it', () => {
+    const { props, textarea } = renderChatBox({
+      isStreaming: true,
+      input: 'ajoute un bouton de commande',
+    });
 
     fireEvent.keyDown(textarea, { key: 'Enter' });
 
-    // Before: Enter called handleStop(), aborting the build and its file/shell actions.
+    /*
+     * Enter used to either abort the build (handleStop) or be swallowed. It now hands the words to
+     * the parent, which keeps the partial answer as context and resumes (Hermes' redirect). Stopping
+     * stays on the square button.
+     */
     expect(props.handleStop).not.toHaveBeenCalled();
-    expect(props.handleSendMessage).not.toHaveBeenCalled();
+    expect(props.handleSendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('never stops the generation on Enter, even with an empty composer', () => {
+    const { props, textarea } = renderChatBox({ isStreaming: true, input: '' });
+
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+
+    /* An empty send is rejected by the parent's own guard; the point here is that Enter is never a stop. */
+    expect(props.handleStop).not.toHaveBeenCalled();
   });
 
   it('still sends on Enter when idle', () => {

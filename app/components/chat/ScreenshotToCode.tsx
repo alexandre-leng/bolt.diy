@@ -8,13 +8,13 @@ import { Label } from '~/components/ui/Label';
 import { generateDesigns, validateDesignPrompt, DESIGN_COUNT, type Design } from '~/lib/screenshot/designs';
 import {
   generateScreenshotCode,
-  STACKS,
   validateScreenshot,
   type Stack,
   type StreamEvent,
   type Variant,
 } from '~/lib/screenshot/generate';
 import { importScreenshotHtml, validateImportableHtml } from '~/lib/screenshot/import';
+import { buildProjectInstruction, pickTemplate, templateLabel } from '~/lib/screenshot/project';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
 
@@ -24,6 +24,13 @@ type Props = {
 
   /** Text-to-image step: a prompt becomes page mockups to choose from. */
   designFor?: typeof generateDesigns;
+
+  /**
+   * Start a NEW project from the chosen design (or the uploaded screenshot): the image becomes the
+   * reference of a React + TypeScript + Tailwind + shadcn/ui project built by the agent, instead of
+   * a throwaway HTML file. When absent, the panel falls back to the flat-file import.
+   */
+  onStartProject?: (args: { prompt: string; image: string; template: string }) => void;
 };
 
 /** Cap on the streamed progress lines kept in the panel, so a long run cannot grow forever. */
@@ -411,6 +418,7 @@ export function ScreenshotToCode({
   generate = generateScreenshotCode,
   importCode = (code) => importScreenshotHtml(code, workbenchStore),
   designFor = generateDesigns,
+  onStartProject,
 }: Props) {
   const [mode, setMode] = useState<Mode>('design');
   const [prompt, setPrompt] = useState('');
@@ -418,7 +426,13 @@ export function ScreenshotToCode({
   const [chosenDesign, setChosenDesign] = useState(0);
 
   const [file, setFile] = useState<File>();
-  const [stack, setStack] = useState<Stack>('html_tailwind');
+
+  /*
+   * The stack selector is hidden (the user settled on React + TypeScript + Tailwind + shadcn/ui, and
+   * Lovable/Bolt do not expose a per-generation framework choice either). The value stays because
+   * the flat-file fallback path still needs one.
+   */
+  const [stack] = useState<Stack>('html_tailwind');
   const [status, setStatus] = useState('');
   const [log, setLog] = useState<string[]>([]);
   const [error, setError] = useState('');
@@ -534,11 +548,17 @@ export function ScreenshotToCode({
             return;
           }
 
+          /*
+           * Place each mockup in its art-direction slot. A `.filter(Boolean)` on a sparse array
+           * COMPACTS the holes, so when the second image landed first the array became [design2]:
+           * `designs[chosenDesign]` (index 0) then held the wrong mockup and every index-based read
+           * was off by one. Keep the holes and let the render skip them.
+           */
           setDesigns((previous) => {
-            const next = previous.length > 0 && previous[0].direction === design.direction ? [...previous] : [];
+            const next: Array<Design | undefined> = [...previous];
             next[index] = design;
 
-            return next.filter(Boolean);
+            return next as Design[];
           });
           setStatus(`Maquette ${done} sur ${total} prête...`);
           pushLog(`Maquette ${index + 1} (${design.direction}) prête.`);
@@ -687,8 +707,63 @@ export function ScreenshotToCode({
     }
   };
 
+  /**
+   * Turn a design (or an upload) into a NEW project.
+   *
+   * This is the primary path now: the image becomes the reference of a real project scaffolded from
+   * a template (React + TypeScript + Tailwind + shadcn/ui by default) and built by the agent, the
+   * same way Bolt and Lovable work. Without a handler the panel keeps the flat-file import, so the
+   * component stays usable on its own.
+   */
+  const startProject = (args: { image: string; prompt: string; designs?: number; index?: number }) => {
+    if (!onStartProject) {
+      /* Fallback: the old flat HTML path, still gated by the import validator. */
+      void codeFromDesign();
+
+      return;
+    }
+
+    const template = pickTemplate(args.prompt);
+
+    onStartProject({
+      prompt: buildProjectInstruction({
+        prompt: args.prompt,
+        template,
+        designCount: args.designs ?? 1,
+        chosenIndex: args.index ?? 0,
+      }),
+      image: args.image,
+      template,
+    });
+  };
+
+  const startProjectFromFile = async () => {
+    if (!file) {
+      return;
+    }
+
+    const dataUrl = await readImage(file);
+
+    if (!onStartProject) {
+      /* Fallback: the flat-file path, which needs the generation to run first. */
+      await start();
+
+      return;
+    }
+
+    startProject({ image: dataUrl, prompt });
+  };
+
   const current = variants[selected];
-  const chosenMockup = designs[chosenDesign];
+
+  /*
+   * A sparse `designs` array (a mockup still drawing) can leave the chosen index on a hole; the
+   * button then looked permanently disabled while a usable mockup was on screen. Resolve the
+   * chosen index to the first real design and keep the slot index for selection.
+   */
+  const chosenIndex = designs[chosenDesign] ? chosenDesign : designs.findIndex(Boolean);
+
+  const chosenMockup = chosenIndex >= 0 ? designs[chosenIndex] : undefined;
 
   return (
     <div className="flex flex-col gap-4 text-sm text-bolt-elements-textPrimary">
@@ -799,6 +874,11 @@ export function ScreenshotToCode({
               </p>
               <div role="radiogroup" aria-label="Maquettes générées" className={grid}>
                 {designs.map((design, index) => {
+                  /* A slot whose image is still being drawn: skipped, never dereferenced. */
+                  if (!design) {
+                    return null;
+                  }
+
                   const active = index === chosenDesign;
 
                   return (
@@ -857,11 +937,26 @@ export function ScreenshotToCode({
 
               <Button
                 type="button"
-                disabled={busy || !chosenMockup}
-                onClick={() => void codeFromDesign()}
+
+                /*
+                 * Only the presence of a usable mockup gates this button. `busy` stays true while the
+                 * remaining mockups are drawn, and gating on it left the primary action disabled for
+                 * a full minute with a finished design on screen.
+                 */
+                disabled={!chosenMockup}
+                onClick={() =>
+                  chosenMockup &&
+                  startProject({
+                    image: chosenMockup.image,
+                    prompt,
+                    designs: designs.filter(Boolean).length,
+                    index: chosenIndex,
+                  })
+                }
                 className="self-start gap-2 !rounded-full px-5 !bg-accent-700 !text-white hover:!bg-accent-800 disabled:!bg-accent-700/50"
               >
-                Transformer cette maquette en code
+                <span className="i-ph:rocket-launch-bold" aria-hidden />
+                Créer le projet {templateLabel(pickTemplate(prompt))}
               </Button>
             </div>
           )}
@@ -886,34 +981,25 @@ export function ScreenshotToCode({
           <Button
             type="button"
             disabled={!file || busy}
-            onClick={() => void start()}
+            onClick={() => void startProjectFromFile()}
             className="self-start gap-2 !rounded-full px-5 !bg-accent-700 !text-white hover:!bg-accent-800 disabled:!bg-accent-700/50"
           >
-            Transformer cette image en code
+            <span className="i-ph:rocket-launch-bold" aria-hidden />
+            Créer le projet {templateLabel(pickTemplate(prompt))}
           </Button>
         </div>
       )}
 
       {/* ---- Shared output side ---- */}
-      <Label htmlFor="screenshot-stack">Stack de sortie</Label>
-      <select
-        id="screenshot-stack"
-        aria-label="Stack de sortie"
-        value={stack}
-        disabled={busy}
-        onChange={(event) => setStack(event.target.value as Stack)}
-        className={classNames(
-          'w-full appearance-none rounded-lg border border-bolt-elements-borderColor px-3 py-2 pr-9',
-          'bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary',
-          'focus-visible:border-bolt-elements-borderColorActive focus-visible:outline-none',
-        )}
-      >
-        {STACKS.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      {/*
+       * No stack selector. The project stack is React + TypeScript + Tailwind + shadcn/ui (a
+       * framework typed in the prompt still wins, see `pickTemplate`), which is exactly the choice
+       * Lovable refuses to expose and Bolt makes once, at project creation.
+       */}
+      <p className="flex items-center gap-2 text-xs text-bolt-elements-textSecondary">
+        <span className="i-ph:info" aria-hidden />
+        Le projet sera créé en React + TypeScript + Tailwind + shadcn/ui.
+      </p>
 
       {busy && (
         <Button type="button" variant="outline" onClick={() => controller.current?.abort()} className="self-start">

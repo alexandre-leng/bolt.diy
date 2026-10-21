@@ -166,14 +166,37 @@ export async function generateDesigns(request: DesignRequest): Promise<Design[]>
   if (request.onDesign) {
     const slots: Array<Design | undefined> = [];
 
-    for (let index = 0; index < count; index += 1) {
-      const design = await requestOne({ prompt, model, size, index, signal: request.signal });
+    let finished = 0;
+    let lastError: unknown;
 
-      slots[index] = design;
-      request.onDesign(design, index, slots.filter(Boolean).length, count);
+    for (let index = 0; index < count; index += 1) {
+      /*
+       * One failed mockup must not throw away the ones already drawn: a quota error on the second
+       * image would otherwise reject the whole loop and the panel would show nothing at all, even
+       * with a finished design on screen.
+       */
+      try {
+        const design = await requestOne({ prompt, model, size, index, signal: request.signal });
+
+        slots[index] = design;
+        finished += 1;
+        request.onDesign(design, index, finished, count);
+      } catch (error) {
+        lastError = error;
+
+        if (request.signal?.aborted) {
+          break;
+        }
+      }
     }
 
-    return slots.filter((slot): slot is Design => Boolean(slot));
+    const designs = slots.filter((slot): slot is Design => Boolean(slot));
+
+    if (designs.length === 0) {
+      throw new Error(lastError instanceof Error ? lastError.message : 'La génération n’a renvoyé aucune maquette.');
+    }
+
+    return designs;
   }
 
   const response = await fetch('/api/screenshot/designs', {

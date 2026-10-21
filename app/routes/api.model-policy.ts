@@ -1,6 +1,7 @@
 import type { LoaderFunction } from 'react-router';
 
 import { resolveProviderKeys } from '~/lib/.server/api/instance-keys';
+import { LLMManager } from '~/lib/modules/llm/manager';
 
 /**
  * What the signed-in account may use, for the composer and the "Mon accès IA" panel.
@@ -22,11 +23,27 @@ export const loader: LoaderFunction = async ({ context, request }) => {
 
   const policy = resolved.policy;
 
+  /*
+   * With no policy in force, every registered provider is open in principle: what decides is
+   * whether a key exists. Sending `allowedProviders: []` there made the panel say "aucun
+   * fournisseur ne vous est ouvert" on an instance that works, which is a lie the user cannot
+   * debug. With a managed policy, the admin's list is the answer and nothing is added.
+   */
+  const allProviders = LLMManager.getInstance(context?.cloudflare?.env as any)
+    .getAllProviders()
+    .map((provider) => provider.name);
+
+  const readableProviders = policy.managedMode
+    ? policy.allowedProviders
+    : resolved.allowUserKeys.length > 0
+      ? [...new Set([...resolved.allowUserKeys, ...Object.keys(resolved.apiKeys)])]
+      : allProviders;
+
   return Response.json({
     managedMode: policy.managedMode,
     defaultModel: policy.defaultModel,
     effortPolicy: policy.effortPolicy,
-    allowedProviders: policy.allowedProviders,
+    allowedProviders: readableProviders,
     allowedModels: policy.allowedModels,
     userKeyProviders: resolved.allowUserKeys,
     providers: Object.fromEntries(

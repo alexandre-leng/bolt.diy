@@ -7,6 +7,16 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { BaseChat } from './BaseChat';
 import type { ElementInfo } from '~/components/workbench/Inspector';
+import {
+  appendSteer,
+  applyRedirect,
+  createTurnControl,
+  drainRedirect,
+  hasInterruptibleContent,
+  queueRedirect,
+  requestStop,
+  shouldAcceptStop,
+} from '~/lib/agent/turn-control';
 import { API_KEYS_UPDATED_EVENT, type ApiKeysUpdatedDetail } from '~/lib/api/apiKeys';
 import { isNetworkStreamError, reportChatFailure, trackedChatFetch } from '~/lib/chatStreamDiagnostics';
 import { isServerAgentTool } from '~/lib/common/agentLoop';
@@ -180,6 +190,14 @@ export const ChatImpl = memo(
      */
     const [progressAnnotations, setProgressAnnotations] = useState<ProgressAnnotation[]>([]);
     const pendingTemplateContinuationRef = useRef<UIMessage | null>(null);
+
+    /*
+     * Control of the RUNNING turn (stop / steer / redirect), ported from Hermes Agent.
+     * `generationRef` is the `require_generation` guard: a stop aimed at turn N must not cancel
+     * turn N+1 that already started.
+     */
+    const turnControlRef = useRef(createTurnControl());
+    const generationRef = useRef(0);
     const parsedStarterSetupMessagesRef = useRef(new Set<string>());
 
     const pendingTemplateParserRef = useRef<(messages: { id: string; role?: string }[], isLoading: boolean) => void>(
@@ -768,7 +786,43 @@ export const ChatImpl = memo(
       }
     };
 
+    /*
+     * The assistant text produced so far. A redirect hands it to the model as context, so an
+     * interruption never loses what was already generated (Hermes keeps it in the checkpoint).
+     */
+    const currentPartialText = () => {
+      /*
+       * Read the LIVE list, not the render closure: during streaming the newest assistant row can be
+       * one render behind, and an empty read here silently downgrades the redirect to a plain turn.
+       */
+      const live = messagesRef.current ?? messages;
+
+      /*
+       * Scan BACKWARDS for the newest assistant row that carries text. A turn that is busy importing
+       * a template, or calling tools, has no text in its last assistant row yet, but the partial
+       * answer from earlier in the same turn is exactly what a redirect must preserve.
+       */
+      for (let index = live.length - 1; index >= 0; index -= 1) {
+        const candidate = live[index];
+
+        if (candidate.role !== 'assistant') {
+          continue;
+        }
+
+        const text = (getMessageText(candidate) ?? '').trim();
+
+        if (text) {
+          return text;
+        }
+      }
+
+      return '';
+    };
+
+    /** The square button: an explicit stop. The partial text is preserved for the record. */
     const abort = () => {
+      turnControlRef.current = requestStop(turnControlRef.current, currentPartialText());
+
       stop();
       chatStore.setKey('aborted', true);
       workbenchStore.abortAllActions();
@@ -779,6 +833,64 @@ export const ChatImpl = memo(
         model,
         provider: provider.name,
       });
+    };
+
+    /**
+     * Send while a generation runs: STEER or REDIRECT, never "ignore".
+     *
+     * With nothing streamed yet there is nothing to preserve, so the message simply starts the next
+     * turn once the running one is aborted. With text on screen, the partial becomes a checkpoint,
+     * the correction becomes a real user message, and the turn RESUMES from it: the behaviour the
+     * user asked for, taken from Hermes' `_apply_active_turn_redirect`.
+     */
+    const interruptWith = async (text: string, actingGeneration: number) => {
+      const partial = currentPartialText();
+      const generation = generationRef.current;
+
+      /*
+       * Debug the two inputs that decide between steer and redirect. An empty `partial` silently
+       * degrades the correction to a plain new turn, which is correct but looks like a lost
+       * checkpoint; this line is what tells them apart.
+       */
+      console.debug('[turn-control] partial length', partial.length, 'generation', generation);
+
+      if (!shouldAcceptStop(actingGeneration, generation)) {
+        /* The turn this message was aimed at already ended: let it be a normal new turn. */
+        return false;
+      }
+
+      if (!hasInterruptibleContent(partial)) {
+        turnControlRef.current = appendSteer(turnControlRef.current, text);
+        abort();
+
+        return false;
+      }
+
+      turnControlRef.current = queueRedirect(turnControlRef.current, text);
+      abort();
+
+      const drained = drainRedirect(turnControlRef.current);
+      turnControlRef.current = drained.next;
+
+      if (!drained.text) {
+        return false;
+      }
+
+      const resumed = applyRedirect(
+        [{ role: 'user', content: text }],
+        partial,
+        `[Correction demandée par l'utilisateur pendant la génération]\n${drained.text}`,
+      );
+
+      const correctionRow = resumed[resumed.length - 1];
+      const checkpoint = correctionRow.apiContent ?? correctionRow.content;
+      const messageText = `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${checkpoint}`;
+
+      /* The resumed turn is a NEW generation: the aborted one must not accept any further stop. */
+      generationRef.current = generation + 1;
+      void sendChatMessage((await buildUserMessage(messageText)) as any);
+
+      return true;
     };
 
     const handleError = useCallback(
@@ -951,6 +1063,78 @@ export const ChatImpl = memo(
       );
     };
 
+    /**
+     * Start a NEW project from a design or a screenshot.
+     *
+     * The stack is not a per-generation choice: the project is scaffolded from a template (React +
+     * TypeScript + Tailwind + shadcn/ui by default) and the image becomes the reference the agent
+     * builds from, in the normal chat pipeline. That is how Bolt and Lovable both work, and it is
+     * what makes the result a project you can actually develop instead of a throwaway HTML file.
+     */
+    const startProjectFromImage = async (args: { prompt: string; image: string; template: string }) => {
+      if (isLoading) {
+        return;
+      }
+
+      setFakeLoading(true);
+
+      try {
+        const title = args.prompt.replace(/\s+/g, ' ').trim().slice(0, 80) || 'Nouveau projet';
+        const temResp = await getTemplates(args.template, title);
+
+        if (!temResp) {
+          throw new Error('Le modèle de projet n’a pas pu être chargé.');
+        }
+
+        const imagePart = {
+          type: 'file' as const,
+          mediaType: 'image/png',
+          filename: 'design.png',
+          url: args.image,
+        };
+
+        const preamble = `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${args.prompt}`;
+
+        /*
+         * The workspace is created by the template import; the build instruction is queued as the
+         * continuation, exactly like Bolt's own starter flow, so the agent works on real files.
+         */
+        pendingTemplateContinuationRef.current = {
+          ...(createMessage({
+            role: 'user',
+            text: preamble,
+            flags: ['hidden', STARTER_BUILD_FLAG],
+          }) as unknown as UIMessage),
+
+          /* The design travels WITH the instruction: the agent reproduces it, it does not guess. */
+          experimental_attachments: [imagePart],
+        } as UIMessage;
+
+        setMessages([
+          {
+            id: `1-${new Date().getTime()}`,
+            role: 'user',
+            content: preamble,
+            parts: [...createMessageParts(preamble, [args.image]), imagePart],
+          },
+          {
+            id: `2-${new Date().getTime()}`,
+            role: 'assistant',
+            content: temResp.assistantMessage,
+            parts: [{ type: 'text', text: temResp.assistantMessage }],
+          },
+        ] as any);
+
+        setInput('');
+        Cookies.remove(PROMPT_COOKIE_KEY);
+        resetEnhancer();
+        textareaRef.current?.blur();
+      } catch (cause) {
+        handleError(cause, 'chat');
+        setFakeLoading(false);
+      }
+    };
+
     const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
       const messageContent = messageInput || input;
 
@@ -959,11 +1143,36 @@ export const ChatImpl = memo(
       }
 
       /*
-       * A send while a generation runs is ignored, not turned into a stop: Enter used to
-       * abort the running build and drop the message. The Stop button calls abort itself.
+       * A send while a generation runs is a CORRECTION, not a dropped message and not a plain stop:
+       * the partial answer is kept as context and the turn resumes from the user's words. With no
+       * text produced yet there is nothing to keep, so it becomes the next turn. The square button
+       * stays the explicit stop.
        */
       if (isLoading) {
-        return;
+        /*
+         * Observability for the interruption path: without it a silent no-op is indistinguishable
+         * from a dropped message (this cost a whole debug cycle). Console only, no payload.
+         */
+        console.debug('[turn-control] send during generation', {
+          generation: generationRef.current,
+          hasPartial: hasInterruptibleContent(currentPartialText()),
+        });
+
+        /*
+         * `generationRef` already identifies the RUNNING turn here; it is bumped below only when
+         * this really becomes a new turn. Passing it through is what makes the stale-stop guard
+         * meaningful: a correction aimed at a finished turn falls through instead of aborting.
+         */
+        const handled = await interruptWith(messageContent, generationRef.current);
+
+        setInput('');
+        Cookies.remove(PROMPT_COOKIE_KEY);
+
+        if (handled) {
+          return;
+        }
+
+        /* Nothing was on screen: fall through so the message starts the next turn once aborted. */
       }
 
       let finalMessageContent = messageContent;
@@ -1007,6 +1216,7 @@ export const ChatImpl = memo(
               const { assistantMessage, userMessage } = temResp;
               const userMessageText = `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${finalMessageContent}`;
 
+              generationRef.current += 1;
               pendingTemplateContinuationRef.current = createMessage({
                 role: 'user',
                 text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${userMessage}\n\nOriginal request:\n${finalMessageContent}`,
@@ -1234,6 +1444,7 @@ export const ChatImpl = memo(
           Cookies.set('agentMode', String(enabled), { expires: 30 });
         }}
         designScheme={designScheme}
+        onStartProject={startProjectFromImage}
         setDesignScheme={setDesignScheme}
         selectedElement={selectedElement}
         setSelectedElement={setSelectedElement}

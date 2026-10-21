@@ -20,7 +20,7 @@ describe('ScreenshotToCode uses Bolt design tokens and primitives', () => {
     expect(input.className).toContain('bg-bolt-elements-background');
     expect(input.className).toContain('border-bolt-elements-border');
 
-    const action = screen.getByRole('button', { name: 'Transformer cette image en code' });
+    const action = screen.getByRole('button', { name: /Créer le projet/ });
     expect(action.className).toContain('inline-flex');
     expect(action.className).toContain('rounded-md');
 
@@ -29,13 +29,16 @@ describe('ScreenshotToCode uses Bolt design tokens and primitives', () => {
     expect(label?.className).toContain('font-medium');
   });
 
-  it('styles the output stack selector with the same tokens as the rest of the panel', () => {
+  it('states the project stack instead of exposing a selector', () => {
     renderPanel();
 
-    const stack = screen.getByLabelText('Stack de sortie');
-    expect(stack.className).toContain('bg-bolt-elements-background-depth-1');
-    expect(stack.className).toContain('border-bolt-elements-borderColor');
-    expect(stack.className).toContain('text-bolt-elements-textPrimary');
+    /*
+     * The stack is a product decision (React + TypeScript + Tailwind + shadcn/ui), not a field:
+     * Lovable does not let you choose a framework and Bolt makes that call once, at project
+     * creation. Asking per generation produced code nobody could develop.
+     */
+    expect(screen.queryByLabelText('Stack de sortie')).toBeNull();
+    expect(screen.getByText(/React \+ TypeScript \+ Tailwind \+ shadcn\/ui/)).toBeTruthy();
   });
 
   it('styles the prompt textarea with the panel tokens', () => {

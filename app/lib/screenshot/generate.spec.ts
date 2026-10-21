@@ -42,6 +42,28 @@ function start(onProgress = vi.fn(), onEvent = vi.fn()) {
 }
 
 describe('screenshot generation', () => {
+  it('keeps the variant identity on streamed text so simultaneous runs do not mix sentences', async () => {
+    const { task, socket, onEvent } = start();
+    socket.message({ type: 'assistant', variantIndex: 2, value: 'Working ' });
+    socket.message({ type: 'thinking', variantIndex: 1, value: 'Layout' });
+    socket.message({ type: 'setCode', variantIndex: 0, value: html });
+    socket.message({ type: 'variantComplete', variantIndex: 0 });
+    socket.emit('close', { code: 1000 });
+    await task;
+    expect(onEvent).toHaveBeenCalledWith({ kind: 'assistant', variantIndex: 2, text: 'Working ' });
+    expect(onEvent).toHaveBeenCalledWith({ kind: 'thinking', variantIndex: 1, text: 'Layout' });
+  });
+
+  it('accepts the real backend variantCount string', async () => {
+    const { task, socket, onEvent } = start();
+    socket.message({ type: 'variantCount', variantIndex: 0, value: '4' });
+    socket.message({ type: 'setCode', variantIndex: 0, value: html });
+    socket.message({ type: 'variantComplete', variantIndex: 0 });
+    socket.emit('close', { code: 1000 });
+    await task;
+    expect(onEvent).toHaveBeenCalledWith({ kind: 'variantCount', count: 4 });
+  });
+
   it('uses authenticated same-origin websocket and sends only screenshot protocol parameters without keys', async () => {
     const { task, socket } = start();
     expect(socket.url).toBe('wss://bolt.example/screenshot-api/generate-code');

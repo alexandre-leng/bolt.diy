@@ -7,14 +7,14 @@
  * `isImageGenerationEnabled` on the server, which generates the *assets inside* a
  * generated page (hero images, illustrations), not the page designs themselves.
  *
- * Runs server-side through the app's own route so the OpenAI key never reaches the
+ * Runs server-side through the app's own route so the credential never reaches the
  * browser.
  */
 export const DESIGN_COUNT = 3;
 
 /** Models that return base64 image data through the Images API. */
 export const DESIGN_MODELS = [
-  { value: 'gpt-image-1', label: 'GPT Image (recommended)' },
+  { value: 'gpt-image-1', label: 'GPT Image (recommandé)' },
   { value: 'dall-e-3', label: 'DALL-E 3' },
 ] as const;
 
@@ -36,6 +36,12 @@ export interface DesignRequest {
   /** Portrait/landscape/square, mirrors the API's `size` parameter. */
   size?: '1024x1024' | '1536x1024' | '1024x1536';
   signal?: AbortSignal;
+
+  /**
+   * Progressive mode: called as soon as each mockup is ready, so the panel fills in one tile at a
+   * time instead of waiting for all of them. `index` is the art-direction slot.
+   */
+  onDesign?: (design: Design, index: number, done: number, total: number) => void;
 }
 
 /**
@@ -48,6 +54,8 @@ const DIRECTIONS = [
   'a warm, friendly product layout with rounded cards, soft shadows and an illustration',
   'a dense, data-oriented dashboard layout with cards, charts and a sidebar',
 ];
+
+const IMAGE_DATA_URL = /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 
 const BASE_INSTRUCTION =
   'A flat UI mockup of a web page, straight-on view, no perspective, no device frame, ' +
@@ -75,7 +83,7 @@ export function buildDesignPrompt(userPrompt: string, directionIndex: number): s
 }
 
 function directionLabel(index: number): string {
-  return ['Minimal', 'Bold', 'Friendly', 'Dense'][index % 4];
+  return ['Minimaliste', 'Affirmé', 'Chaleureux', 'Dense'][index % 4];
 }
 
 /**
@@ -84,19 +92,100 @@ function directionLabel(index: number): string {
  * The route is `/api/screenshot/designs`, served by the same auth guard as the rest of
  * the app: the OpenAI key stays on the server.
  */
-export async function generateDesigns(request: DesignRequest): Promise<Design[]> {
-  const prompt = validateDesignPrompt(request.prompt);
-  const count = Math.min(Math.max(request.count ?? DESIGN_COUNT, 1), 4);
-
+/** One mockup: a single design, requested on its own so each has its own deadline. */
+async function requestOne(args: {
+  prompt: string;
+  model: DesignModel;
+  size: '1024x1024' | '1536x1024' | '1024x1536';
+  index: number;
+  signal?: AbortSignal;
+}): Promise<Design> {
   const response = await fetch('/api/screenshot/designs', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      prompt,
-      count,
-      model: request.model ?? 'gpt-image-1',
-      size: request.size ?? '1024x1024',
+      prompt: args.prompt,
+      count: 1,
+      directionIndex: args.index,
+      model: args.model,
+      size: args.size,
     }),
+    signal: args.signal,
+  });
+
+  if (!response.ok) {
+    let detail = `HTTP ${response.status}`;
+
+    if (response.status === 502 || response.status === 504) {
+      /* The gateway gives up before a subscription image finishes: say what to do, not the code. */
+      detail = "le service image n'a pas répondu à temps. Réessayez, et si cela se répète, générez une seule maquette.";
+    } else {
+      try {
+        const body = (await response.json()) as { error?: string };
+
+        if (body?.error) {
+          detail = body.error;
+        }
+      } catch {
+        // keep the status text
+      }
+    }
+
+    throw new Error(detail);
+  }
+
+  const body = (await response.json()) as { images?: unknown };
+  const [first] = Array.isArray(body.images) ? body.images : [];
+
+  if (typeof first !== 'string') {
+    throw new Error("La génération n'a renvoyé aucune image.");
+  }
+
+  return toDesign(first, args.index);
+}
+
+/** Accept a bare base64 payload or a ready data URL; reject anything that is not an image. */
+function toDesign(value: string, index: number): Design {
+  const image = value.startsWith('data:') ? value : `data:image/png;base64,${value}`;
+
+  if (!IMAGE_DATA_URL.test(image)) {
+    throw new Error("La génération n'a renvoyé aucune image exploitable.");
+  }
+
+  return { image, direction: directionLabel(index) };
+}
+
+/*
+ * Each mockup is requested on its own, so the panel can show the first one while the others are
+ * still being drawn. Measured on this host: one subscription image takes 30-56 s, and a single
+ * batched call for three exceeded the gateway budget and surfaced as a bare `HTTP 502`.
+ *
+ * Results therefore arrive out of order; `onDesign` carries the direction index so the caller can
+ * place each mockup in its own slot.
+ */
+export async function generateDesigns(request: DesignRequest): Promise<Design[]> {
+  const prompt = validateDesignPrompt(request.prompt);
+  const count = Math.min(Math.max(request.count ?? DESIGN_COUNT, 1), 4);
+  const model = request.model ?? 'gpt-image-1';
+  const size = request.size ?? '1024x1024';
+
+  if (request.onDesign) {
+    const slots: Array<Design | undefined> = [];
+
+    for (let index = 0; index < count; index += 1) {
+      const design = await requestOne({ prompt, model, size, index, signal: request.signal });
+
+      slots[index] = design;
+      request.onDesign(design, index, slots.filter(Boolean).length, count);
+    }
+
+    return slots.filter((slot): slot is Design => Boolean(slot));
+  }
+
+  const response = await fetch('/api/screenshot/designs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, count, model, size }),
     signal: request.signal,
   });
 
@@ -129,14 +218,11 @@ export async function generateDesigns(request: DesignRequest): Promise<Design[]>
       return;
     }
 
-    // Accept a bare base64 payload or a ready data URL.
-    const image = value.startsWith('data:') ? value : `data:image/png;base64,${value}`;
-
-    if (!/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(image)) {
-      return;
+    try {
+      designs.push(toDesign(value, index));
+    } catch {
+      // skip a payload that is not an image
     }
-
-    designs.push({ image, direction: directionLabel(index) });
   });
 
   if (designs.length === 0) {

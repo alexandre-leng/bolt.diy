@@ -14,13 +14,13 @@ describe('ScreenshotToCode uses Bolt design tokens and primitives', () => {
   it('renders the file input and action with Bolt primitives once the image mode is active', async () => {
     const { container } = renderPanel();
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Use an image' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Utiliser une image' }));
 
-    const input = screen.getByLabelText('Screenshot image');
+    const input = screen.getByLabelText('Image de capture');
     expect(input.className).toContain('bg-bolt-elements-background');
     expect(input.className).toContain('border-bolt-elements-border');
 
-    const action = screen.getByRole('button', { name: 'Turn this image into code' });
+    const action = screen.getByRole('button', { name: 'Transformer cette image en code' });
     expect(action.className).toContain('inline-flex');
     expect(action.className).toContain('rounded-md');
 
@@ -32,7 +32,7 @@ describe('ScreenshotToCode uses Bolt design tokens and primitives', () => {
   it('styles the output stack selector with the same tokens as the rest of the panel', () => {
     renderPanel();
 
-    const stack = screen.getByLabelText('Output stack');
+    const stack = screen.getByLabelText('Stack de sortie');
     expect(stack.className).toContain('bg-bolt-elements-background-depth-1');
     expect(stack.className).toContain('border-bolt-elements-borderColor');
     expect(stack.className).toContain('text-bolt-elements-textPrimary');
@@ -41,7 +41,7 @@ describe('ScreenshotToCode uses Bolt design tokens and primitives', () => {
   it('styles the prompt textarea with the panel tokens', () => {
     renderPanel();
 
-    const prompt = screen.getByLabelText('Design description');
+    const prompt = screen.getByLabelText('Description du design');
     expect(prompt.className).toContain('bg-bolt-elements-background-depth-1');
     expect(prompt.className).toContain('border-bolt-elements-borderColor');
     expect(prompt.className).toContain('text-bolt-elements-textPrimary');
@@ -52,17 +52,17 @@ describe('the mode switch is visible, not hidden in a menu', () => {
   it('renders both options as cards with an icon, a title and a hint', () => {
     renderPanel();
 
-    const designMode = screen.getByRole('radio', { name: 'Generate a design' });
-    const imageMode = screen.getByRole('radio', { name: 'Use an image' });
+    const designMode = screen.getByRole('radio', { name: 'Générer un design' });
+    const imageMode = screen.getByRole('radio', { name: 'Utiliser une image' });
 
     // Icon + title + hint: the choice reads at a glance instead of needing a dropdown.
     expect(designMode.querySelector('[class*="i-ph:"]')).toBeTruthy();
-    expect(designMode.textContent).toContain('Generate a design');
-    expect(designMode.textContent).toContain('pick one');
+    expect(designMode.textContent).toContain('Générer un design');
+    expect(designMode.textContent).toContain('choisissez une maquette');
 
     expect(imageMode.querySelector('[class*="i-ph:"]')).toBeTruthy();
-    expect(imageMode.textContent).toContain('Use an image');
-    expect(imageMode.textContent).toContain('screenshot');
+    expect(imageMode.textContent).toContain('Utiliser une image');
+    expect(imageMode.textContent).toContain('capture');
 
     // The active one is marked visually, not only semantically.
     expect(designMode.className).toContain('border-bolt-elements-borderColorActive');
@@ -73,14 +73,14 @@ describe('ScreenshotToCode primary action follows the Bolt primary button tokens
   it('uses the primary accent for the main action and a styled file trigger', async () => {
     renderPanel();
 
-    const designs = screen.getByRole('button', { name: /Generate 3 mockups/ });
+    const designs = screen.getByRole('button', { name: /Générer 3 maquettes/ });
     expect(designs.className).toContain('bg-bolt-elements-button-primary-background');
     expect(designs.className).toContain('hover:bg-bolt-elements-button-primary-backgroundHover');
     expect(designs.className).toContain('!rounded-full');
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Use an image' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Utiliser une image' }));
 
-    const input = screen.getByLabelText('Screenshot image');
+    const input = screen.getByLabelText('Image de capture');
     expect(input.className).toContain('rounded-full');
   });
 });

@@ -11,13 +11,14 @@ import {
   type StreamEvent,
   type Variant,
 } from '~/lib/screenshot/generate';
-import { importScreenshotHtml, validateImportableHtml } from '~/lib/screenshot/import';
+import { importScreenshotHtml, requiresScriptConsent, validateImportableHtml } from '~/lib/screenshot/import';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
 
 type Props = {
   generate?: typeof generateScreenshotCode;
-  importCode?: (code: string) => Promise<string>;
+  onContinue?: (code: string, path: string) => void;
+  importCode?: (code: string, options?: { allowScripts?: boolean }) => Promise<string>;
 
   /** Text-to-image step: a prompt becomes page mockups to choose from. */
   designFor?: typeof generateDesigns;
@@ -29,18 +30,29 @@ const MAX_LOG_LINES = 60;
 /** The two ways into a project. Chosen with a visible card, not a hidden dropdown. */
 type Mode = 'design' | 'screenshot';
 
+/**
+ * Surface of the mode cards, shared by the stylesheet class and the spec.
+ *
+ * A bare <button> paints the UA grey in the dark theme, which read as a white, disabled card, so
+ * every card names its own fill. The unchecked card sits one depth step above the dialog
+ * (depth-2 -> depth-3); the checked one takes the accent tint, because depth-4 is a 7% white that
+ * measures within a few points of depth-3 and left the active card looking as flat as the other.
+ */
+const MODE_CARD_SURFACE = 'bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary';
+const MODE_CARD_ACTIVE_SURFACE = 'bg-bolt-elements-item-backgroundAccent';
+
 const MODES: Array<{ value: Mode; icon: string; title: string; hint: string }> = [
   {
     value: 'design',
     icon: 'i-ph:sparkle-duotone',
-    title: 'Generate a design',
-    hint: 'Describe the page, get mockups, pick one',
+    title: 'Générer un design',
+    hint: 'Décrivez la page, choisissez une maquette',
   },
   {
     value: 'screenshot',
     icon: 'i-ph:image-duotone',
-    title: 'Use an image',
-    hint: 'Turn a screenshot or exported mockup into code',
+    title: 'Utiliser une image',
+    hint: 'Transformez une capture ou une maquette en code',
   },
 ];
 
@@ -48,7 +60,7 @@ const readImage = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error('Could not read screenshot.'));
+    reader.onerror = () => reject(new Error('Impossible de lire la capture.'));
     reader.readAsDataURL(file);
   });
 
@@ -67,28 +79,49 @@ async function dataUrlToFile(dataUrl: string, name: string): Promise<File> {
  * it runs and how many variants it will produce. Showing those is what keeps a generation
  * that takes minutes from looking frozen.
  */
+/** Translate service messages owned by this workflow; retain unknown diagnostics verbatim. */
+function localizeMessage(text: string): string {
+  const messages: Record<string, string> = {
+    'Screenshot service connection failed.': 'Connexion au service de génération impossible. Réessayez.',
+    'Screenshot service connection closed unexpectedly.': 'La connexion au service de génération a été interrompue.',
+    'Screenshot service failed.': 'Le service de génération a échoué.',
+    'Screenshot generation cancelled.': 'Génération annulée.',
+    'Invalid screenshot service response. Nothing was imported.': 'Réponse du service invalide. Aucun fichier importé.',
+    'Screenshot generation incomplete or unsafe. Nothing was imported.':
+      'Génération incomplète ou non valide. Aucun fichier importé.',
+    'Generated code is not a complete HTML page. Nothing was imported.':
+      'Le code n’est pas une page HTML complète. Aucun fichier importé.',
+    'Choose a PNG, JPEG, or WebP screenshot under 10 MB.':
+      'Choisissez une capture PNG, JPEG ou WebP de moins de 10 Mo.',
+    'Describe the page you want (at least a few words).': 'Décrivez la page souhaitée en quelques mots.',
+    'Keep the description under 1500 characters.': 'Limitez la description à 1 500 caractères.',
+    'Design generation returned no image.': 'La génération n’a renvoyé aucune maquette.',
+    'Design generation returned no usable image.': 'La génération n’a renvoyé aucune maquette exploitable.',
+    'Could not create the generated HTML file. Impossible d’enregistrer le fichier dans le projet.':
+      'Impossible d’enregistrer le fichier HTML dans le projet.',
+  };
+
+  return (
+    messages[text] ??
+    text
+      .replace(/^Design generation failed: /, 'La génération des maquettes a échoué : ')
+      .replace(/^Generating code(?:\.\.\.|…)?$/i, 'Génération du code…')
+      .replace(/^Generating (?:your )?(?:design|page)(?:\.\.\.|…)?$/i, 'Génération de la page…')
+      .replace(/^Connecting(?:\.\.\.|…)?$/i, 'Connexion…')
+      .replace(/^Analyzing (?:the )?image(?:\.\.\.|…)?$/i, 'Analyse de l’image…')
+  );
+}
+
 function describeEvent(event: StreamEvent): string | undefined {
   switch (event.kind) {
     case 'status':
-      return event.text;
+      return localizeMessage(event.text);
 
     case 'variantCount':
-      return `Generating ${event.count} version${event.count === 1 ? '' : 's'}...`;
+      return `Génération de ${event.count} version${event.count === 1 ? '' : 's'}…`;
 
     case 'toolStart':
-      return `Running ${event.name}...`;
-
-    case 'thinking': {
-      const text = event.text.trim();
-
-      return text ? `Thinking: ${text.slice(0, 120)}` : undefined;
-    }
-
-    case 'assistant': {
-      const text = event.text.trim();
-
-      return text ? text.slice(0, 120) : undefined;
-    }
+      return `Exécution de ${event.name}…`;
 
     default:
       return undefined;
@@ -97,7 +130,8 @@ function describeEvent(event: StreamEvent): string | undefined {
 
 export function ScreenshotToCode({
   generate = generateScreenshotCode,
-  importCode = (code) => importScreenshotHtml(code, workbenchStore),
+  onContinue,
+  importCode = (code, options) => importScreenshotHtml(code, workbenchStore, options),
   designFor = generateDesigns,
 }: Props) {
   const [mode, setMode] = useState<Mode>('design');
@@ -108,32 +142,61 @@ export function ScreenshotToCode({
   const [file, setFile] = useState<File>();
   const [stack, setStack] = useState<Stack>('html_tailwind');
   const [status, setStatus] = useState('');
-  const [log, setLog] = useState<string[]>([]);
+  const [log, setLog] = useState<Array<{ key?: string; text: string }>>([]);
+  const [consents, setConsents] = useState<Record<number, boolean>>({});
+  const [filePreview, setFilePreview] = useState('');
+  const [imported, setImported] = useState<{ code: string; path: string } | null>(null);
   const [error, setError] = useState('');
   const [variants, setVariants] = useState<Variant[]>([]);
   const [selected, setSelected] = useState(0);
   const [busy, setBusy] = useState(false);
   const controller = useRef<AbortController | null>(null);
   const mounted = useRef(true);
+  const sourceProject = useRef<number | null>(null);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mounted.current = true;
+
+    return () => {
       mounted.current = false;
       controller.current?.abort();
-    },
-    [],
-  );
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setFilePreview('');
+
+    if (file) {
+      void readImage(file)
+        .then((image) => {
+          if (active) {
+            setFilePreview(image);
+          }
+        })
+        .catch(() => {
+          /* The generation reader reports errors when needed. */
+        });
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [file]);
 
   const pushLog = (line: string) => {
-    setLog((current) => [...current, line].slice(-MAX_LOG_LINES));
+    setLog((current) => [...current, { text: line }].slice(-MAX_LOG_LINES));
   };
 
   const reset = () => {
     controller.current?.abort();
+    controller.current = null;
     setStatus('');
     setLog([]);
     setError('');
     setVariants([]);
+    setImported(null);
+    setConsents({});
     setSelected(0);
   };
 
@@ -161,7 +224,7 @@ export function ScreenshotToCode({
       !['image/png', 'image/jpeg', 'image/webp'].includes(selectedFile.type) ||
       selectedFile.size > 10 * 1024 * 1024
     ) {
-      setError('Choose a PNG, JPEG, or WebP screenshot under 10 MB.');
+      setError('Choisissez une capture PNG, JPEG ou WebP de moins de 10 Mo.');
 
       return;
     }
@@ -176,6 +239,24 @@ export function ScreenshotToCode({
       signal: abort.signal,
       onEvent: (event) => {
         if (!mounted.current || abort.signal.aborted) {
+          return;
+        }
+
+        if (event.kind === 'assistant' || event.kind === 'thinking') {
+          // Keep whitespace: stream frames are fragments, not individual messages.
+          const variantIndex = (event as StreamEvent & { variantIndex?: number }).variantIndex;
+          const key = `${event.kind}-${variantIndex ?? 'shared'}`;
+          const label = `${variantIndex === undefined ? '' : `Version ${variantIndex + 1} · `}${event.kind === 'thinking' ? 'Réflexion' : 'Assistant'} : `;
+          setLog((current) => {
+            const existing = current.find((entry) => entry.key === key);
+
+            return existing
+              ? current.map((entry) =>
+                  entry.key === key ? { key, text: (entry.text + event.text).slice(0, 8000) } : entry,
+                )
+              : [...current, { key, text: label + event.text }].slice(-MAX_LOG_LINES);
+          });
+
           return;
         }
 
@@ -195,31 +276,60 @@ export function ScreenshotToCode({
 
     const abort = new AbortController();
     controller.current = abort;
+    sourceProject.current = workbenchStore.projectGeneration.get();
     setBusy(true);
     setError('');
     setLog([]);
     setVariants([]);
+    setImported(null);
+    setConsents({});
     setDesigns([]);
     setChosenDesign(0);
-    setStatus('Generating page mockups...');
+    setStatus('Génération des maquettes...');
 
     try {
       const text = validateDesignPrompt(prompt);
-      const result = await designFor({ prompt: text, count: DESIGN_COUNT, signal: abort.signal });
+      const progressive = new Map<number, Design>();
 
-      if (mounted.current && !abort.signal.aborted) {
+      /*
+       * Progressive: each mockup appears the moment it is drawn. One subscription image takes
+       * 30-56 s on this backend, so waiting for all three left the panel frozen for minutes.
+       */
+      const result = await designFor({
+        prompt: text,
+        count: DESIGN_COUNT,
+        signal: abort.signal,
+        onDesign: (design, index, done, total) => {
+          if (!mounted.current || abort.signal.aborted) {
+            return;
+          }
+
+          progressive.set(index, design);
+          setDesigns([...progressive.entries()].sort(([a], [b]) => a - b).map(([, mockup]) => mockup));
+          setStatus(`Maquette ${done} sur ${total} prête...`);
+          pushLog(`Maquette ${index + 1} (${design.direction}) prête.`);
+        },
+      });
+
+      if (mounted.current && !abort.signal.aborted && result.length > 0) {
         setDesigns(result);
         setStatus(
-          `${result.length} mockup${result.length === 1 ? '' : 's'} generated. Pick the one to turn into code.`,
+          result.length === 1
+            ? 'Maquette prête. Choisissez-la pour la transformer en code.'
+            : `${result.length} maquettes prêtes. Choisissez celle à transformer en code.`,
         );
       }
     } catch (cause) {
       if (mounted.current && !abort.signal.aborted) {
-        setError(cause instanceof Error ? cause.message : 'Design generation failed.');
+        setError(cause instanceof Error ? localizeMessage(cause.message) : 'La génération du design a échoué.');
       }
     } finally {
-      if (mounted.current) {
-        setBusy(false);
+      if (controller.current === abort) {
+        controller.current = null;
+
+        if (mounted.current) {
+          setBusy(false);
+        }
       }
     }
   };
@@ -239,11 +349,14 @@ export function ScreenshotToCode({
 
     const abort = new AbortController();
     controller.current = abort;
+    sourceProject.current = workbenchStore.projectGeneration.get();
     setBusy(true);
     setError('');
     setVariants([]);
+    setImported(null);
+    setConsents({});
     setSelected(0);
-    setStatus('Turning the mockup into code...');
+    setStatus('Transformation de la maquette en code...');
     setLog([]);
 
     try {
@@ -260,17 +373,21 @@ export function ScreenshotToCode({
         setVariants(result);
         setStatus(
           result.length === 1
-            ? 'Code ready. Review it before importing.'
-            : `${result.length} versions generated. Pick the one to import.`,
+            ? 'Code prêt. Vérifiez-le avant de l’importer.'
+            : `${result.length} versions générées. Choisissez celle à importer.`,
         );
       }
     } catch (cause) {
       if (mounted.current && !abort.signal.aborted) {
-        setError(cause instanceof Error ? cause.message : 'Generation failed.');
+        setError(cause instanceof Error ? localizeMessage(cause.message) : 'La génération a échoué.');
       }
     } finally {
-      if (mounted.current) {
-        setBusy(false);
+      if (controller.current === abort) {
+        controller.current = null;
+
+        if (mounted.current) {
+          setBusy(false);
+        }
       }
     }
   };
@@ -283,11 +400,14 @@ export function ScreenshotToCode({
 
     const abort = new AbortController();
     controller.current = abort;
+    sourceProject.current = workbenchStore.projectGeneration.get();
     setBusy(true);
     setError('');
     setVariants([]);
+    setImported(null);
+    setConsents({});
     setSelected(0);
-    setStatus('Reading the image...');
+    setStatus('Lecture de l’image...');
     setLog([]);
 
     try {
@@ -303,17 +423,21 @@ export function ScreenshotToCode({
         setVariants(result);
         setStatus(
           result.length === 1
-            ? 'Code ready. Review it before importing.'
-            : `${result.length} versions generated. Pick the one to import.`,
+            ? 'Code prêt. Vérifiez-le avant de l’importer.'
+            : `${result.length} versions générées. Choisissez celle à importer.`,
         );
       }
     } catch (cause) {
       if (mounted.current && !abort.signal.aborted) {
-        setError(cause instanceof Error ? cause.message : 'Generation failed.');
+        setError(cause instanceof Error ? localizeMessage(cause.message) : 'La génération a échoué.');
       }
     } finally {
-      if (mounted.current) {
-        setBusy(false);
+      if (controller.current === abort) {
+        controller.current = null;
+
+        if (mounted.current) {
+          setBusy(false);
+        }
       }
     }
   };
@@ -327,18 +451,33 @@ export function ScreenshotToCode({
 
     setBusy(true);
     setError('');
+    setImported(null);
 
     try {
-      validateImportableHtml(chosen.code);
+      if (sourceProject.current !== workbenchStore.projectGeneration.get()) {
+        throw new Error(
+          'Le projet a changé depuis la génération. Relancez la génération dans le projet actuel avant d’importer.',
+        );
+      }
 
-      const path = await importCode(chosen.code);
+      const active = requiresScriptConsent(chosen.code);
+
+      if (active && !consents[selected]) {
+        throw new Error('Autorisez explicitement l’import du code interactif pour cette version.');
+      }
+
+      const options = active ? { allowScripts: true } : undefined;
+      validateImportableHtml(chosen.code, options);
+
+      const path = options ? await importCode(chosen.code, options) : await importCode(chosen.code);
 
       if (mounted.current) {
-        setStatus(`Imported ${path}. Ask Bolt to refine it in the chat.`);
+        setImported({ code: chosen.code, path });
+        setStatus(`Fichier importé : ${path}. Demandez à Bolt de l’améliorer dans le chat.`);
       }
     } catch (cause) {
       if (mounted.current) {
-        setError(cause instanceof Error ? cause.message : 'Import failed.');
+        setError(cause instanceof Error ? localizeMessage(cause.message) : 'L’import a échoué.');
       }
     } finally {
       if (mounted.current) {
@@ -347,13 +486,52 @@ export function ScreenshotToCode({
     }
   };
 
+  const cancel = () => {
+    controller.current?.abort();
+    controller.current = null;
+    setBusy(false);
+    setStatus('Génération annulée.');
+  };
+
+  const chooseDesign = (index: number) => {
+    if (index !== chosenDesign) {
+      reset();
+      setChosenDesign(index);
+    }
+  };
+
+  const navigateCards = (
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    index: number,
+    count: number,
+    choose: (index: number) => void,
+  ) => {
+    const offset = ['ArrowRight', 'ArrowDown'].includes(event.key)
+      ? 1
+      : ['ArrowLeft', 'ArrowUp'].includes(event.key)
+        ? -1
+        : 0;
+
+    if (!offset || busy) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const next = (index + offset + count) % count;
+    const cards = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role=radio]');
+    choose(next);
+    cards?.[next]?.focus();
+  };
+
   const current = variants[selected];
+  const activeSource = current ? requiresScriptConsent(current.code) : false;
   const chosenMockup = designs[chosenDesign];
 
   return (
     <div className="flex flex-col gap-4 text-sm text-bolt-elements-textPrimary">
       {/* Mode switch: two visible cards, so the choice is seen rather than hunted. */}
-      <div role="radiogroup" aria-label="Starting point" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <div role="radiogroup" aria-label="Point de départ" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {MODES.map((option) => {
           const active = mode === option.value;
 
@@ -366,12 +544,29 @@ export function ScreenshotToCode({
               aria-label={option.title}
               disabled={busy}
               onClick={() => switchMode(option.value)}
+              tabIndex={active ? 0 : -1}
+              onKeyDown={(event) =>
+                navigateCards(
+                  event,
+                  MODES.findIndex((item) => item.value === mode),
+                  MODES.length,
+                  (index) => switchMode(MODES[index].value),
+                )
+              }
               className={classNames(
                 'relative flex items-start gap-3 rounded-xl border p-3 text-left transition-all',
-                'disabled:cursor-not-allowed disabled:opacity-60',
+
+                /*
+                 * A <button> without an explicit fill paints the UA grey (rgb(239,239,239)) in the
+                 * dark theme, which read as a white, disabled card. Own the surface on both states:
+                 * the unchecked card is ONE depth step above the dialog (depth-2), the checked one
+                 * two steps, so the difference is visible without relying on the border alone.
+                 */
+                MODE_CARD_SURFACE,
+                'disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-borderColorActive',
                 active
-                  ? 'border-bolt-elements-borderColorActive bg-bolt-elements-background-depth-2 shadow-sm'
-                  : 'border-bolt-elements-borderColor hover:border-bolt-elements-borderColorActive hover:bg-bolt-elements-background-depth-2',
+                  ? `border-bolt-elements-borderColorActive ${MODE_CARD_ACTIVE_SURFACE} shadow-sm`
+                  : 'border-bolt-elements-borderColor hover:border-bolt-elements-borderColorActive hover:bg-bolt-elements-item-backgroundAccent',
               )}
             >
               <span
@@ -400,14 +595,14 @@ export function ScreenshotToCode({
       {/* ---- Design mode: prompt -> mockups -> code ---- */}
       {mode === 'design' && (
         <div className="flex flex-col gap-3">
-          <Label htmlFor="design-prompt">What page do you want?</Label>
+          <Label htmlFor="design-prompt">Quelle page voulez-vous ?</Label>
           <textarea
             id="design-prompt"
-            aria-label="Design description"
+            aria-label="Description du design"
             value={prompt}
             disabled={busy}
             onChange={(event) => setPrompt(event.target.value)}
-            placeholder="A landing page for a bakery: hero, three product cards, opening hours, footer"
+            placeholder="Une landing page pour une boulangerie : héro, trois cartes produit, horaires, pied de page"
             rows={3}
             className={classNames(
               'w-full resize-y rounded-lg border border-bolt-elements-borderColor px-3 py-2',
@@ -420,17 +615,35 @@ export function ScreenshotToCode({
             type="button"
             disabled={busy || prompt.trim().length < 3}
             onClick={() => void createDesigns()}
-            className="self-start bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text !rounded-full px-5"
+            className="self-start gap-2 !rounded-full px-5 bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text"
           >
-            Generate {DESIGN_COUNT} mockups
+            {busy ? (
+              <>
+                <span className="i-ph:circle-notch-bold animate-spin" aria-hidden />
+                Génération en cours…
+              </>
+            ) : (
+              `Générer ${DESIGN_COUNT} maquettes`
+            )}
           </Button>
+
+          {busy && designs.length === 0 && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" aria-hidden>
+              {Array.from({ length: DESIGN_COUNT }, (_, index) => (
+                <div
+                  key={index}
+                  className="aspect-[3/4] animate-pulse rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1"
+                />
+              ))}
+            </div>
+          )}
 
           {designs.length > 0 && (
             <div className="flex flex-col gap-3">
               <p className="text-xs text-bolt-elements-textSecondary">
-                Pick the mockup to build. Each one is a different direction.
+                Choisissez la maquette à construire. Chacune est une direction différente.
               </p>
-              <div role="radiogroup" aria-label="Generated mockups" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div role="radiogroup" aria-label="Maquettes générées" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {designs.map((design, index) => {
                   const active = index === chosenDesign;
 
@@ -440,20 +653,25 @@ export function ScreenshotToCode({
                       type="button"
                       role="radio"
                       aria-checked={active}
-                      aria-label={`${design.direction} mockup`}
+                      aria-label={`Maquette ${design.direction}`}
                       disabled={busy}
-                      onClick={() => setChosenDesign(index)}
+                      onClick={() => chooseDesign(index)}
+                      tabIndex={active ? 0 : -1}
+                      onKeyDown={(event) => navigateCards(event, index, designs.length, chooseDesign)}
                       className={classNames(
-                        'relative flex flex-col overflow-hidden rounded-xl border text-left transition-all',
+                        'relative flex flex-col overflow-hidden rounded-xl border bg-bolt-elements-background-depth-1 text-left transition-colors',
+
+                        // Same UA-grey trap as the mode cards: own the surface explicitly.
+                        'bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-borderColorActive',
                         active
-                          ? 'border-bolt-elements-borderColorActive ring-2 ring-bolt-elements-borderColorActive'
+                          ? 'border-bolt-elements-borderColorActive bg-bolt-elements-background-depth-4 ring-2 ring-bolt-elements-borderColorActive'
                           : 'border-bolt-elements-borderColor hover:border-bolt-elements-borderColorActive',
                       )}
                     >
                       <img
                         src={design.image}
-                        alt={`${design.direction} mockup preview`}
-                        className="h-40 w-full bg-white object-cover"
+                        alt={`Aperçu de la maquette ${design.direction}`}
+                        className="aspect-[3/4] w-full bg-bolt-elements-background-depth-3 object-cover object-top"
                       />
                       <span className="flex items-center gap-2 px-3 py-2">
                         <span className="text-xs font-medium">{design.direction}</span>
@@ -473,9 +691,9 @@ export function ScreenshotToCode({
                 type="button"
                 disabled={busy || !chosenMockup}
                 onClick={() => void codeFromDesign()}
-                className="self-start bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text !rounded-full px-5"
+                className="self-start !rounded-full px-5 bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text"
               >
-                Turn this mockup into code
+                Transformer cette maquette en code
               </Button>
             </div>
           )}
@@ -485,10 +703,10 @@ export function ScreenshotToCode({
       {/* ---- Screenshot mode: upload -> code ---- */}
       {mode === 'screenshot' && (
         <div className="flex flex-col gap-3">
-          <Label htmlFor="screenshot-image">Screenshot image</Label>
+          <Label htmlFor="screenshot-image">Image de capture</Label>
           <Input
             id="screenshot-image"
-            aria-label="Screenshot image"
+            aria-label="Image de capture"
             type="file"
             accept="image/png,image/jpeg,image/webp"
             onChange={(event) => select(event.target.files?.[0])}
@@ -496,29 +714,36 @@ export function ScreenshotToCode({
             className="h-auto rounded-full py-2 file:mr-3 file:rounded-full file:border-0 file:bg-bolt-elements-background-depth-3 file:px-3 file:py-1 file:text-bolt-elements-textPrimary"
           />
           {file && <span className="text-xs text-bolt-elements-textSecondary">{file.name}</span>}
+          {filePreview && (
+            <img src={filePreview} alt="Image sélectionnée" className="max-h-48 w-full rounded-lg object-contain" />
+          )}
 
           <Button
             type="button"
             disabled={!file || busy}
             onClick={() => void start()}
-            className="self-start bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text !rounded-full px-5"
+            className="self-start !rounded-full px-5 bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text"
           >
-            Turn this image into code
+            Transformer cette image en code
           </Button>
         </div>
       )}
 
       {/* ---- Shared output side ---- */}
-      <Label htmlFor="screenshot-stack">Output stack</Label>
+      <Label htmlFor="screenshot-stack">Stack de sortie</Label>
       <select
         id="screenshot-stack"
-        aria-label="Output stack"
+        aria-label="Stack de sortie"
         value={stack}
         disabled={busy}
-        onChange={(event) => setStack(event.target.value as Stack)}
+        onChange={(event) => {
+          reset();
+          setStack(event.target.value as Stack);
+        }}
         className={classNames(
-          'rounded-md border border-bolt-elements-borderColor px-3 py-2',
+          'w-full appearance-none rounded-lg border border-bolt-elements-borderColor px-3 py-2 pr-9',
           'bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary',
+          'focus-visible:border-bolt-elements-borderColorActive focus-visible:outline-none',
         )}
       >
         {STACKS.map((option) => (
@@ -528,9 +753,9 @@ export function ScreenshotToCode({
         ))}
       </select>
 
-      {busy && (
-        <Button type="button" variant="outline" onClick={() => controller.current?.abort()} className="self-start">
-          Cancel
+      {busy && controller.current && (
+        <Button type="button" variant="outline" onClick={cancel} className="self-start">
+          Annuler
         </Button>
       )}
 
@@ -543,12 +768,15 @@ export function ScreenshotToCode({
       {log.length > 0 && (
         <details className="rounded-md border border-bolt-elements-borderColor px-3 py-2">
           <summary className="cursor-pointer text-xs text-bolt-elements-textSecondary">
-            Generation progress ({log.length})
+            Progression de la génération ({log.length})
           </summary>
-          <ul aria-label="Generation progress" className="mt-2 flex flex-col gap-0.5">
+          <ul aria-label="Progression de la génération" className="mt-2 flex flex-col gap-0.5">
             {log.map((line, index) => (
-              <li key={`${index}-${line}`} className="truncate text-xs text-bolt-elements-textSecondary">
-                {line}
+              <li
+                key={line.key ?? index}
+                className="whitespace-pre-wrap break-words text-xs text-bolt-elements-textSecondary"
+              >
+                {line.text}
               </li>
             ))}
           </ul>
@@ -564,23 +792,32 @@ export function ScreenshotToCode({
       {variants.length > 0 && (
         <>
           <p className="text-xs text-bolt-elements-textSecondary">
-            The preview is a static, scriptless rendering in an isolated frame. The source is saved in Bolt only after
-            you import it.
+            L’aperçu est un rendu statique, sans script, dans une frame isolée. Le code n’est enregistré dans Bolt
+            qu’après l’import. L’import sauvegarde un fichier HTML sans exécuter les scripts et ne crée pas une
+            application React multi-fichiers.
           </p>
 
           {variants.length > 1 && (
-            <div role="group" aria-label="Generated versions" className="flex flex-wrap gap-2">
+            <div role="group" aria-label="Versions générées" className="flex flex-wrap gap-2">
               {variants.map((variant, index) => (
                 <button
                   key={variant.index}
                   type="button"
                   aria-pressed={index === selected}
-                  onClick={() => setSelected(index)}
+                  disabled={busy}
+                  onClick={() => {
+                    if (index !== selected) {
+                      setImported(null);
+                      setSelected(index);
+                      setError('');
+                      setStatus('');
+                    }
+                  }}
                   className={classNames(
                     'rounded-full border px-3 py-1 text-xs transition-colors',
                     index === selected
                       ? 'border-bolt-elements-borderColorActive bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary'
-                      : 'border-bolt-elements-borderColor text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary',
+                      : 'border-bolt-elements-borderColor bg-transparent text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary',
                   )}
                 >
                   Version {index + 1}
@@ -592,29 +829,85 @@ export function ScreenshotToCode({
           {current && (
             <>
               <iframe
-                title={`Generated version ${selected + 1} preview`}
+                title={`Aperçu de la version ${selected + 1}`}
                 sandbox=""
                 referrerPolicy="no-referrer"
                 srcDoc={`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'">${current.code}`}
-                className="h-64 w-full rounded-md border border-bolt-elements-borderColor bg-white"
+                className="h-64 w-full rounded-lg border border-bolt-elements-borderColor bg-white"
               />
-              <textarea
-                aria-label="Generated HTML source"
-                readOnly
-                value={current.code}
-                className={classNames(
-                  'w-full min-h-32 rounded-md border border-bolt-elements-borderColor',
-                  'bg-bolt-elements-background-depth-1 px-3 py-2 font-mono text-xs text-bolt-elements-textPrimary',
-                )}
-              />
+              {activeSource && (
+                <div className="rounded-lg border border-bolt-elements-borderColorActive bg-bolt-elements-background-depth-3 p-3">
+                  <p className="text-sm">
+                    Cette version contient du code interactif (scripts, React ou Babel). React n’est pas rendu dans cet
+                    aperçu statique : une page vide ne signifie pas que le code est perdu. Les scripts restent bloqués
+                    ici.
+                  </p>
+                  <p className="mt-2 text-xs text-bolt-elements-textSecondary">
+                    Après l’import, ces scripts et leurs dépendances externes pourront s’exécuter dans le projet.
+                    Vérifiez la source et n’autorisez que du code de confiance.
+                  </p>
+                  <label className="mt-2 flex min-h-11 cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={!!consents[selected]}
+                      disabled={busy}
+                      onChange={(event) => {
+                        const checked = event.target.checked;
+                        setConsents((previous) => ({ ...previous, [selected]: checked }));
+                      }}
+                      className="focus-visible:ring-2 focus-visible:ring-bolt-elements-borderColorActive"
+                    />
+                    J’autorise l’import du code interactif
+                  </label>
+                </div>
+              )}
+              <details className="rounded-md border border-bolt-elements-borderColor px-3 py-2">
+                <summary className="cursor-pointer">Voir la source HTML</summary>
+                <textarea
+                  aria-label="Source HTML générée"
+                  readOnly
+                  value={current.code}
+                  className={classNames(
+                    'mt-2 w-full min-h-32 rounded-md border border-bolt-elements-borderColor',
+                    'bg-bolt-elements-background-depth-1 px-3 py-2 font-mono text-xs text-bolt-elements-textPrimary',
+                  )}
+                />
+              </details>
+              <a
+                href={`data:text/html;charset=utf-8,${encodeURIComponent(current.code)}`}
+                download={`version-${selected + 1}.html`}
+                className="inline-flex min-h-11 items-center self-start rounded-md px-3 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-borderColorActive"
+              >
+                Télécharger le HTML
+              </a>
               <Button
                 type="button"
                 onClick={() => void importFile()}
-                disabled={busy}
-                className="self-start bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text !rounded-full px-5"
+                disabled={busy || (activeSource && !consents[selected])}
+                className="self-start !rounded-full px-5 bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text"
               >
-                Import into Bolt
+                Importer dans Bolt
               </Button>
+              {imported && onContinue && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => {
+                    if (sourceProject.current !== workbenchStore.projectGeneration.get()) {
+                      setImported(null);
+                      setError('Le projet a changé. Importez le code dans le projet actuel avant de continuer.');
+
+                      return;
+                    }
+
+                    onContinue(imported.code, imported.path);
+                  }}
+                  className="self-start"
+                >
+                  Continuer avec Bolt
+                </Button>
+              )}
             </>
           )}
         </>

@@ -3,11 +3,19 @@ import { migrateLegacyMessages } from './messageMigration';
 import type { Snapshot } from './types'; // Import Snapshot type
 import type { ChatHistoryItem } from './useChatHistory';
 import { createScopedLogger } from '~/utils/logger';
+import { detectDebugScope, type DebugScope } from './debugChat';
 
 export interface IChatMetadata {
   gitUrl: string;
   gitBranch?: string;
   netlifySiteId?: string;
+
+  /**
+   * Set when this conversation is a debug session, so it is identifiable from the server row
+   * and not only from its messages. `detectDebugScope` remains the authority: the flag is a
+   * redundancy for tooling that reads `bolt-history` directly, never a substitute for it.
+   */
+  debugScope?: DebugScope;
 }
 
 const logger = createScopedLogger('ChatHistory');
@@ -396,7 +404,21 @@ export async function createChatFromMessages(
   messages: UIMessage[],
   metadata?: IChatMetadata,
 ): Promise<string> {
-  const created = await createChatWithNextId(db, messages, undefined, description, metadata, true);
+  /*
+   * Record the debug marker at creation time. Detection stays message-based, but writing the
+   * flag means the server row itself says which conversations are debug, so an operator
+   * querying `bolt-history` does not have to replicate the rule in SQL.
+   */
+  const debugScope = detectDebugScope(messages);
+
+  const created = await createChatWithNextId(
+    db,
+    messages,
+    undefined,
+    description,
+    debugScope ? { gitUrl: '', ...metadata, debugScope } : metadata,
+    true,
+  );
 
   return created.urlId!;
 }

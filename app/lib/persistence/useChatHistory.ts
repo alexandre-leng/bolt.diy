@@ -11,6 +11,7 @@ import {
   touchesDependencies,
 } from './agentFileReplay';
 import { getCachedMessages, getCachedSnapshot, invalidateChatCache } from './chatCache';
+import { detectDebugScope } from './debugChat';
 import {
   getMessagesByIdRaw,
   getMessagesByUrlIdRaw,
@@ -963,6 +964,15 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
     ready,
     initialMessages,
     chatChanged,
+    /**
+     * Whether the conversation now open is a debug session.
+     *
+     * Read from the stored messages rather than from the live stream: a chat that is still
+     * unsaved has no `initialMessages` at all, and it is precisely the one a debug run creates
+     * — that case is covered by the marker written at save time (see `storeMessageHistory`).
+     * See `detectDebugScope` for the (deliberately narrow) rule.
+     */
+    debugScope: detectDebugScope(initialMessages),
     updateChatMestaData: async (metadata: IChatMetadata) => {
       const id = chatId.get();
 
@@ -1003,6 +1013,17 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
 
         if (messages.length === 0) {
           return;
+        }
+
+        /*
+         * Keep the debug marker on the record even when the chat was created before the
+         * marker existed, or by a path that did not go through createChatFromMessages.
+         * Computed here, once per save, from the messages being saved.
+         */
+        const debugScope = detectDebugScope(messages);
+
+        if (debugScope && !chatMetadata.get()?.debugScope) {
+          chatMetadata.set({ gitUrl: '', ...chatMetadata.get(), debugScope });
         }
 
         streamingRef.current = isStreaming;

@@ -4,6 +4,7 @@ import { Checkbox } from '~/components/ui/Checkbox';
 import WithTooltip from '~/components/ui/Tooltip';
 import { useEditChatDescription } from '~/lib/hooks';
 import { db, prefetchChat, type ChatHistoryItem } from '~/lib/persistence';
+import { detectDebugScope, type DebugScope } from '~/lib/persistence/debugChat';
 import { closeSidebar } from '~/lib/stores/sidebar';
 import { classNames } from '~/utils/classNames';
 
@@ -28,6 +29,13 @@ export function HistoryItem({
 }: HistoryItemProps) {
   const { id: urlId } = useParams();
   const isActiveChat = urlId === item.urlId;
+
+  /*
+   * A debug conversation is labelled from its own messages, not from a stored flag: the flag
+   * would be missing on every chat created before it existed, and those are exactly the ones
+   * polluting the list today. See `detectDebugScope` for the rule and why it is narrow.
+   */
+  const debugScope = detectDebugScope(item.messages ?? []);
 
   const { editing, handleChange, handleBlur, handleSubmit, handleKeyDown, currentDescription, toggleEditMode } =
     useEditChatDescription({
@@ -142,6 +150,7 @@ export function HistoryItem({
           <WithTooltip tooltip={currentDescription}>
             <span className="truncate pr-24">{currentDescription}</span>
           </WithTooltip>
+          {debugScope && <DebugBadge scope={debugScope} />}
           <div
             className={classNames(
               'absolute right-0 top-0 bottom-0 flex items-center bg-transparent px-2 transition-colors',
@@ -264,3 +273,30 @@ function ProjectMonogram({ title }: { title: string }) {
     </span>
   );
 }
+
+/**
+ * The visible mark of a debug conversation.
+ *
+ * Amber, not red: a debug session is not an error, it is something that should not be mistaken
+ * for the user's own work. The text is not decorative — a colour alone would be lost on a
+ * colour-blind reader and on the truncated titles that make these entries unrecognisable in
+ * the first place, so the chip spells "DEBUG" out.
+ */
+function DebugBadge({ scope }: { scope: DebugScope }) {
+  const label = scope === 'probe' ? 'SONDE' : 'DEBUG';
+
+  return (
+    <span
+      data-testid="debug-badge"
+      title={
+        scope === 'probe'
+          ? 'Conversation de test (sonde) : aucun projet construit ici.'
+          : 'Session de debug : conversation créée par un test automatisé.'
+      }
+      className="mr-1 shrink-0 rounded border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300"
+    >
+      {label}
+    </span>
+  );
+}
+

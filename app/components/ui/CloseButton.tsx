@@ -3,7 +3,8 @@ import React from 'react';
 import { classNames } from '~/utils/classNames';
 
 interface CloseButtonProps {
-  onClick?: () => void;
+  /** Called instead of the default internal close (Radix `Dialog.Close` supplies `asChild`). */
+  onClick?: React.MouseEventHandler<HTMLButtonElement>;
   className?: string;
   size?: 'sm' | 'md' | 'lg';
   'aria-label'?: string;
@@ -33,8 +34,10 @@ export function CloseButton({ onClick, className, size = 'md', 'aria-label': ari
       type="button"
       onClick={onClick}
       className={classNames(
-        'text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary dark:text-bolt-elements-textTertiary-dark dark:hover:text-bolt-elements-textSecondary-dark',
-        'rounded-lg hover:bg-bolt-elements-background-depth-2 dark:hover:bg-bolt-elements-background-depth-3',
+        'text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary dark:text-bolt-elements-textTertiary dark:hover:text-bolt-elements-textSecondary',
+
+        // A bare <button> keeps the UA grey fill; declare the transparent surface explicitly.
+        'bg-transparent rounded-lg hover:bg-bolt-elements-background-depth-2',
         'transition-colors duration-200',
         'focus:outline-none focus:ring-2 focus:ring-purple-500/50',
         sizeClasses[size],

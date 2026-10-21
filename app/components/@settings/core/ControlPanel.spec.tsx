@@ -119,4 +119,39 @@ describe('ControlPanel accessibility', () => {
     expect(document.activeElement).not.toBe(screen.getByTestId('settings-content'));
     void before;
   });
+
+  it('closes from the dedicated close control', () => {
+    const onClose = vi.fn();
+    render(<ControlPanel open onClose={onClose} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer les réglages' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes from the mobile navigation pane, where the return link is the only other exit', () => {
+    setViewport(true);
+
+    const onClose = vi.fn();
+    render(<ControlPanel open onClose={onClose} />);
+
+    // On phones the navigation pane fills the dialog and "Retour au projet" scrolls with it.
+    expect(screen.getByTestId('settings-navigation')).toBeVisible();
+
+    fireEvent.click(screen.getByTestId('settings-close'));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the close control reachable after opening a sub-tab', async () => {
+    const onClose = vi.fn();
+    render(<ControlPanel open onClose={onClose} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /profil|profile/i }));
+    await waitFor(() => expect(screen.getByText('profile-body')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId('settings-close'));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

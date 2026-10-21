@@ -356,6 +356,21 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
               )}
             >
               <div className="relative z-10 flex h-full min-h-0">
+                {/*
+                 * A permanent close control. On desktop "Retour au projet" and outside-click are the
+                 * only exits, and on phones that link scrolls away with the navigation list, which
+                 * reads as a panel you cannot close. Sits above both panes, outside the scroll areas.
+                 */}
+                <button
+                  type="button"
+                  data-testid="settings-close"
+                  aria-label="Fermer les réglages"
+                  title="Fermer"
+                  onClick={handleClose}
+                  className="absolute right-3 top-3 z-20 flex h-11 w-11 items-center justify-center rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary transition-colors hover:bg-bolt-elements-item-backgroundActive hover:text-bolt-elements-textPrimary focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500 sm:h-10 sm:w-10"
+                >
+                  <span className="i-ph:x h-5 w-5" aria-hidden="true" />
+                </button>
                 <aside
                   ref={navigationRef}
                   data-testid="settings-navigation"
@@ -366,7 +381,7 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
                 >
                   <button
                     onClick={handleClose}
-                    className="mx-4 mt-4 flex appearance-none items-center gap-2 border-0 border-b border-solid border-bolt-elements-borderColor bg-transparent px-2 pb-5 pt-2 text-left text-sm font-semibold text-bolt-elements-textPrimary hover:text-bolt-elements-item-contentAccent"
+                    className="mx-4 mt-4 mr-16 flex appearance-none items-center gap-2 border-0 border-b border-solid border-bolt-elements-borderColor bg-transparent px-2 pb-5 pt-2 text-left text-sm font-semibold text-bolt-elements-textPrimary hover:text-bolt-elements-item-contentAccent sm:mr-4"
                   >
                     <span className="i-ph:arrow-left w-4 h-4" /> Retour au projet
                   </button>

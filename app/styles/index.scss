@@ -236,9 +236,20 @@ body {
     rgba(0, 0, 0, 0.05) 0 1px 2px 0;
 }
 
+/*
+ * The dark theme inverts the button (light fill, dark ink), which is the Lovable vocabulary for the
+ * send control. But an INACTIVE send button then paints `#fcfbf8` behind a modal overlay and reads
+ * as a stray white control showing through the dialog. Disabled means neutral, in both themes.
+ */
 [data-theme='dark'] .bolt-primary-button {
   background-color: #fcfbf8;
   color: #1c1c1c;
+}
+
+.bolt-primary-button:disabled {
+  background-color: color-mix(in srgb, currentColor 12%, transparent);
+  color: var(--bolt-elements-textSecondary);
+  box-shadow: none;
 }
 
 /* Horizontally scrollable chip rows on phones: visible scrollbar signals more options. */
@@ -375,4 +386,60 @@ body {
  */
 .has-sticky-header {
   padding-bottom: 4rem;
+}
+
+/*
+ * The prompt is pinned to the BOTTOM of the editor (user requirement: "cette partie dans l'éditeur
+ * doit être sticky en bas").
+ *
+ * Two layouts were measured on the deployed build and both failed:
+ *  - a `sticky bottom-0` composer nested in the chat column was never pinned: every wrapper between
+ *    the page column and the composer stretches to the transcript's height (15482px with the file
+ *    tree open), and a sticky element pins only while its OWN containing block crosses the
+ *    scrollport, so it sat at the very end of the conversation (`composerTop: 15360` on mount);
+ *  - making that dock viewport-sized (`sticky` + `height: calc(100dvh - header)`) pinned it in the
+ *    flow but only once the page reached the bottom: in normal flow the dock still starts AFTER the
+ *    transcript, so its top was 15360 until the user had scrolled the whole conversation.
+ *
+ * The composer is chrome, not content: it is fixed to the viewport, at the bottom of the chat
+ * column, and the transcript scrolls behind it. `left`/`width` are driven by CSS variables the chat
+ * column publishes (`--chat-fixed-left` / `--chat-fixed-width`), so it follows the workbench opening
+ * and hiding the chat without measuring anything in JS. `pointer-events: none` keeps the band above
+ * the composer clickable through to the transcript; the composer re-enables pointer events.
+ */
+.bolt-composer-dock {
+  position: fixed;
+  bottom: 0;
+  left: calc(var(--chat-fixed-left, 0px) + 1.5rem);
+  width: calc(var(--chat-fixed-width, 100vw) - 3rem);
+  z-index: 3;
+  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+
+  /*
+   * Fade + floor in ONE layer anchored to the viewport bottom (`100dvh`), not to the dock box: the
+   * dock ends where its content ends, and the band between the composer and the bottom edge showed
+   * raw transcript behind it (measured: "Started npx tsc ..." readable in that strip). The gradient
+   * is solid over the composer's bottom margin, then dissolves upward so nothing is cut dead.
+   */
+  &::before {
+    content: '';
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: min(11rem, 40dvh);
+    pointer-events: none;
+    background: linear-gradient(
+      to top,
+      var(--bolt-elements-bg-depth-1) calc(1.4rem + env(safe-area-inset-bottom, 0px)),
+      color-mix(in oklab, var(--bolt-elements-bg-depth-1) 94%, transparent) 32%,
+      transparent
+    );
+  }
+
+  /* The composer rides above its own fade. */
+  > * {
+    position: relative;
+  }
 }

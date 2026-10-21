@@ -7,7 +7,7 @@ import { ClientOnly } from 'remix-utils/client-only';
 import { getApiKeysFromCookies } from './APIKeyManager';
 import styles from './BaseChat.module.scss';
 import ChatAlert from './ChatAlert';
-import { ChatBox } from './ChatBox';
+import { ChatBox, type StartProjectArgs } from './ChatBox';
 import { ConnectToolsPill } from './ConnectToolsPill';
 import GitCloneButton from './GitCloneButton';
 import LlmErrorAlert from './LLMApiAlert';
@@ -87,6 +87,9 @@ interface BaseChatProps {
   selectedElement?: ElementInfo | null;
   setSelectedElement?: (element: ElementInfo | null) => void;
   addToolOutput?: (options: { tool: string; toolCallId: string; output: unknown }) => void;
+
+  /** Start a new project from a design or a screenshot (template + agent build). */
+  onStartProject?: (args: StartProjectArgs) => void;
 }
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
@@ -136,6 +139,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       addToolOutput = () => {
         throw new Error('addToolOutput not implemented');
       },
+      onStartProject,
     },
     ref,
   ) => {
@@ -150,6 +154,41 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const expoUrl = useStore(expoUrlAtom);
     const showWorkbench = useStore(workbenchStore.showWorkbench);
     const [qrModalOpen, setQrModalOpen] = useState(false);
+    const chatColumnRef = React.useRef<HTMLDivElement | null>(null);
+
+    /*
+     * Publish where the chat column sits, so the fixed composer follows it.
+     *
+     * The composer is `position: fixed` (see `.bolt-composer-dock` in `app/styles/index.scss`): it is
+     * viewport chrome, because every in-flow wrapper here stretches to the transcript's height and a
+     * sticky child then pins only at the very end of the conversation. Fixed positioning needs the
+     * column's left edge and width, which change when the workbench opens, hides the chat, or the
+     * window resizes. A ResizeObserver covers all three without re-rendering the tree.
+     */
+    React.useEffect(() => {
+      const column = chatColumnRef.current;
+
+      if (!column || typeof window === 'undefined') {
+        return undefined;
+      }
+
+      const publish = () => {
+        const rect = column.getBoundingClientRect();
+        document.documentElement.style.setProperty('--chat-fixed-left', `${Math.round(rect.left)}px`);
+        document.documentElement.style.setProperty('--chat-fixed-width', `${Math.round(rect.width)}px`);
+      };
+
+      publish();
+
+      const observer = new ResizeObserver(publish);
+      observer.observe(column);
+      window.addEventListener('resize', publish);
+
+      return () => {
+        observer.disconnect();
+        window.removeEventListener('resize', publish);
+      };
+    }, []);
 
     useEffect(() => {
       if (expoUrl) {
@@ -353,8 +392,27 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         {chatStarted && showChat && !showWorkbench && (
           <WorkbenchReopenButton onClick={() => workbenchStore.showWorkbench.set(true)} />
         )}
-        <div className="flex flex-col lg:flex-row overflow-y-auto overflow-x-hidden w-full h-full">
-          <div className={classNames(styles.Chat, 'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] h-full')}>
+        {/*
+         * The row is a layout box, not a scroller: the chat column owns the vertical scroll so the
+         * composer can pin inside it, and the workbench keeps its own internal scrollers. With
+         * `overflow-y-auto h-full` here the row grew to the file tree's height (measured 15482px),
+         * so both columns measured 100% of THAT, and the sticky composer sat ~15000px down the page.
+         * `min-w-0` lets the row shrink below its children's intrinsic width.
+         */}
+        <div className="flex flex-col lg:flex-row w-full h-full min-h-0 min-w-0 overflow-hidden">
+          <div
+            ref={chatColumnRef}
+            className={classNames(
+              styles.Chat,
+
+              /*
+               * h-full only from lg: below that the row is an auto-height flex-col, so h-full would
+               * resolve against it and grow a 100vh scroller with the file tree's height, pushing
+               * the composer (sticky) many screens below the viewport.
+               */
+              'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] lg:h-full lg:min-h-0 min-h-0',
+            )}
+          >
             {!chatStarted && (
               <div id="intro" className="mt-[8vh] lg:mt-[12vh] max-w-2xl mx-auto text-center px-4 lg:px-0">
                 <ConnectToolsPill />
@@ -392,97 +450,108 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   }}
                 </ClientOnly>
                 <ScrollToBottom />
+                {/* Reserves the fixed composer's height so the last message is not hidden behind it. */}
+                {chatStarted && <div className="shrink-0 h-[var(--composer-space,9.5rem)]" aria-hidden="true" />}
               </StickToBottom.Content>
               <div
-                className={classNames('my-auto flex flex-col gap-2 w-full mx-auto z-prompt mb-6', {
-                  'sticky bottom-2 max-w-chat': chatStarted,
-                  'max-w-[44rem]': !chatStarted,
+                className={classNames('flex flex-col w-full mx-auto mb-6', {
+                  'bolt-composer-dock': chatStarted,
+                  'my-auto max-w-[44rem] z-prompt': !chatStarted,
                 })}
+                data-testid="composer-column"
               >
-                <div className="flex flex-col gap-2">
-                  {deployAlert && (
-                    <DeployChatAlert
-                      alert={deployAlert}
-                      clearAlert={() => _clearDeployAlert?.()}
-                      postMessage={(message: string | undefined) => {
-                        sendMessage?.({} as any, message);
-                      }}
-                    />
-                  )}
-                  {actionAlert && (
-                    <ChatAlert
-                      alert={actionAlert}
-                      clearAlert={() => clearAlert?.()}
-                      postMessage={(message) => {
-                        sendMessage?.({} as any, message);
-                        clearAlert?.();
-                      }}
-                    />
-                  )}
-                  {llmErrorAlert && (
-                    <LlmErrorAlert
-                      alert={llmErrorAlert}
-                      clearAlert={() => clearLlmErrorAlert?.()}
-                      onContinue={() => {
-                        clearLlmErrorAlert?.();
-                        sendMessage?.({} as any, 'Continue where you stopped.');
-                      }}
-                    />
-                  )}
+                <div
+                  className={classNames('w-full mx-auto pointer-events-auto', {
+                    'max-w-chat pb-2 mt-auto': chatStarted,
+                  })}
+                  data-testid="composer-sticky"
+                >
+                  <div className="flex flex-col gap-2">
+                    {deployAlert && (
+                      <DeployChatAlert
+                        alert={deployAlert}
+                        clearAlert={() => _clearDeployAlert?.()}
+                        postMessage={(message: string | undefined) => {
+                          sendMessage?.({} as any, message);
+                        }}
+                      />
+                    )}
+                    {actionAlert && (
+                      <ChatAlert
+                        alert={actionAlert}
+                        clearAlert={() => clearAlert?.()}
+                        postMessage={(message) => {
+                          sendMessage?.({} as any, message);
+                          clearAlert?.();
+                        }}
+                      />
+                    )}
+                    {llmErrorAlert && (
+                      <LlmErrorAlert
+                        alert={llmErrorAlert}
+                        clearAlert={() => clearLlmErrorAlert?.()}
+                        onContinue={() => {
+                          clearLlmErrorAlert?.();
+                          sendMessage?.({} as any, 'Continue where you stopped.');
+                        }}
+                      />
+                    )}
+                  </div>
+                  <ToolApprovalTray messages={messages} addToolOutput={addToolOutput} />
+                  {incomingProgressAnnotations && <ProgressCompilation data={incomingProgressAnnotations} />}
+                  <ChatBox
+                    isModelSettingsCollapsed={isModelSettingsCollapsed}
+                    setIsModelSettingsCollapsed={setIsModelSettingsCollapsed}
+                    provider={provider}
+                    setProvider={setProvider}
+                    providerList={providerList || (PROVIDER_LIST as ProviderInfo[])}
+                    model={model}
+                    setModel={setModel}
+                    modelList={modelList}
+                    apiKeys={apiKeys}
+                    isModelLoading={isModelLoading}
+                    onApiKeysChange={onApiKeysChange}
+                    uploadedFiles={uploadedFiles}
+                    setUploadedFiles={setUploadedFiles}
+                    imageDataList={imageDataList}
+                    setImageDataList={setImageDataList}
+                    textareaRef={textareaRef}
+                    input={input}
+                    handleInputChange={handleInputChange}
+                    handlePaste={handlePaste}
+                    TEXTAREA_MIN_HEIGHT={TEXTAREA_MIN_HEIGHT}
+                    TEXTAREA_MAX_HEIGHT={TEXTAREA_MAX_HEIGHT}
+                    isStreaming={isStreaming}
+                    handleStop={handleStop}
+                    handleSendMessage={handleSendMessage}
+                    enhancingPrompt={enhancingPrompt}
+                    enhancePrompt={enhancePrompt}
+                    isListening={isListening}
+                    speechSupported={speechSupported}
+                    speechEngine={speechEngine}
+                    speechTranscribing={speechTranscribing}
+                    speechError={speechError}
+                    clearSpeechError={clearSpeechError}
+                    dictationSettings={dictationSettings}
+                    updateDictationSettings={updateDictationSettings}
+                    startListening={startListening}
+                    stopListening={stopListening}
+                    chatStarted={chatStarted}
+                    exportChat={exportChat}
+                    qrModalOpen={qrModalOpen}
+                    setQrModalOpen={setQrModalOpen}
+                    handleFileUpload={handleFileUpload}
+                    onStartProject={onStartProject}
+                    chatMode={chatMode}
+                    setChatMode={setChatMode}
+                    agentMode={agentMode}
+                    setAgentMode={setAgentMode}
+                    designScheme={designScheme}
+                    setDesignScheme={setDesignScheme}
+                    selectedElement={selectedElement}
+                    setSelectedElement={setSelectedElement}
+                  />
                 </div>
-                <ToolApprovalTray messages={messages} addToolOutput={addToolOutput} />
-                {incomingProgressAnnotations && <ProgressCompilation data={incomingProgressAnnotations} />}
-                <ChatBox
-                  isModelSettingsCollapsed={isModelSettingsCollapsed}
-                  setIsModelSettingsCollapsed={setIsModelSettingsCollapsed}
-                  provider={provider}
-                  setProvider={setProvider}
-                  providerList={providerList || (PROVIDER_LIST as ProviderInfo[])}
-                  model={model}
-                  setModel={setModel}
-                  modelList={modelList}
-                  apiKeys={apiKeys}
-                  isModelLoading={isModelLoading}
-                  onApiKeysChange={onApiKeysChange}
-                  uploadedFiles={uploadedFiles}
-                  setUploadedFiles={setUploadedFiles}
-                  imageDataList={imageDataList}
-                  setImageDataList={setImageDataList}
-                  textareaRef={textareaRef}
-                  input={input}
-                  handleInputChange={handleInputChange}
-                  handlePaste={handlePaste}
-                  TEXTAREA_MIN_HEIGHT={TEXTAREA_MIN_HEIGHT}
-                  TEXTAREA_MAX_HEIGHT={TEXTAREA_MAX_HEIGHT}
-                  isStreaming={isStreaming}
-                  handleStop={handleStop}
-                  handleSendMessage={handleSendMessage}
-                  enhancingPrompt={enhancingPrompt}
-                  enhancePrompt={enhancePrompt}
-                  isListening={isListening}
-                  speechSupported={speechSupported}
-                  speechEngine={speechEngine}
-                  speechTranscribing={speechTranscribing}
-                  speechError={speechError}
-                  clearSpeechError={clearSpeechError}
-                  dictationSettings={dictationSettings}
-                  updateDictationSettings={updateDictationSettings}
-                  startListening={startListening}
-                  stopListening={stopListening}
-                  chatStarted={chatStarted}
-                  exportChat={exportChat}
-                  qrModalOpen={qrModalOpen}
-                  setQrModalOpen={setQrModalOpen}
-                  handleFileUpload={handleFileUpload}
-                  chatMode={chatMode}
-                  setChatMode={setChatMode}
-                  agentMode={agentMode}
-                  setAgentMode={setAgentMode}
-                  designScheme={designScheme}
-                  setDesignScheme={setDesignScheme}
-                  selectedElement={selectedElement}
-                  setSelectedElement={setSelectedElement}
-                />
               </div>
             </StickToBottom>
             {!chatStarted && (

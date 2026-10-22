@@ -59,12 +59,13 @@ export const SettingsHeader = forwardRef<HTMLDivElement, SettingsHeaderProps>(
           {title ?? 'Réglages'}
         </h1>
 
+        {/* `bg-transparent`: same UA-grey trap as « Tous les réglages » in the dark theme. */}
         <button
           type="button"
           onClick={onClose}
           data-testid="settings-close"
           className={classNames(
-            'flex min-h-11 min-w-11 items-center justify-center rounded-lg text-bolt-elements-textSecondary',
+            'flex min-h-11 min-w-11 appearance-none items-center justify-center rounded-lg border-0 bg-transparent text-bolt-elements-textSecondary',
             'transition-colors hover:bg-bolt-elements-item-backgroundActive hover:text-bolt-elements-textPrimary',
             'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500',
           )}

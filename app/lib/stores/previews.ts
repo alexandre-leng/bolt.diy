@@ -73,7 +73,8 @@ export class PreviewsStore {
       };
     }
 
-    this.#init();
+    // A refused runtime boot is reported once by `~/lib/webcontainer`; never an unhandled rejection.
+    this.#init().catch((error: unknown) => console.warn('[previews] runtime not available:', error));
   }
 
   #maybeCreateChannel(name: string): BroadcastChannel | undefined {

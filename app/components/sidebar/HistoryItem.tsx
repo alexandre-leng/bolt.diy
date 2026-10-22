@@ -5,6 +5,7 @@ import WithTooltip from '~/components/ui/Tooltip';
 import { useEditChatDescription } from '~/lib/hooks';
 import { db, prefetchChat, type ChatHistoryItem } from '~/lib/persistence';
 import { closeSidebar } from '~/lib/stores/sidebar';
+import { cleanChatTitle } from '~/utils/chatTitle';
 import { classNames } from '~/utils/classNames';
 
 interface HistoryItemProps {
@@ -148,9 +149,12 @@ export function HistoryItem({
               closeSidebar();
             }}
           >
-            <ProjectMonogram title={currentDescription} />
-            <WithTooltip tooltip={currentDescription}>
-              <span className="truncate">{currentDescription}</span>
+            {/* `cleanChatTitle`: stored titles may still start with « [Model: x] [Provider: y] ». */}
+            <ProjectMonogram title={cleanChatTitle(currentDescription)} />
+            <WithTooltip tooltip={cleanChatTitle(currentDescription)}>
+              <span className="truncate" data-testid="history-item-title">
+                {cleanChatTitle(currentDescription)}
+              </span>
             </WithTooltip>
           </Link>
           <div ref={actionsRef} className="flex shrink-0 items-center gap-0.5 text-gray-600 dark:text-gray-300">

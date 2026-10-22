@@ -89,3 +89,30 @@ describe('ChatDescription', () => {
     expect(input.className).toContain('min-w-0');
   });
 });
+
+describe('ChatDescription: titre hérité « [Model: …] [Provider: …] » (A-02)', () => {
+  it('affiche le titre nettoyé dans l’en-tête sans écrire côté serveur', () => {
+    description.set('[Model: beam-free] [Provider: OpenCodeGo] créer un site à 1 milliard');
+
+    render(<ChatDescription />);
+
+    expect(screen.getByTestId('chat-description-title').textContent).toBe('créer un site à 1 milliard');
+    expect(saveCount()).toBe(0);
+  });
+
+  it('garde le bouton Renommer dans la ligne du titre (A 768 px : min-w-0, titre tronqué)', () => {
+    description.set('Un titre très long '.repeat(10));
+
+    render(<ChatDescription />);
+
+    const row = screen.getByTestId('chat-description');
+    const title = screen.getByTestId('chat-description-title');
+
+    // jsdom has no layout: pin the classes that let the row shrink and the title truncate.
+    expect(row.className).toMatch(/\bmin-w-0\b/);
+    expect(row.className).toMatch(/\bmax-w-full\b/);
+    expect(title.className).toMatch(/\bmin-w-0\b/);
+    expect(title.className).toMatch(/\btruncate\b/);
+    expect(row.contains(screen.getByTestId('rename-chat'))).toBe(true);
+  });
+});

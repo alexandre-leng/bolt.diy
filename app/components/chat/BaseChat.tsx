@@ -9,13 +9,11 @@ import styles from './BaseChat.module.scss';
 import ChatAlert from './ChatAlert';
 import { ChatBox, type StartProjectArgs } from './ChatBox';
 import { ConnectToolsPill } from './ConnectToolsPill';
-import GitCloneButton from './GitCloneButton';
+import { HomeHeroText, HomeImportActions } from './HomeIntro';
 import LlmErrorAlert from './LLMApiAlert';
 import { Messages, type DisplayMessage } from './Messages.client';
 import ProgressCompilation from './ProgressCompilation';
 import { ToolApprovalTray } from './ToolApprovalTray';
-import { ImportFolderButton } from '~/components/chat/ImportFolderButton';
-import { ImportZipButton } from '~/components/chat/ImportZipButton';
 import DeployChatAlert from '~/components/deploy/DeployAlert';
 import { Menu } from '~/components/sidebar/Menu.client';
 import type { ElementInfo } from '~/components/workbench/Inspector';
@@ -28,7 +26,6 @@ const LazyWorkbench = lazy(() =>
 import { StickToBottom, useStickToBottomContext } from '~/lib/hooks';
 import { useSpeechRecognition } from '~/lib/hooks/useSpeechRecognition';
 import type { ModelInfo } from '~/lib/modules/llm/types';
-import { profileStore } from '~/lib/stores/profile';
 import { expoUrlAtom } from '~/lib/stores/qrCodeStore';
 import { workbenchStore } from '~/lib/stores/workbench';
 import type { ActionAlert, DeployAlert, LlmErrorAlertType } from '~/types/actions';
@@ -416,12 +413,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             {!chatStarted && (
               <div id="intro" className="mt-[8vh] lg:mt-[12vh] max-w-2xl mx-auto text-center px-4 lg:px-0">
                 <ConnectToolsPill />
-                <h1 className="text-[2rem] leading-[1.1] sm:text-5xl font-semibold tracking-[-0.03em] text-bolt-elements-textPrimary mb-3 animate-fade-in">
-                  <HeroTitle />
-                </h1>
-                <p className="text-base sm:text-lg mb-8 text-bolt-elements-textSecondary animate-fade-in animation-delay-200">
-                  Describe your app and Bolt builds it, live, in your browser.
-                </p>
+                <HomeHeroText />
               </div>
             )}
             <StickToBottom
@@ -563,16 +555,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             </StickToBottom>
             {!chatStarted && (
               <div className="flex flex-col items-center gap-8 px-4 pb-[var(--mobile-nav-space)] md:pb-12 w-full">
-                <div
-                  className="flex flex-wrap justify-center items-center gap-1 text-sm text-[#1c1c1c]/80 dark:text-white/80"
-                  aria-label="Import an existing project"
-                  role="group"
-                >
-                  <span className="mr-1">or import</span>
-                  <ImportFolderButton importChat={importChat} className={SECONDARY_ACTION} />
-                  <ImportZipButton importChat={importChat} className={SECONDARY_ACTION} />
-                  <GitCloneButton importChat={importChat} className={SECONDARY_ACTION} />
-                </div>
+                <HomeImportActions importChat={importChat} />
               </div>
             )}
           </div>
@@ -597,31 +580,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
   },
 );
 
-/*
- * Secondary landing actions (import folder / ZIP / clone) as quiet ghost
- * buttons, so they do not compete with the prompt. `!` overrides the default
- * Button styles, since classNames() concatenates instead of merging.
- */
-const SECONDARY_ACTION = classNames(
-  '!h-8 !min-w-0 !px-2.5 !py-1 !gap-1.5 !text-sm !font-normal !rounded-lg',
-
-  // Sits on the landing wash: near-black / near-white text keeps AA contrast on the pink band.
-  '!bg-transparent !border-transparent !text-[#1c1c1c] dark:!text-white',
-  'hover:!bg-white/60 dark:hover:!bg-white/10',
-  'focus-visible:!outline focus-visible:!outline-2 focus-visible:!outline-accent-500',
-);
-
-/*
- * Lovable greets the user by name. Client-only (the profile lives in
- * localStorage), so the server render shows the generic title.
- */
-function HeroTitle() {
-  const profile = useStore(profileStore);
-  const name = profile?.username?.trim();
-
-  return <>{name ? `What will you build, ${name}?` : 'What will you build today?'}</>;
-}
-
 function ScrollToBottom() {
   const { isAtBottom, scrollToBottom } = useStickToBottomContext();
 
@@ -633,7 +591,7 @@ function ScrollToBottom() {
           className="sticky z-50 bottom-0 left-0 right-0 text-4xl rounded-lg px-1.5 py-0.5 flex items-center justify-center mx-auto gap-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor text-bolt-elements-textPrimary text-sm"
           onClick={() => scrollToBottom()}
         >
-          Go to last message
+          Aller au dernier message
           <span className="i-ph:arrow-down animate-bounce" />
         </button>
       </>

@@ -141,3 +141,43 @@ describe('HistoryItem accessible names (U12, U13)', () => {
     }
   });
 });
+
+describe('HistoryItem: titres déjà enregistrés avec « [Model: …] [Provider: …] » (A-02)', () => {
+  const legacy = {
+    ...item,
+    description: '[Model: beam-free] [Provider: OpenCodeGo] créer un site à 1 milliard',
+  };
+
+  function renderLegacy() {
+    return render(
+      <MemoryRouter>
+        <HistoryItem item={legacy as never} exportChat={vi.fn()} onDuplicate={vi.fn()} onDelete={vi.fn()} />
+      </MemoryRouter>,
+    );
+  }
+
+  it('affiche le titre nettoyé dans la ligne, sans rien réécrire', () => {
+    renderLegacy();
+
+    expect(screen.getByTestId('history-item-title').textContent).toBe('créer un site à 1 milliard');
+    expect(document.body.textContent).not.toContain('[Model:');
+    expect(saveCount()).toBe(0);
+  });
+
+  it('ouvre l’édition sur le titre nettoyé, et valider sans changement n’écrit rien', async () => {
+    const { container } = renderLegacy();
+
+    act(() => {
+      fireEvent.click(renameButton(container));
+    });
+
+    const input = screen.getByRole('textbox') as HTMLInputElement;
+    expect(input.value).toBe('créer un site à 1 milliard');
+
+    await act(async () => {
+      fireEvent.submit(input.closest('form') as HTMLFormElement);
+    });
+
+    expect(saveCount()).toBe(0);
+  });
+});

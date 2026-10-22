@@ -1,4 +1,9 @@
 import type { WebContainer } from '~/lib/runtime/container';
+import {
+  RUNTIME_BOOT_TOAST_ID,
+  installRuntimeRejectionGuard,
+  reportRuntimeBootFailure,
+} from '~/lib/runtime/runtimeBootError';
 import { cleanStackTrace } from '~/utils/stacktrace';
 
 interface WebContainerContext {
@@ -112,6 +117,26 @@ if (!import.meta.env.SSR) {
    * (server unreachable at first load) is surfaced to the caller rather than retried in a loop.
    */
   const getWebContainer = (): Promise<WebContainer> => Promise.resolve(bootPromise);
+
+  /*
+   * A refused boot (measured: `EBUSY`, the account already runs 3 sandboxes) used to surface
+   * only as unhandled rejections in the console, one per store awaiting the boot. Tell the user
+   * once, in French, and mark those derived rejections of the same failure as handled.
+   */
+  const notifyBootFailure = (message: string) => {
+    void import('~/lib/toastify')
+      .then(({ toast }) => toast.error(message, { toastId: RUNTIME_BOOT_TOAST_ID }))
+      .catch(() => console.error('[runtime]', message));
+  };
+
+  if (typeof window !== 'undefined') {
+    installRuntimeRejectionGuard(window, notifyBootFailure);
+  }
+
+  bootPromise.catch((error: unknown) => {
+    console.warn('[runtime] project runtime did not start:', error);
+    reportRuntimeBootFailure(error, notifyBootFailure);
+  });
 
   /*
    * The exported binding stays a Promise for its consumers, but each await is

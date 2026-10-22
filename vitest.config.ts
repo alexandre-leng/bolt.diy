@@ -86,6 +86,9 @@ const DOM_TESTS = [
   'app/components/chat/AssistantMessage.accessibility.spec.tsx',
   'app/components/workbench/EditorPanel.spec.tsx',
   'app/components/header/Header.spec.tsx',
+  'app/components/chat/HomeIntro.spec.tsx',
+  'app/utils/restoreFocus.spec.ts',
+  'app/lib/hooks/useSearchFilter.spec.ts',
 
   // UX/a11y regression specs (render React)
   'app/components/@settings/core/SettingsHeader.spec.tsx',

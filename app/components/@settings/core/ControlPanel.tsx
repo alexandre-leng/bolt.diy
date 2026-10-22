@@ -497,9 +497,16 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
                     mobileNavigationOpen ? 'hidden sm:block' : 'block',
                   )}
                 >
+                  {/*
+                   * Explicit surface: without `bg-transparent`/`appearance-none` a <button> keeps
+                   * the browser's light-grey fill, so in the dark theme its light ink sat on
+                   * rgb(239,239,239) (measured 1.08:1). Now it paints the dialog surface in both
+                   * themes, with the theme's primary ink.
+                   */}
                   <button
                     type="button"
-                    className="mb-5 flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-medium text-bolt-elements-textPrimary hover:text-bolt-elements-item-contentAccent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500 sm:hidden"
+                    data-testid="settings-all-mobile"
+                    className="mb-5 flex min-h-11 appearance-none items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-sm font-medium text-bolt-elements-textPrimary transition-colors hover:bg-bolt-elements-item-backgroundActive hover:text-bolt-elements-item-contentAccent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500 sm:hidden"
                     onClick={() => {
                       setMobileNavigationOpen(true);
                       requestAnimationFrame(() => activeTab && tabButtons.current.get(activeTab)?.focus());

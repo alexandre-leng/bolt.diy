@@ -3,6 +3,7 @@ import { TooltipProvider } from '@radix-ui/react-tooltip';
 import WithTooltip from '~/components/ui/Tooltip';
 import { useEditChatDescription } from '~/lib/hooks';
 import { description as descriptionStore } from '~/lib/persistence';
+import { cleanChatTitle } from '~/utils/chatTitle';
 
 export function ChatDescription() {
   const initialDescription = useStore(descriptionStore)!;
@@ -18,8 +19,15 @@ export function ChatDescription() {
     return null;
   }
 
+  /*
+   * `min-w-0 max-w-full`: this row is a flex item of the header's title slot, and a flex item
+   * defaults to `min-width: auto`, i.e. its whole content. A long title therefore kept the row
+   * wider than the slot and pushed « Renommer la conversation » past the right edge of the
+   * header (measured at 768 px: [755,9,36,36], right edge 791 > 768, unreachable). Now the title
+   * truncates and the button keeps its 36 px inside the slot.
+   */
   return (
-    <div className="flex items-center justify-center">
+    <div data-testid="chat-description" className="flex min-w-0 max-w-full items-center justify-center">
       {editing ? (
         <form onSubmit={handleSubmit} className="flex items-center justify-center min-w-0 max-w-full">
           {/*
@@ -59,7 +67,9 @@ export function ChatDescription() {
         </form>
       ) : (
         <>
-          <span className="truncate">{currentDescription}</span>
+          <span className="min-w-0 truncate" data-testid="chat-description-title">
+            {cleanChatTitle(currentDescription)}
+          </span>
           <TooltipProvider>
             <WithTooltip tooltip="Renommer la conversation">
               {/*

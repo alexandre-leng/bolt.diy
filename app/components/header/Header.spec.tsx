@@ -8,6 +8,7 @@ vi.mock('~/lib/persistence/ChatDescription.client', () => ({ ChatDescription: ()
 import { Header } from './Header';
 import { chatStore } from '~/lib/stores/chat';
 import { sidebarOpenStore, closeSidebar } from '~/lib/stores/sidebar';
+import { workbenchStore } from '~/lib/stores/workbench';
 
 /*
  * The header mixed « Publier » with "New project", "Preview" and "Report Bug" (audit U13).
@@ -124,5 +125,56 @@ describe('Header sidebar controls', () => {
   it('points aria-controls at the panel element', () => {
     renderHeader();
     expect(screen.getByTestId('sidebar-toggle').getAttribute('aria-controls')).toBe('sidebar-panel');
+  });
+});
+
+/*
+ * B-02 / 768 px (vérification prod du 22/10). jsdom has no layout, so these tests pin the
+ * structural rules that make the measured geometry hold; the pixel measurement itself
+ * (no overlap, elementFromPoint = each control, right edge <= viewport) is redone on the
+ * deployed build at 390/768/1024/1440.
+ */
+describe('Header layout at narrow widths', () => {
+  it('never lets the logo cluster shrink under the controls (390 px overlap)', async () => {
+    chatStore.setKey('started', true);
+    renderHeader();
+    await screen.findByTestId('new-project');
+
+    const left = screen.getByTestId('header-left-cluster');
+    expect(left.className).toMatch(/\bshrink-0\b/);
+    expect(left.className).not.toMatch(/\bmin-w-0\b/);
+    expect(left.contains(screen.getByRole('link', { name: 'Accueil bolt.diy' }))).toBe(true);
+  });
+
+  it('keeps the phone controls icon-only, with their accessible names', async () => {
+    chatStore.setKey('started', true);
+    workbenchStore.showWorkbench.set(false);
+    renderHeader();
+    await screen.findByTestId('new-project');
+
+    const preview = screen.getByTestId('mobile-preview-button');
+    expect(preview.getAttribute('aria-label')).toMatch(/^Ouvrir l’aperçu/);
+    expect(preview.className).toMatch(/\bw-9\b/);
+
+    const previewLabel = Array.from(preview.querySelectorAll('span')).find((span) => span.textContent === 'Aperçu');
+    expect(previewLabel?.className).toContain('hidden sm:inline');
+
+    const publish = screen.getByTestId('publish-button');
+    expect(publish.getAttribute('aria-label')).toBe('Publier');
+
+    const publishLabel = Array.from(publish.querySelectorAll('span')).find((span) => span.textContent === 'Publier');
+    expect(publishLabel?.className).toContain('hidden sm:inline');
+  });
+
+  it('gives the title slot the only flexible width, clipped inside the header (768 px)', async () => {
+    chatStore.setKey('started', true);
+    renderHeader();
+    await screen.findByTestId('new-project');
+
+    const slot = screen.getByTestId('header-title-slot');
+    expect(slot.className).toMatch(/\bflex-1\b/);
+    expect(slot.className).toMatch(/\bmin-w-0\b/);
+    expect(slot.className).toMatch(/\boverflow-hidden\b/);
+    expect(screen.getByTestId('header-right-cluster').className).toMatch(/\bshrink-0\b/);
   });
 });

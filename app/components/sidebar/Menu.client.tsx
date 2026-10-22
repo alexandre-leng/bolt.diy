@@ -43,9 +43,11 @@ import {
   unpeekSidebar,
 } from '~/lib/stores/sidebar';
 import { toast } from '~/lib/toastify';
+import { cleanChatTitle } from '~/utils/chatTitle';
 import { classNames } from '~/utils/classNames';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger } from '~/utils/logger';
+import { restoreSettingsFocus } from '~/utils/restoreFocus';
 
 const logger = createScopedLogger('HistoryMenu');
 
@@ -137,6 +139,10 @@ export const Menu = () => {
   const menuRef = useRef<HTMLDivElement>(null);
   const toggleRef = useRef<HTMLElement | null>(null);
   const settingsOpenerRef = useRef<HTMLElement | null>(null);
+  const cancelSettingsFocusRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => () => cancelSettingsFocusRef.current?.(), []);
+
   const [list, setList] = useState<ChatHistoryItem[]>([]);
 
   /*
@@ -650,7 +656,16 @@ export const Menu = () => {
   const handleSettingsClose = () => {
     setIsSettingsOpen(false);
     setSettingsInitialTab(undefined);
-    requestAnimationFrame(() => settingsOpenerRef.current?.focus());
+
+    /*
+     * A08: `requestAnimationFrame(() => opener.focus())` left focus on <body> at every width.
+     * The opener is gone (phone: the bottom navigation unmounts while the dialog is open) or
+     * hidden (desktop: opening the dialog closes the side panel), and `focus()` on either is a
+     * silent no-op. Try the opener, then its remounted equivalent, then the header toggle,
+     * verifying each attempt and retrying for a few frames while the close is committed.
+     */
+    cancelSettingsFocusRef.current?.();
+    cancelSettingsFocusRef.current = restoreSettingsFocus(settingsOpenerRef.current);
 
     /*
      * Tell the /settings route the panel is gone. That route only exists to keep a URL working;
@@ -866,7 +881,7 @@ export const Menu = () => {
                         <p>
                           Vous allez supprimer{' '}
                           <span className="font-medium text-bolt-elements-textPrimary">
-                            {dialogContent.item.description}
+                            {cleanChatTitle(dialogContent.item.description)}
                           </span>
                         </p>
                         <p className="mt-2">Cette action est définitive sur tous vos appareils.</p>
@@ -904,7 +919,9 @@ export const Menu = () => {
                           <ul className="list-disc pl-5 space-y-1">
                             {dialogContent.items.map((item) => (
                               <li key={item.id} className="text-sm">
-                                <span className="font-medium text-bolt-elements-textPrimary">{item.description}</span>
+                                <span className="font-medium text-bolt-elements-textPrimary">
+                                  {cleanChatTitle(item.description)}
+                                </span>
                               </li>
                             ))}
                           </ul>

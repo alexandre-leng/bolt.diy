@@ -49,6 +49,7 @@ const DOM_TESTS = [
   'app/components/workbench/WorkbenchReopenButton.spec.tsx',
   'app/components/workbench/FirefoxAndroidPreviewNotice.spec.tsx',
   'app/components/workbench/Preview.portClamp.spec.tsx',
+  'app/components/workbench/Preview.reloadAndRestart.spec.tsx',
   'app/components/onboarding/FirstRunOnboarding.spec.tsx',
   'app/components/chat/APIKeyManager.spec.tsx',
   'app/lib/stores/sidebar.spec.ts',

@@ -97,6 +97,33 @@ describe('resolveProviderKeys', () => {
      * unreachable policy must fail closed, not open every provider.
      */
     expect(resolved.apiKeys).toEqual({});
+    expect(resolved.policyUnavailable).toBe(true);
+  });
+
+  it('retains last-known-good instance keys and policy through an accounts outage', async () => {
+    fetchMock.mockResolvedValueOnce(
+      ACCOUNTS_ANSWER({
+        policy: {
+          managedMode: true,
+          defaultModel: { provider: 'OpenAI', model: 'gpt-4o' },
+          allowedProviders: ['OpenAI'],
+          allowedModels: { OpenAI: ['gpt-4o'] },
+          effortPolicy: 'auto-only',
+        },
+      }),
+    );
+
+    const first = await resolveProviderKeys({ userId: 'user-stale' });
+    expect(first.policyUnavailable).toBe(false);
+
+    fetchMock.mockRejectedValueOnce(new Error('request timed out'));
+
+    const stale = await resolveProviderKeys({ userId: 'user-stale' });
+
+    expect(stale.apiKeys.OpenAI).toBe('sk-instance');
+    expect(stale.policy.managedMode).toBe(true);
+    expect(stale.policy.allowedProviders).toEqual(['OpenAI']);
+    expect(stale.policyUnavailable).toBe(false);
   });
 
   it('never throws when the service answers garbage', async () => {
@@ -167,6 +194,7 @@ describe('model policy', () => {
     expect(resolved.policy.managedMode).toBe(true);
     expect(resolved.policy.allowedProviders).toEqual(['OpenCodeGo']);
     expect(resolved.policy.effortPolicy).toBe('auto-only');
+    expect(resolved.policyUnavailable).toBe(false);
 
     vi.unstubAllGlobals();
   });

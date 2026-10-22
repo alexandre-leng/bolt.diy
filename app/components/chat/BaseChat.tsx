@@ -14,7 +14,6 @@ import LlmErrorAlert from './LLMApiAlert';
 import { Messages, type DisplayMessage } from './Messages.client';
 import ProgressCompilation from './ProgressCompilation';
 import { ToolApprovalTray } from './ToolApprovalTray';
-import { ExamplePrompts } from '~/components/chat/ExamplePrompts';
 import { ImportFolderButton } from '~/components/chat/ImportFolderButton';
 import { ImportZipButton } from '~/components/chat/ImportZipButton';
 import DeployChatAlert from '~/components/deploy/DeployAlert';
@@ -555,14 +554,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             </StickToBottom>
             {!chatStarted && (
               <div className="flex flex-col items-center gap-8 px-4 pb-[var(--mobile-nav-space)] md:pb-12 w-full">
-                {ExamplePrompts((event, messageInput) => {
-                  // Never stop a generation from a prompt click; Stop has its own button.
-                  if (isStreaming) {
-                    return;
-                  }
-
-                  handleSendMessage?.(event, messageInput);
-                })}
                 <div
                   className="flex flex-wrap justify-center items-center gap-1 text-sm text-[#1c1c1c]/80 dark:text-white/80"
                   aria-label="Import an existing project"

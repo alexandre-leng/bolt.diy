@@ -24,6 +24,30 @@ export const ColorSchemeDialog: React.FC<ColorSchemeDialogProps> = ({ setDesignS
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<'colors' | 'typography' | 'features'>('colors');
 
+  const savedScheme = (): DesignScheme => ({
+    palette: designScheme?.palette
+      ? { ...defaultDesignScheme.palette, ...designScheme.palette }
+      : defaultDesignScheme.palette,
+    features: designScheme?.features || defaultDesignScheme.features,
+    font: designScheme?.font || defaultDesignScheme.font,
+  });
+
+  // Discard unsaved draft values; the saved scheme (props) is the source of truth.
+  const discardDraft = () => {
+    const saved = savedScheme();
+    setPalette(saved.palette);
+    setFeatures(saved.features);
+    setFont(saved.font);
+  };
+
+  const handleDialogOpenChange = (open: boolean) => {
+    if (!open) {
+      discardDraft();
+    }
+
+    setIsDialogOpen(open);
+  };
+
   useEffect(() => {
     if (designScheme) {
       setPalette(() => ({ ...defaultDesignScheme.palette, ...designScheme.palette }));
@@ -52,6 +76,8 @@ export const ColorSchemeDialog: React.FC<ColorSchemeDialogProps> = ({ setDesignS
     setDesignScheme?.({ palette, features, font });
     setIsDialogOpen(false);
   };
+
+  const handleCancel = () => handleDialogOpenChange(false);
 
   const handleReset = () => {
     setPalette(defaultDesignScheme.palette);
@@ -83,12 +109,18 @@ export const ColorSchemeDialog: React.FC<ColorSchemeDialogProps> = ({ setDesignS
           >
             <div className="relative flex-shrink-0">
               <div
-                className="w-12 h-12 rounded-xl shadow-md cursor-pointer transition-all duration-200 hover:scale-110 ring-2 ring-transparent hover:ring-bolt-elements-borderColorActive"
+                className="w-12 h-12 rounded-xl shadow-md cursor-pointer transition-all duration-200 hover:scale-110 ring-2 ring-transparent hover:ring-bolt-elements-borderColorActive focus-visible:ring-2 focus-visible:ring-bolt-elements-borderColorActive focus-visible:outline-none"
                 style={{ backgroundColor: palette[role.key] }}
                 onClick={() => document.getElementById(`color-input-${role.key}`)?.click()}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    document.getElementById(`color-input-${role.key}`)?.click();
+                  }
+                }}
                 role="button"
                 tabIndex={0}
-                aria-label={`Change ${role.label} color`}
+                aria-label={`Changer la couleur : ${role.label}`}
               />
               <input
                 id={`color-input-${role.key}`}
@@ -129,6 +161,7 @@ export const ColorSchemeDialog: React.FC<ColorSchemeDialogProps> = ({ setDesignS
           <button
             key={f.key}
             type="button"
+            aria-pressed={font.includes(f.key)}
             onClick={() => handleFontToggle(f.key)}
             className={`group p-4 rounded-xl border-2 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-bolt-elements-borderColorActive ${
               font.includes(f.key)
@@ -179,6 +212,7 @@ export const ColorSchemeDialog: React.FC<ColorSchemeDialogProps> = ({ setDesignS
             <div key={f.key} className="feature-card-container p-2">
               <button
                 type="button"
+                aria-pressed={isSelected}
                 onClick={() => handleFeatureToggle(f.key)}
                 className={`group relative w-full p-6 text-sm font-medium transition-all duration-200 bg-bolt-elements-background-depth-3 text-bolt-elements-item-textSecondary ${
                   f.key === 'rounded'
@@ -272,13 +306,17 @@ export const ColorSchemeDialog: React.FC<ColorSchemeDialogProps> = ({ setDesignS
 
   return (
     <div>
-      <IconButton title="Design Palette" className="transition-all" onClick={() => setIsDialogOpen(!isDialogOpen)}>
+      <IconButton
+        title="Design Palette"
+        className="transition-all"
+        onClick={() => (isDialogOpen ? handleDialogOpenChange(false) : setIsDialogOpen(true))}
+      >
         <div className="i-ph:palette text-xl"></div>
       </IconButton>
 
-      <DialogRoot open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <DialogRoot open={isDialogOpen} onOpenChange={handleDialogOpenChange}>
         <Dialog>
-          <div className="py-4 px-4 min-w-[480px] max-w-[90vw] max-h-[85vh] flex flex-col gap-6 overflow-hidden">
+          <div className="py-4 px-4 w-full min-w-0 max-h-[85vh] flex flex-col gap-6 overflow-y-auto">
             <div className="">
               <DialogTitle className="text-2xl font-bold text-bolt-elements-textPrimary">
                 Design Palette & Features
@@ -324,15 +362,15 @@ export const ColorSchemeDialog: React.FC<ColorSchemeDialogProps> = ({ setDesignS
                 {Object.keys(palette).length} colors • {font.length} fonts • {features.length} features
               </div>
               <div className="flex gap-3">
-                <Button variant="secondary" onClick={() => setIsDialogOpen(false)}>
-                  Cancel
+                <Button variant="secondary" onClick={handleCancel}>
+                  Annuler
                 </Button>
                 <Button
                   variant="ghost"
                   onClick={handleSave}
                   className="bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text"
                 >
-                  Save Changes
+                  Enregistrer
                 </Button>
               </div>
             </div>

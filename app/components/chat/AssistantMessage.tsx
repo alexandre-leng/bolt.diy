@@ -131,7 +131,15 @@ export const AssistantMessage = memo(
         <>
           <div className=" flex gap-2 items-center text-sm text-bolt-elements-textSecondary mb-2">
             {(codeContext || chatSummary) && (
-              <Popover side="right" align="start" trigger={<div className="i-ph:info" />}>
+              <Popover
+                side="right"
+                align="start"
+                trigger={
+                  <button type="button" aria-label="Afficher le contexte du message" className="flex items-center">
+                    <div aria-hidden="true" className="i-ph:info" />
+                  </button>
+                }
+              >
                 {chatSummary && (
                   <div className="max-w-chat">
                     <div className="summary max-h-96 flex flex-col">
@@ -148,7 +156,8 @@ export const AssistantMessage = memo(
                             const normalized = normalizedFilePath(x);
                             return (
                               <Fragment key={normalized}>
-                                <code
+                                <button
+                                  type="button"
                                   className="bg-bolt-elements-artifacts-inlineCode-background text-bolt-elements-artifacts-inlineCode-text px-1.5 py-1 rounded-md text-bolt-elements-item-contentAccent hover:underline cursor-pointer"
                                   onClick={(e) => {
                                     e.preventDefault();
@@ -156,8 +165,8 @@ export const AssistantMessage = memo(
                                     openArtifactInWorkbench(normalized);
                                   }}
                                 >
-                                  {normalized}
-                                </code>
+                                  <code>{normalized}</code>
+                                </button>
                               </Fragment>
                             );
                           })}

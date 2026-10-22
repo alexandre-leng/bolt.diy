@@ -142,8 +142,64 @@ export const FileTree = memo(
       }
     };
 
+    const [rootCreating, setRootCreating] = useState<'file' | 'folder' | null>(null);
+
+    const submitRootCreate = async (name: string) => {
+      const kind = rootCreating;
+      setRootCreating(null);
+
+      if (!kind || !rootFolder || !isSafeEntryName(name)) {
+        toast.error('Invalid name');
+
+        return;
+      }
+
+      const targetPath = path.join(rootFolder, name);
+      const success =
+        kind === 'file' ? await workbenchStore.createFile(targetPath, '') : await workbenchStore.createFolder(targetPath);
+
+      if (success) {
+        toast.success(kind === 'file' ? 'File created successfully' : 'Folder created successfully');
+      } else {
+        toast.error(kind === 'file' ? 'Failed to create file' : 'Failed to create folder');
+      }
+    };
+
+    const rootActions =
+      rootFolder && filteredFileList.length === 0 ? (
+        <div className="flex flex-col gap-1 px-2 py-2">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md text-bolt-elements-textSecondary hover:bg-bolt-elements-item-backgroundActive hover:text-bolt-elements-item-contentActive"
+              onClick={() => setRootCreating('file')}
+            >
+              <span className="i-ph:file-plus" aria-hidden="true" />
+              New File
+            </button>
+            <button
+              type="button"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md text-bolt-elements-textSecondary hover:bg-bolt-elements-item-backgroundActive hover:text-bolt-elements-item-contentActive"
+              onClick={() => setRootCreating('folder')}
+            >
+              <span className="i-ph:folder-plus" aria-hidden="true" />
+              New Folder
+            </button>
+          </div>
+          {rootCreating && (
+            <InlineInput
+              depth={0}
+              placeholder={rootCreating === 'file' ? 'Enter file name...' : 'Enter folder name...'}
+              onSubmit={submitRootCreate}
+              onCancel={() => setRootCreating(null)}
+            />
+          )}
+        </div>
+      ) : null;
+
     return (
       <div className={classNames('text-sm', className, 'overflow-y-auto modern-scrollbar')}>
+        {rootActions}
         {filteredFileList.map((fileOrFolder) => {
           switch (fileOrFolder.kind) {
             case 'file': {
@@ -829,6 +885,10 @@ function buildFileList(
   }
 
   return sortFileList(rootFolder, fileList, hideRoot);
+}
+
+function isSafeEntryName(name: string): boolean {
+  return name.length > 0 && name !== '.' && name !== '..' && !/[\\/\0]/.test(name);
 }
 
 function isHiddenFile(filePath: string, fileName: string, hiddenFiles: Array<string | RegExp>) {

@@ -1,7 +1,7 @@
 import { useStore } from '@nanostores/react';
+import * as RadixDialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import React from 'react';
-import { createPortal } from 'react-dom';
 import { ClientOnly } from 'remix-utils/client-only';
 import { APIKeyManager } from './APIKeyManager';
 import { AttachmentMenu } from './AttachmentMenu';
@@ -15,7 +15,6 @@ import { SupabaseConnection } from './SupabaseConnection';
 import { ToolAccessMenu } from './ToolAccessMenu';
 import { ModelSelector } from '~/components/chat/ModelSelector';
 import { SpeechRecognitionButton } from '~/components/chat/SpeechRecognition';
-import { Card } from '~/components/ui/Card';
 import { CloseButton } from '~/components/ui/CloseButton';
 import { ColorSchemeDialog } from '~/components/ui/ColorSchemeDialog';
 import { IconButton } from '~/components/ui/IconButton';
@@ -41,6 +40,60 @@ function readImageAsDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
+}
+
+/**
+ * Accessible screenshot-to-code dialog. Rendered through Radix Dialog (portal, focus trap,
+ * Escape/close, focus restored to the element that opened it). Mounted only on the client.
+ */
+export function ScreenshotDialog({
+  open,
+  onOpenChange,
+  openerRef,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  openerRef: React.MutableRefObject<HTMLElement | null>;
+}) {
+  return (
+    <ClientOnly>
+      {() => (
+        <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
+          <RadixDialog.Portal>
+            <RadixDialog.Overlay className="fixed inset-0 z-[1000] bg-black/30" />
+            <RadixDialog.Content
+              aria-describedby={undefined}
+              onCloseAutoFocus={(event) => {
+                /*
+                 * Radix returns focus on close only when it knows the opener. Make the opener the
+                 * element that had focus before the dialog opened (the attachment control) and
+                 * stop the default, which otherwise lands on <body> once the close button unmounts.
+                 */
+                if (openerRef.current?.isConnected) {
+                  event.preventDefault();
+                  openerRef.current.focus();
+                }
+              }}
+              className="fixed left-1/2 -translate-x-1/2 top-[calc(var(--header-height)+0.75rem)] bottom-6 w-[min(36rem,calc(100vw-2rem))] max-h-[calc(100dvh-var(--header-height)-2rem)] overflow-y-auto rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-4 shadow-lg z-[1001] focus:outline-none"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <RadixDialog.Title className="text-sm font-semibold text-bolt-elements-textPrimary">
+                  Depuis une capture d’écran
+                </RadixDialog.Title>
+                <RadixDialog.Close aria-label="Fermer le générateur de capture" className="rounded-lg">
+                  <CloseButton size="sm" />
+                </RadixDialog.Close>
+              </div>
+              <RadixDialog.Description className="sr-only">
+                Générez une application à partir d’une capture d’écran ou d’une maquette.
+              </RadixDialog.Description>
+              <ScreenshotToCode />
+            </RadixDialog.Content>
+          </RadixDialog.Portal>
+        </RadixDialog.Root>
+      )}
+    </ClientOnly>
+  );
 }
 
 interface ChatBoxProps {
@@ -94,6 +147,7 @@ interface ChatBoxProps {
 export const ChatBox: React.FC<ChatBoxProps> = (props) => {
   const [isMcpToolsOpen, setIsMcpToolsOpen] = React.useState(false);
   const [isScreenshotOpen, setIsScreenshotOpen] = React.useState(false);
+  const screenshotOpenerRef = React.useRef<HTMLElement | null>(null);
   const mcpToolsInitialized = useMCPStore((state) => state.isInitialized);
   const mcpSettings = useMCPStore((state) => state.settings);
   const setWebSearchEnabled = useMCPStore((state) => state.setWebSearchEnabled);
@@ -374,7 +428,16 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
               {() => (
                 <AttachmentMenu
                   onAttachFile={() => props.handleFileUpload()} // Opens image file picker (image/* only)
-                  onScreenshot={() => setIsScreenshotOpen(true)}
+                  onScreenshot={() => {
+                    /*
+                     * Remember the attachment control before the menu closes and focus moves: the
+                     * dialog returns focus there on close (see onCloseAutoFocus in ScreenshotDialog).
+                     */
+                    screenshotOpenerRef.current = document.querySelector<HTMLElement>(
+                      '[title="Add attachment or connector"]',
+                    );
+                    setIsScreenshotOpen(true);
+                  }}
                   onOpenDesignDialog={() => {
                     /*
                      * Trigger the design dialog by programmatically clicking the hidden button
@@ -404,30 +467,11 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
               <SupabaseConnection />
             </div>
             <McpTools open={isMcpToolsOpen} onOpenChange={setIsMcpToolsOpen} />
-            <ClientOnly>
-              {() =>
-                isScreenshotOpen
-                  ? createPortal(
-                      <Card
-                        role="dialog"
-                        aria-label="From a screenshot"
-                        className="fixed left-1/2 -translate-x-1/2 top-[calc(var(--header-height)+0.75rem)] bottom-6 w-[min(36rem,calc(100vw-2rem))] overflow-y-auto !bg-bolt-elements-background-depth-2 p-4 shadow-lg z-[1001]"
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <h2 className="text-sm font-semibold text-bolt-elements-textPrimary">From a screenshot</h2>
-                          <CloseButton
-                            aria-label="Close screenshot generator"
-                            onClick={() => setIsScreenshotOpen(false)}
-                            size="sm"
-                          />
-                        </div>
-                        <ScreenshotToCode />
-                      </Card>,
-                      document.body,
-                    )
-                  : null
-              }
-            </ClientOnly>
+            <ScreenshotDialog
+              open={isScreenshotOpen}
+              onOpenChange={setIsScreenshotOpen}
+              openerRef={screenshotOpenerRef}
+            />
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>
                 <button

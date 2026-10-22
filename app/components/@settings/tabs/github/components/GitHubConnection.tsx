@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import React from 'react';
+import React, { useId } from 'react';
 import { Button } from '~/components/ui/Button';
 import { useGitHubConnection } from '~/lib/hooks';
 import { classNames } from '~/utils/classNames';
@@ -18,6 +18,11 @@ interface GitHubConnectionProps {
 export function GitHubConnection({ connectionTest, onTestConnection }: GitHubConnectionProps) {
   const { isConnected, isLoading, isConnecting, connect, disconnect, error } = useGitHubConnection();
 
+  const fieldId = useId();
+  const tokenTypeId = `${fieldId}-token-type`;
+  const tokenId = `${fieldId}-token`;
+  const tokenHelpId = `${fieldId}-token-help`;
+  const errorId = `${fieldId}-error`;
   const [token, setToken] = React.useState('');
   const [tokenType, setTokenType] = React.useState<'classic' | 'fine-grained'>('classic');
 
@@ -83,10 +88,11 @@ export function GitHubConnection({ connectionTest, onTestConnection }: GitHubCon
         <form onSubmit={handleConnect} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-bolt-elements-textSecondary dark:text-bolt-elements-textSecondary mb-2">
+              <label htmlFor={tokenTypeId} className="block text-sm text-bolt-elements-textSecondary dark:text-bolt-elements-textSecondary mb-2">
                 Token Type
               </label>
               <select
+                id={tokenTypeId}
                 value={tokenType}
                 onChange={(e) => setTokenType(e.target.value as 'classic' | 'fine-grained')}
                 disabled={isConnecting || isConnected}
@@ -105,11 +111,14 @@ export function GitHubConnection({ connectionTest, onTestConnection }: GitHubCon
             </div>
 
             <div>
-              <label className="block text-sm text-bolt-elements-textSecondary dark:text-bolt-elements-textSecondary mb-2">
+              <label htmlFor={tokenId} className="block text-sm text-bolt-elements-textSecondary dark:text-bolt-elements-textSecondary mb-2">
                 {tokenType === 'classic' ? 'Personal Access Token' : 'Fine-grained Token'}
               </label>
               <input
+                id={tokenId}
                 type="password"
+                aria-invalid={error ? true : undefined}
+                aria-describedby={[tokenHelpId, error ? errorId : undefined].filter(Boolean).join(' ')}
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
                 disabled={isConnecting || isConnected}
@@ -125,12 +134,12 @@ export function GitHubConnection({ connectionTest, onTestConnection }: GitHubCon
                   'disabled:opacity-50',
                 )}
               />
-              <div className="mt-2 text-sm text-bolt-elements-textSecondary">
+              <div id={tokenHelpId} className="mt-2 text-sm text-bolt-elements-textSecondary">
                 <a
                   href={`https://github.com/settings/${tokenType === 'fine-grained' ? 'personal-access-tokens' : 'tokens'}/new`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-bolt-elements-borderColorActive hover:underline inline-flex items-center gap-1"
+                  className="text-bolt-elements-settings-linkText hover:underline inline-flex items-center gap-1"
                 >
                   Get your token
                   <div className="i-ph:arrow-square-out w-4 h-4" />
@@ -145,7 +154,11 @@ export function GitHubConnection({ connectionTest, onTestConnection }: GitHubCon
           </div>
 
           {error && (
-            <div className="p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-700">
+            <div
+              id={errorId}
+              role="alert"
+              className="p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-700"
+            >
               <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
             </div>
           )}

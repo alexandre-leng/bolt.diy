@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { Button } from '~/components/ui/Button';
 import { useGitLabConnection } from '~/lib/hooks';
 import { toast } from '~/lib/toastify';
@@ -26,6 +26,11 @@ export default function GitLabConnection({
     fetchStatsOnConnect,
   });
 
+  const fieldId = useId();
+  const urlId = `${fieldId}-url`;
+  const tokenId = `${fieldId}-token`;
+  const tokenHelpId = `${fieldId}-token-help`;
+  const errorId = `${fieldId}-error`;
   const [token, setToken] = useState('');
   const [gitlabUrl, setGitlabUrl] = useState('https://gitlab.com');
 
@@ -102,8 +107,9 @@ export default function GitLabConnection({
         <form onSubmit={handleConnect}>
           <div className="grid grid-cols-1 gap-4">
             <div>
-              <label className="block text-sm text-bolt-elements-textSecondary mb-2">GitLab URL</label>
+              <label htmlFor={urlId} className="block text-sm text-bolt-elements-textSecondary mb-2">GitLab URL</label>
               <input
+                id={urlId}
                 type="text"
                 value={gitlabUrl}
                 onChange={(e) => setGitlabUrl(e.target.value)}
@@ -121,9 +127,12 @@ export default function GitLabConnection({
             </div>
 
             <div>
-              <label className="block text-sm text-bolt-elements-textSecondary mb-2">Access Token</label>
+              <label htmlFor={tokenId} className="block text-sm text-bolt-elements-textSecondary mb-2">Access Token</label>
               <input
+                id={tokenId}
                 type="password"
+                aria-invalid={error ? true : undefined}
+                aria-describedby={[tokenHelpId, error ? errorId : undefined].filter(Boolean).join(' ')}
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
                 disabled={isConnecting || isConnected}
@@ -137,12 +146,12 @@ export default function GitLabConnection({
                   'disabled:opacity-50',
                 )}
               />
-              <div className="mt-2 text-sm text-bolt-elements-textSecondary">
+              <div id={tokenHelpId} className="mt-2 text-sm text-bolt-elements-textSecondary">
                 <a
                   href={`${gitlabUrl}/-/user_settings/personal_access_tokens`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-bolt-elements-borderColorActive hover:underline inline-flex items-center gap-1"
+                  className="text-bolt-elements-settings-linkText hover:underline inline-flex items-center gap-1"
                 >
                   Get your token
                   <div className="i-ph:arrow-square-out w-4 h-4" />
@@ -154,7 +163,11 @@ export default function GitLabConnection({
           </div>
 
           {error && (
-            <div className="p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-700">
+            <div
+              id={errorId}
+              role="alert"
+              className="p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-700"
+            >
               <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
             </div>
           )}
@@ -167,8 +180,8 @@ export default function GitLabConnection({
                   disabled={isConnecting || !token.trim()}
                   className={classNames(
                     'px-4 py-2 rounded-lg text-sm flex items-center gap-2',
-                    'bg-[#FC6D26] text-white',
-                    'hover:bg-[#E24329] hover:text-white',
+                    'bg-[var(--bolt-elements-settings-gitlabButtonBg)] text-white',
+                    'hover:bg-[var(--bolt-elements-settings-gitlabButtonBgHover)] hover:text-white',
                     'disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200',
                     'transform active:scale-95',
                   )}

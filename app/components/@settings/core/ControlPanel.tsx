@@ -1,6 +1,6 @@
 import { useStore } from '@nanostores/react';
 import * as RadixDialog from '@radix-ui/react-dialog';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { AvatarDropdown } from './AvatarDropdown';
 import { TAB_LABELS, TAB_ICONS, DEFAULT_TAB_CONFIG, TAB_DESCRIPTIONS } from './constants';
 import type { TabType, Profile } from './types';
@@ -48,11 +48,11 @@ const BetaLabel = () => (
 );
 
 const NAV_GROUPS: { label: string; tabs: TabType[] }[] = [
-  { label: 'Preferences', tabs: ['settings'] },
-  { label: 'Account', tabs: ['profile', 'notifications'] },
-  { label: 'Workspace', tabs: ['features', 'data', 'event-logs'] },
-  { label: 'AI Providers', tabs: ['cloud-providers', 'local-providers'] },
-  { label: 'Integrations', tabs: ['connectors', 'mcp'] },
+  { label: 'Préférences', tabs: ['settings'] },
+  { label: 'Compte', tabs: ['profile', 'notifications'] },
+  { label: 'Espace de travail', tabs: ['features', 'data', 'event-logs'] },
+  { label: 'Fournisseurs IA', tabs: ['cloud-providers', 'local-providers'] },
+  { label: 'Intégrations', tabs: ['connectors', 'mcp'] },
   { label: 'Extensions', tabs: ['plugins'] },
 ];
 
@@ -63,6 +63,37 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
   const [isDocumentationOpen, setIsDocumentationOpen] = useState(false);
   const [hasVisitedCloudProviders, setHasVisitedCloudProviders] = useState(false);
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(true);
+
+  const navigationRef = useRef<HTMLElement>(null);
+  const contentRef = useRef<HTMLElement>(null);
+  const tabButtons = useRef(new Map<TabType, HTMLButtonElement>());
+
+  // Mobile panes are display:none, so move focus before the user continues in the visible pane.
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    const media = window.matchMedia('(min-width: 640px)');
+
+    const focusVisiblePane = () => {
+      if (!media.matches) {
+        if (mobileNavigationOpen) {
+          if (contentRef.current?.contains(document.activeElement)) {
+            const selectedButton = activeTab ? tabButtons.current.get(activeTab) : undefined;
+            (selectedButton ?? navigationRef.current?.querySelector('button'))?.focus();
+          }
+        } else {
+          contentRef.current?.focus();
+        }
+      }
+    };
+
+    focusVisiblePane();
+    media.addEventListener('change', focusVisiblePane);
+
+    return () => media.removeEventListener('change', focusVisiblePane);
+  }, [open, mobileNavigationOpen, activeTab]);
 
   // Store values
   const tabConfiguration = useStore(tabConfigurationStore);
@@ -275,6 +306,7 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
             onPointerDownOutside={handleClose}
             className="relative z-[101]"
           >
+            <DialogTitle className="sr-only">Réglages</DialogTitle>
             <div
               className={classNames(
                 'w-screen h-[100dvh] sm:w-[min(1440px,calc(100vw-2rem))] sm:h-[90vh]',
@@ -289,6 +321,7 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
             >
               <div className="relative z-10 flex h-full min-h-0">
                 <aside
+                  ref={navigationRef}
                   data-testid="settings-navigation"
                   className={classNames(
                     'w-full shrink-0 flex-col border-r border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 sm:w-[248px]',
@@ -299,7 +332,7 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
                     onClick={handleClose}
                     className="mx-4 mt-4 flex appearance-none items-center gap-2 border-0 border-b border-solid border-bolt-elements-borderColor bg-transparent px-2 pb-5 pt-2 text-left text-sm font-semibold text-bolt-elements-textPrimary hover:text-bolt-elements-item-contentAccent"
                   >
-                    <span className="i-ph:arrow-left w-4 h-4" /> Back to project
+                    <span className="i-ph:arrow-left w-4 h-4" /> Retour au projet
                   </button>
                   <nav className="min-h-0 flex-1 overflow-y-auto modern-scrollbar px-3 py-4">
                     {navigationTabs.map((group) => (
@@ -314,6 +347,14 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
                           return (
                             <button
                               key={tabId}
+                              ref={(button) => {
+                                if (button) {
+                                  tabButtons.current.set(tabId, button);
+                                } else {
+                                  tabButtons.current.delete(tabId);
+                                }
+                              }}
+                              aria-current={selected ? 'page' : undefined}
                               onClick={() => handleTabClick(tabId)}
                               className={classNames(
                                 'flex w-full appearance-none items-center gap-3 rounded-md border-0 px-2 py-2 text-left text-sm transition-colors',
@@ -334,6 +375,9 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
                   </div>
                 </aside>
                 <main
+                  ref={contentRef}
+                  tabIndex={-1}
+                  aria-label="Contenu des réglages"
                   data-testid="settings-content"
                   className={classNames(
                     'min-w-0 flex-1 overflow-y-auto modern-scrollbar p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 md:px-10 md:py-8',
@@ -345,17 +389,15 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
                     className="mb-5 flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-medium text-bolt-elements-textPrimary hover:text-bolt-elements-item-contentAccent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500 sm:hidden"
                     onClick={() => setMobileNavigationOpen(true)}
                   >
-                    <span className="i-ph:arrow-left text-lg" aria-hidden="true" /> All settings
+                    <span className="i-ph:arrow-left text-lg" aria-hidden="true" /> Tous les réglages
                   </button>
                   {activeTab && activeTab !== 'cloud-providers' ? (
                     <div className="mx-auto max-w-5xl">{getTabComponent(activeTab)}</div>
                   ) : !activeTab ? (
                     <div className="mx-auto max-w-5xl">
-                      <DialogTitle className="mb-1 text-2xl font-semibold text-bolt-elements-textPrimary">
-                        Control Panel
-                      </DialogTitle>
+                      <h1 className="mb-1 text-2xl font-semibold text-bolt-elements-textPrimary">Réglages</h1>
                       <p className="mb-6 text-sm text-bolt-elements-textSecondary">
-                        Manage your account, preferences, providers, and connected services.
+                        Gérez votre compte, vos préférences, les fournisseurs et les services connectés.
                       </p>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         {visibleTabs.map((tab, index) => (

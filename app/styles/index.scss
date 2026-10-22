@@ -363,7 +363,8 @@ body {
 }
 
 /*
- * Sticky header (every route that mounts <Header />: /, /settings, /starter, /git).
+ * Header behaviour IS sticky, on every route that mounts <Header /> (/, /settings, /starter,
+ * /git). See `app/routes/_index.tsx` for the full contract.
  *
  * A sticky element pins only while its containing block's ENTIRE area crosses the scrollport
  * edge, so a scroller needs empty space under its last child or the bar is carried off the top

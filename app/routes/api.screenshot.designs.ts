@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs } from 'react-router';
 import { z } from 'zod';
+import { CODEX_BASE_URL, codexAuth, codexHeaders } from '~/lib/.server/codex-oauth';
 import { getTrustedClientIP } from '~/lib/security';
 
 /*
@@ -34,6 +35,9 @@ const DIRECTIONS = [
 /** Per-IP throttle: image generation costs real money, so it must not be an open relay. */
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 8;
+
+/** One image takes 30-56 s on the subscription backend; bound it well above that. */
+const IMAGE_TIMEOUT_MS = 120_000;
 const hits = new Map<string, { count: number; resetAt: number }>();
 
 function allowed(ip: string): boolean {
@@ -71,6 +75,57 @@ function buildPrompt(userPrompt: string, index: number): string {
   return `${BASE_INSTRUCTION} Content: ${userPrompt.trim()} Style direction: ${direction}.`;
 }
 
+/*
+ * Ask the screenshot-to-code service for the mockups. It owns the OAuth session and the
+ * rotating refresh token; this Worker only forwards a prompt and receives base64 images.
+ *
+ * Returns null (rather than throwing) when the service is unreachable or not configured, so
+ * the caller can fall back to its own credentials. A service that answers with an error is
+ * surfaced verbatim: that message names the real problem (expired login, quota) instead of a
+ * generic "not configured".
+ */
+async function requestDesignsFromService(args: {
+  url: string;
+  token: string;
+  parsed: z.infer<typeof requestSchema>;
+}): Promise<Response | null> {
+  const { url, token, parsed } = args;
+
+  try {
+    const response = await fetch(`${url.replace(/\/$/, '')}/api/internal/designs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-internal-token': token },
+      body: JSON.stringify({ prompt: parsed.prompt, count: parsed.count }),
+      signal: AbortSignal.timeout(180_000),
+    });
+
+    if (response.ok) {
+      const body = (await response.json()) as { images?: string[]; model?: string };
+
+      if (Array.isArray(body.images) && body.images.length > 0) {
+        return Response.json({ images: body.images, model: body.model ?? parsed.model });
+      }
+
+      return Response.json({ error: 'The image service returned no mockup.' }, { status: 502 });
+    }
+
+    if (response.status === 503 || response.status === 502) {
+      const body = (await response.json().catch(() => ({}))) as { detail?: string };
+
+      return Response.json(
+        { error: body.detail ?? `Image service failed (HTTP ${response.status}).` },
+        { status: 503 },
+      );
+    }
+
+    /* 401 on our shared token is a deployment bug, not a user-facing condition. */
+    return Response.json({ error: `Image service refused the request (HTTP ${response.status}).` }, { status: 502 });
+  } catch {
+    /* Unreachable service: let the caller try its own credentials. */
+    return null;
+  }
+}
+
 export async function action({ request, context }: ActionFunctionArgs) {
   if (request.method !== 'POST') {
     return Response.json({ error: 'Method not allowed' }, { status: 405 });
@@ -95,84 +150,121 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return Response.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
+  /*
+   * Two credentials, tried in this order:
+   *  1. the ChatGPT/Codex OAuth session (`codex login`), which bills the ChatGPT plan and lives
+   *     on a different backend (`chatgpt.com/backend-api/codex`), not `api.openai.com`;
+   *  2. a platform `OPENAI_API_KEY`, if the deployment happens to carry one.
+   * Neither present is a real configuration error, and the message says so instead of
+   * pretending the feature is broken.
+   */
+  const session = await codexAuth();
+
   const apiKey =
     (context?.cloudflare?.env as Record<string, any> | undefined)?.OPENAI_API_KEY || process.env.OPENAI_API_KEY;
 
-  if (!apiKey) {
+  /*
+   * A Worker has NO filesystem: `codexAuth()` above exists for the Node-run routes, but inside
+   * workerd `existsSync()` answers false and `readFileSync()` throws even when auth.json is
+   * mounted, so it always returns null here. The OAuth session is therefore owned by the
+   * screenshot-to-code service, which runs on Node, refreshes the rotating token and exposes
+   * `POST /api/internal/designs`. This Worker proxies to it over the host gateway; the
+   * subscription is still what pays, and no OpenAI key exists anywhere.
+   */
+  const env = (context?.cloudflare?.env as Record<string, any> | undefined) ?? {};
+  const serviceUrl = env.DESIGN_API_URL || process.env.DESIGN_API_URL;
+  const serviceToken = env.DESIGN_API_INTERNAL_TOKEN || process.env.DESIGN_API_INTERNAL_TOKEN;
+
+  if (serviceUrl && serviceToken) {
+    const designs = await requestDesignsFromService({ url: serviceUrl, token: serviceToken, parsed });
+
+    if (designs) {
+      return designs;
+    }
+  }
+
+  if (!session && !apiKey) {
     return Response.json(
-      { error: 'Image generation is not configured on this server (no OpenAI key).' },
+      {
+        error:
+          'Image generation is not configured on this server: the screenshot-to-code service has no ChatGPT OAuth session, and no OpenAI API key is set.',
+      },
       { status: 503 },
     );
   }
 
-  const baseUrl =
-    (context?.cloudflare?.env as Record<string, any> | undefined)?.OPENAI_BASE_URL ||
-    process.env.OPENAI_BASE_URL ||
-    'https://api.openai.com/v1';
+  const openaiEnv = (context?.cloudflare?.env as Record<string, any> | undefined) ?? {};
+
+  const baseUrl = session
+    ? `${CODEX_BASE_URL}/images/generations`
+    : `${openaiEnv.OPENAI_BASE_URL || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1'}/images/generations`;
+
+  const authHeaders: Record<string, string> = session
+    ? codexHeaders(session)
+    : { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' };
 
   /*
-   * One request per design, in parallel: each carries its own art direction so the results
-   * are genuinely different proposals instead of N samples of the same idea.
+   * Sequential, with a per-image deadline. Measured on this host: ONE subscription image takes
+   * 30-56 s, so three in PARALLEL ran past the gateway's ~30 s budget and the browser showed a bare
+   * `HTTP 502` while this route was still working. A single request per design keeps each one
+   * inside its own timeout and stops a failure from paying for the other two.
    */
-  const tasks = Array.from({ length: parsed.count }, async (_, index) => {
-    const response = await fetch(`${baseUrl}/images/generations`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: parsed.model,
-        prompt: buildPrompt(parsed.prompt, index),
-        n: 1,
-        size: parsed.size,
-      }),
-    });
+  const images: string[] = [];
 
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '');
+  let lastError = '';
 
-      throw new Error(`OpenAI ${response.status}: ${detail.slice(0, 300)}`);
+  for (let index = 0; index < parsed.count; index += 1) {
+    try {
+      images.push(await generateOne(baseUrl, authHeaders, buildPrompt(parsed.prompt, index), parsed));
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : 'Design generation failed.';
     }
-
-    const body = (await response.json()) as { data?: Array<{ b64_json?: string; url?: string }> };
-    const first = body.data?.[0];
-
-    if (first?.b64_json) {
-      return first.b64_json;
-    }
-
-    /*
-     * Some models answer with a URL instead of base64; fetch it so the client gets one
-     * shape only.
-     */
-    if (first?.url) {
-      const image = await fetch(first.url);
-
-      if (!image.ok) {
-        throw new Error(`Could not download the generated image (${image.status})`);
-      }
-
-      const buffer = await image.arrayBuffer();
-
-      return Buffer.from(buffer).toString('base64');
-    }
-
-    throw new Error('OpenAI returned no image.');
-  });
-
-  const settled = await Promise.allSettled(tasks);
-
-  const images = settled
-    .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
-    .map((r) => r.value);
+  }
 
   if (images.length === 0) {
-    const reason = settled.find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined;
-    const message = reason?.reason instanceof Error ? reason.reason.message : 'Design generation failed.';
-
-    return Response.json({ error: message }, { status: 502 });
+    return Response.json({ error: lastError }, { status: 502 });
   }
 
   return Response.json({ images });
+}
+
+/** One image, bounded in time: a provider that never answers must not hold the request open. */
+async function generateOne(
+  baseUrl: string,
+  headers: Record<string, string>,
+  prompt: string,
+  parsed: z.infer<typeof requestSchema>,
+): Promise<string> {
+  const response = await fetch(baseUrl, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ model: parsed.model, prompt, n: 1, size: parsed.size }),
+    signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+
+    throw new Error(`Image provider answered ${response.status}: ${detail.slice(0, 300)}`);
+  }
+
+  const body = (await response.json()) as { data?: Array<{ b64_json?: string; url?: string }> };
+  const first = body.data?.[0];
+
+  if (first?.b64_json) {
+    return first.b64_json;
+  }
+
+  /* Some models answer with a URL instead of base64; fetch it so the client gets one shape. */
+  if (first?.url) {
+    const image = await fetch(first.url);
+
+    if (!image.ok) {
+      throw new Error(`Could not download the generated image (${image.status})`);
+    }
+
+    return Buffer.from(await image.arrayBuffer()).toString('base64');
+  }
+
+  throw new Error('The image provider returned no image.');
 }

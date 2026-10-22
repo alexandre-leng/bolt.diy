@@ -9,13 +9,9 @@ export const meta: MetaFunction = () => [{ title: 'Start a blank app | Bolt' }];
 
 export default function Starter() {
   return (
-    <div className="has-sticky-header flex flex-col h-full w-full overflow-y-auto overflow-x-hidden bg-bolt-elements-background-depth-1">
+    <div className="has-sticky-header flex flex-col h-full min-h-0 w-full overflow-y-auto overflow-x-hidden bg-bolt-elements-background-depth-1">
       <HeroGlow />
-      {/*
-       * STICKY, same contract as the landing route (see app/routes/_index.tsx): `sticky top-0`
-       * inside the page scroller, `z-above-sidebar`, and an OPAQUE page surface so content
-       * never scrolls through the labels.
-       */}
+      {/* STICKY, see app/routes/_index.tsx for the contract. */}
       <div className="sticky top-0 z-above-sidebar shrink-0 bg-bolt-elements-background-depth-1">
         <Header />
       </div>

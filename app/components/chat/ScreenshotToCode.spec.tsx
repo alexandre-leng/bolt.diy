@@ -15,7 +15,7 @@ const noDesigns = async () => [] as Design[];
 
 /** The panel opens on design mode; tests that target the image path switch first. */
 async function useImageMode() {
-  await userEvent.click(screen.getByRole('radio', { name: 'Use an image' }));
+  await userEvent.click(screen.getByRole('radio', { name: 'Utiliser une image' }));
 }
 
 function renderPanel(props: Partial<Parameters<typeof ScreenshotToCode>[0]> = {}) {
@@ -26,8 +26,8 @@ describe('mode selection', () => {
   it('offers both starting points as visible, mutually exclusive options', () => {
     renderPanel();
 
-    const designMode = screen.getByRole('radio', { name: 'Generate a design' });
-    const imageMode = screen.getByRole('radio', { name: 'Use an image' });
+    const designMode = screen.getByRole('radio', { name: 'Générer un design' });
+    const imageMode = screen.getByRole('radio', { name: 'Utiliser une image' });
 
     expect(designMode).toBeTruthy();
     expect(imageMode).toBeTruthy();
@@ -41,42 +41,80 @@ describe('mode selection', () => {
     renderPanel();
 
     // Design mode shows the prompt, not the file picker.
-    expect(screen.getByLabelText('Design description')).toBeTruthy();
-    expect(screen.queryByLabelText('Screenshot image')).toBeNull();
+    expect(screen.getByLabelText('Description du design')).toBeTruthy();
+    expect(screen.queryByLabelText('Image de capture')).toBeNull();
 
     await useImageMode();
 
-    expect(screen.getByLabelText('Screenshot image')).toBeTruthy();
-    expect(screen.queryByLabelText('Design description')).toBeNull();
-    expect(screen.getByRole('radio', { name: 'Use an image' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByLabelText('Image de capture')).toBeTruthy();
+    expect(screen.queryByLabelText('Description du design')).toBeNull();
+    expect(screen.getByRole('radio', { name: 'Utiliser une image' }).getAttribute('aria-checked')).toBe('true');
   });
 
   it('keeps the output stack selector available in both modes', async () => {
     renderPanel();
-    expect(screen.getByLabelText('Output stack')).toBeTruthy();
+    expect(screen.getByLabelText('Stack de sortie')).toBeTruthy();
 
     await useImageMode();
-    expect(screen.getByLabelText('Output stack')).toBeTruthy();
+    expect(screen.getByLabelText('Stack de sortie')).toBeTruthy();
+  });
+
+  /*
+   * A <button> with no fill keeps the UA grey (rgb(239,239,239)) and the light-mode text on top
+   * made the unchecked card look like a disabled white block. Both cards must name their surface.
+   */
+  it('gives each mode card its own surface instead of the browser default', () => {
+    renderPanel();
+
+    for (const name of ['Générer un design', 'Utiliser une image']) {
+      const card = screen.getByRole('radio', { name });
+
+      // Idle cards sit one step off the dialog (depth-2 panel -> depth-1 card).
+      expect(card.className).toContain('bg-bolt-elements-background-depth-1');
+      expect(card.className).toMatch(/\btext-bolt-elements-textPrimary\b/);
+    }
+
+    /*
+     * The active card climbs one more step AND takes the accent border: the difference must be
+     * visible without relying on the border alone (measured flat when it reused the idle depth).
+     */
+    const active = screen.getByRole('radio', { name: 'Générer un design' }).className;
+    const idle = screen.getByRole('radio', { name: 'Utiliser une image' }).className;
+
+    expect(active).toMatch(/(?<!hover:)\bbg-bolt-elements-background-depth-3\b/);
+    expect(active).toContain('border-bolt-elements-borderColorActive');
+    expect(idle).not.toMatch(/(?<!hover:)\bbg-bolt-elements-background-depth-3\b/);
+    expect(idle).toContain('border-bolt-elements-borderColor ');
+  });
+
+  it('does not paint a card with the dialog surface itself', () => {
+    renderPanel();
+
+    for (const name of ['Générer un design', 'Utiliser une image']) {
+      expect(screen.getByRole('radio', { name }).className).not.toMatch(
+        /(?<!hover:)\bbg-bolt-elements-background-depth-2\b/,
+      );
+    }
   });
 });
 
 describe('design mode', () => {
   const mockups: Design[] = [
-    { image: 'data:image/png;base64,aGVsbG8=', direction: 'Minimal' },
-    { image: 'data:image/png;base64,d29ybGQ=', direction: 'Bold' },
-    { image: 'data:image/png;base64,dGVzdA==', direction: 'Friendly' },
+    { image: 'data:image/png;base64,aGVsbG8=', direction: 'Minimaliste' },
+    { image: 'data:image/png;base64,d29ybGQ=', direction: 'Affirmé' },
+    { image: 'data:image/png;base64,dGVzdA==', direction: 'Chaleureux' },
   ];
 
   it('turns a prompt into selectable mockups', async () => {
     const designFor = vi.fn().mockResolvedValue(mockups);
     renderPanel({ designFor });
 
-    await userEvent.type(screen.getByLabelText('Design description'), 'A bakery landing page');
-    await userEvent.click(screen.getByRole('button', { name: /Generate 3 mockups/ }));
+    await userEvent.type(screen.getByLabelText('Description du design'), 'A bakery landing page');
+    await userEvent.click(screen.getByRole('button', { name: /Générer 3 maquettes/ }));
 
-    expect(await screen.findByRole('radio', { name: 'Minimal mockup' })).toBeTruthy();
-    expect(screen.getByRole('radio', { name: 'Bold mockup' })).toBeTruthy();
-    expect(screen.getByRole('radio', { name: 'Friendly mockup' })).toBeTruthy();
+    expect(await screen.findByRole('radio', { name: 'Maquette Minimaliste' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Maquette Affirmé' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Maquette Chaleureux' })).toBeTruthy();
     expect(designFor).toHaveBeenCalledWith(expect.objectContaining({ prompt: 'A bakery landing page', count: 3 }));
   });
 
@@ -84,7 +122,7 @@ describe('design mode', () => {
     const designFor = vi.fn();
     renderPanel({ designFor });
 
-    expect(screen.getByRole('button', { name: /Generate 3 mockups/ })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: /Générer 3 maquettes/ })).toHaveProperty('disabled', true);
     expect(designFor).not.toHaveBeenCalled();
   });
 
@@ -93,12 +131,12 @@ describe('design mode', () => {
     const generate = vi.fn().mockResolvedValue(oneVariant(generated));
     renderPanel({ designFor: vi.fn().mockResolvedValue(mockups), generate });
 
-    await userEvent.type(screen.getByLabelText('Design description'), 'A bakery landing page');
-    await userEvent.click(screen.getByRole('button', { name: /Generate 3 mockups/ }));
-    await screen.findByRole('radio', { name: 'Bold mockup' });
+    await userEvent.type(screen.getByLabelText('Description du design'), 'A bakery landing page');
+    await userEvent.click(screen.getByRole('button', { name: /Générer 3 maquettes/ }));
+    await screen.findByRole('radio', { name: 'Maquette Affirmé' });
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Bold mockup' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Turn this mockup into code' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Maquette Affirmé' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette maquette en code' }));
 
     await waitFor(() =>
       expect(generate).toHaveBeenCalledWith(expect.stringContaining('data:image/'), expect.anything()),
@@ -121,11 +159,11 @@ describe('screenshot mode', () => {
     renderPanel({ generate, importCode });
     await useImageMode();
 
-    fireEvent.change(screen.getByLabelText('Screenshot image'), {
+    fireEvent.change(screen.getByLabelText('Image de capture'), {
       target: { files: [new File(['image bytes'], 'example.png', { type: 'image/png' })] },
     });
     expect(await screen.findByText('example.png')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Turn this image into code' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
 
     /*
      * The real backend emits frames AFTER the socket opens, asynchronously; emitting
@@ -135,7 +173,7 @@ describe('screenshot mode', () => {
     expect(importCode).not.toHaveBeenCalled();
     await act(async () => complete(oneVariant(generated)));
     expect(importCode).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Import into Bolt' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Importer dans Bolt' }));
     expect(await screen.findByRole('status')).toHaveProperty(
       'textContent',
       expect.stringContaining('screenshot-generated.html'),
@@ -149,11 +187,11 @@ describe('screenshot mode', () => {
     await useImageMode();
 
     await userEvent.upload(
-      screen.getByLabelText('Screenshot image'),
+      screen.getByLabelText('Image de capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.selectOptions(screen.getByLabelText('Output stack'), 'react_tailwind');
-    await userEvent.click(screen.getByRole('button', { name: 'Turn this image into code' }));
+    await userEvent.selectOptions(screen.getByLabelText('Stack de sortie'), 'react_tailwind');
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
 
     expect(generate).toHaveBeenCalledWith(
       expect.stringContaining('data:image/png'),
@@ -166,12 +204,12 @@ describe('screenshot mode', () => {
     renderPanel({ generate });
     await useImageMode();
 
-    fireEvent.change(screen.getByLabelText('Screenshot image'), {
+    fireEvent.change(screen.getByLabelText('Image de capture'), {
       target: { files: [new File(['data'], 'not.svg', { type: 'image/svg+xml' })] },
     });
     expect(await screen.findByRole('alert')).toHaveProperty(
       'textContent',
-      expect.stringContaining('PNG, JPEG, or WebP'),
+      expect.stringContaining('PNG, JPEG ou WebP'),
     );
     expect(generate).not.toHaveBeenCalled();
   });
@@ -187,10 +225,10 @@ describe('screenshot mode', () => {
     await useImageMode();
 
     await userEvent.upload(
-      screen.getByLabelText('Screenshot image'),
+      screen.getByLabelText('Image de capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Turn this image into code' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
 
     /*
      * The status line also carries the intermediate "Reading the image...", so wait for
@@ -213,22 +251,22 @@ describe('variant selection', () => {
     await useImageMode();
 
     await userEvent.upload(
-      screen.getByLabelText('Screenshot image'),
+      screen.getByLabelText('Image de capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Turn this image into code' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
 
     // All three are offered, not only the last one that completed.
     expect(await screen.findByRole('button', { name: 'Version 1' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Version 2' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Version 3' })).toBeTruthy();
 
-    expect(screen.getByTitle('Generated version 1 preview').getAttribute('srcdoc')).toContain('<h1>First</h1>');
+    expect(screen.getByTitle('Aperçu de la version 1').getAttribute('srcdoc')).toContain('<h1>First</h1>');
 
     await userEvent.click(screen.getByRole('button', { name: 'Version 3' }));
-    expect(screen.getByTitle('Generated version 3 preview').getAttribute('srcdoc')).toContain('<h1>Third</h1>');
+    expect(screen.getByTitle('Aperçu de la version 3').getAttribute('srcdoc')).toContain('<h1>Third</h1>');
 
-    await userEvent.click(screen.getByRole('button', { name: 'Import into Bolt' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Importer dans Bolt' }));
     expect(importCode).toHaveBeenCalledWith(versions[2].code);
   });
 });
@@ -248,12 +286,12 @@ describe('streamed progress', () => {
     await useImageMode();
 
     await userEvent.upload(
-      screen.getByLabelText('Screenshot image'),
+      screen.getByLabelText('Image de capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Turn this image into code' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
 
-    const log = await screen.findByLabelText('Generation progress');
+    const log = await screen.findByLabelText('Progression de la génération');
     expect(log.textContent).toContain('4 versions');
     expect(log.textContent).toContain('Considering the hero layout');
     expect(log.textContent).toContain('create_file');
@@ -264,13 +302,13 @@ describe('streamed progress', () => {
     await useImageMode();
 
     await userEvent.upload(
-      screen.getByLabelText('Screenshot image'),
+      screen.getByLabelText('Image de capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Turn this image into code' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
 
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Screenshot service connection failed.');
-    expect(screen.queryByRole('button', { name: 'Import into Bolt' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Importer dans Bolt' })).toBeNull();
   });
 });
 
@@ -281,30 +319,30 @@ describe('preview safety', () => {
     await useImageMode();
 
     await userEvent.upload(
-      screen.getByLabelText('Screenshot image'),
+      screen.getByLabelText('Image de capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Turn this image into code' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
 
-    const frame = await screen.findByTitle('Generated version 1 preview');
+    const frame = await screen.findByTitle('Aperçu de la version 1');
     expect(frame.getAttribute('sandbox')).toBe('');
     expect(frame.getAttribute('srcdoc')).toContain('<h1>Safe</h1>');
     expect(frame.getAttribute('srcdoc')).toContain("script-src 'none'");
   });
 
   it('prevents importing active generated HTML while preserving it in the review textarea', async () => {
-    const active = '<!doctype html><html><body><script>alert(1)</script></body></html>';
+    const active = '<!doctype html><html><body><a href="javascript:alert(1)">go</a></body></html>';
     const importCode = vi.fn();
     renderPanel({ generate: vi.fn().mockResolvedValue(oneVariant(active)), importCode });
     await useImageMode();
 
     await userEvent.upload(
-      screen.getByLabelText('Screenshot image'),
+      screen.getByLabelText('Image de capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Turn this image into code' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
     expect(await screen.findByDisplayValue(active)).toBeTruthy();
-    await userEvent.click(screen.getByRole('button', { name: 'Import into Bolt' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Importer dans Bolt' }));
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('active content'));
     expect(importCode).not.toHaveBeenCalled();
   });
@@ -317,13 +355,13 @@ describe('preview safety', () => {
     await useImageMode();
 
     await userEvent.upload(
-      screen.getByLabelText('Screenshot image'),
+      screen.getByLabelText('Image de capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Turn this image into code' }));
-    await screen.findByTitle('Generated version 1 preview');
-    await userEvent.click(screen.getByRole('button', { name: 'Import into Bolt' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
+    await screen.findByTitle('Aperçu de la version 1');
+    await userEvent.click(screen.getByRole('button', { name: 'Importer dans Bolt' }));
     expect(await screen.findByRole('status')).toHaveProperty('textContent', expect.stringContaining('Imported'));
-    expect(screen.getByTitle('Generated version 1 preview')).toBeTruthy();
+    expect(screen.getByTitle('Aperçu de la version 1')).toBeTruthy();
   });
 });

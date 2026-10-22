@@ -88,6 +88,7 @@ interface BaseChatProps {
 
   /** Start a new project from a design or a screenshot (template + agent build). */
   onStartProject?: (args: StartProjectArgs) => void;
+  hasProjectFiles?: boolean;
 }
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
@@ -138,6 +139,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         throw new Error('addToolOutput not implemented');
       },
       onStartProject,
+      hasProjectFiles = false,
     },
     ref,
   ) => {
@@ -546,6 +548,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     setQrModalOpen={setQrModalOpen}
                     handleFileUpload={handleFileUpload}
                     onStartProject={onStartProject}
+                    hasProjectFiles={hasProjectFiles}
                     chatMode={chatMode}
                     setChatMode={setChatMode}
                     agentMode={agentMode}

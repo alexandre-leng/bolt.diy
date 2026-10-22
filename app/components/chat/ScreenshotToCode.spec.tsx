@@ -185,7 +185,7 @@ describe('screenshot mode', () => {
       'textContent',
       expect.stringContaining('screenshot-generated.html'),
     );
-    expect(importCode).toHaveBeenCalledWith(generated);
+    expect(importCode).toHaveBeenCalledWith(generated, { allowScripts: false });
   });
 
   it('sends the fixed fallback stack when no project handler is wired', async () => {
@@ -276,7 +276,7 @@ describe('variant selection', () => {
     expect(screen.getByTitle('Aperçu de la version 3').getAttribute('srcdoc')).toContain('<h1>Third</h1>');
 
     await userEvent.click(screen.getByRole('button', { name: 'Importer dans Bolt' }));
-    expect(importCode).toHaveBeenCalledWith(versions[2].code);
+    expect(importCode).toHaveBeenCalledWith(versions[2].code, { allowScripts: false });
   });
 });
 
@@ -307,7 +307,9 @@ describe('streamed progress', () => {
   });
 
   it('retains an actionable error when the backend is unavailable', async () => {
-    renderPanel({ generate: vi.fn().mockRejectedValue(new Error('Screenshot service connection failed.')) });
+    renderPanel({
+      generate: vi.fn().mockRejectedValue(new Error('Connexion au service de génération impossible. Réessayez.')),
+    });
     await useImageMode();
 
     await userEvent.upload(
@@ -316,7 +318,10 @@ describe('streamed progress', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: /Créer le projet/ }));
 
-    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Screenshot service connection failed.');
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      'Connexion au service de génération impossible. Réessayez.',
+    );
     expect(screen.queryByRole('button', { name: 'Importer dans Bolt' })).toBeNull();
   });
 });
@@ -352,7 +357,10 @@ describe('preview safety', () => {
     await userEvent.click(screen.getByRole('button', { name: /Créer le projet/ }));
     expect(await screen.findByDisplayValue(active)).toBeTruthy();
     await userEvent.click(screen.getByRole('button', { name: 'Importer dans Bolt' }));
-    expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('active content'));
+    expect(await screen.findByRole('alertdialog')).toHaveProperty(
+      'textContent',
+      expect.stringContaining('Cette variante contient des scripts'),
+    );
     expect(importCode).not.toHaveBeenCalled();
   });
 
@@ -370,7 +378,7 @@ describe('preview safety', () => {
     await userEvent.click(screen.getByRole('button', { name: /Créer le projet/ }));
     await screen.findByTitle('Aperçu de la version 1');
     await userEvent.click(screen.getByRole('button', { name: 'Importer dans Bolt' }));
-    expect(await screen.findByRole('status')).toHaveProperty('textContent', expect.stringContaining('Imported'));
+    expect(await screen.findByRole('status')).toHaveProperty('textContent', expect.stringContaining('Fichier importé'));
     expect(screen.getByTitle('Aperçu de la version 1')).toBeTruthy();
   });
 });

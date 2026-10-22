@@ -7,18 +7,29 @@ interface SwitchProps {
   checked?: boolean;
   onCheckedChange?: (event: boolean) => void;
   'aria-label'?: string;
+  'aria-describedby'?: string;
+  'aria-labelledby'?: string;
   id?: string;
   disabled?: boolean;
 }
 
 export const Switch = memo(
-  ({ className, onCheckedChange, checked, 'aria-label': ariaLabel, id, disabled }: SwitchProps) => {
+  ({
+    className,
+    onCheckedChange,
+    checked,
+    'aria-label': ariaLabel,
+    'aria-describedby': ariaDescribedBy,
+    'aria-labelledby': ariaLabelledBy,
+    id,
+    disabled,
+  }: SwitchProps) => {
     return (
       <SwitchPrimitive.Root
         className={classNames(
           'relative h-6 w-11 cursor-pointer rounded-full bg-bolt-elements-button-primary-background',
           'transition-colors duration-200 ease-in-out',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2',
           'disabled:cursor-not-allowed disabled:opacity-50',
           'data-[state=checked]:bg-bolt-elements-item-contentAccent',
           className,
@@ -26,6 +37,8 @@ export const Switch = memo(
         checked={checked}
         onCheckedChange={(e) => onCheckedChange?.(e)}
         aria-label={ariaLabel}
+        aria-describedby={ariaDescribedBy}
+        aria-labelledby={ariaLabelledBy}
         id={id}
         disabled={disabled}
       >

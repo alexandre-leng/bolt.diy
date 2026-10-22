@@ -23,6 +23,15 @@ import { createScopedLogger } from '~/utils/logger';
 const logger = createScopedLogger('HistorySync');
 
 /**
+ * Server conversations downloaded per sync pass.
+ *
+ * Small on purpose: the list is re-read after each pass and the next one runs from the same
+ * effect, so rows appear progressively. One pass downloading everything is what turned a large
+ * account into an empty list (the first large chat aborted the sync and nothing was kept).
+ */
+export const PULL_BATCH_SIZE = 6;
+
+/**
  * True when the server could not be reached; the local cache was used as-is.
  */
 export interface Reconciliation {
@@ -34,6 +43,19 @@ export interface Reconciliation {
 
   /** True when the server could not be reached; the local cache was used as-is. */
   offline: boolean;
+
+  /*
+   * Chats the server HAS but this device could not download inside the sync window.
+   *
+   * Measured in production: the server lists 28 conversations for one account, the first sync
+   * pulls a handful, then a large one (`/api/history/<id>` answering 1.6 MB) misses the 8 s
+   * timeout, the sync aborts and no server chat is ever cached. The list then shows "Aucune
+   * conversation" while every conversation is intact on the server.
+   */
+  failed: number;
+
+  /** Ids still missing locally, oldest first, for the next pass to resume from. */
+  pending: string[];
 }
 
 /*
@@ -210,8 +232,20 @@ export async function reconcileChat(database: IDBDatabase, id: string): Promise<
  * Push every locally stored conversation the server does not have yet, and pull back the
  * ones it has that this device never saw. This is the "open it on my phone" path.
  */
-export async function migrateLocalHistoryToServer(database: IDBDatabase, localIds: string[]): Promise<Reconciliation> {
-  const result: Reconciliation = { pulled: 0, pushed: 0, offline: false };
+export async function migrateLocalHistoryToServer(
+  database: IDBDatabase,
+  localIds: string[],
+  options: { batchSize?: number } = {},
+): Promise<Reconciliation> {
+  const result: Reconciliation = { pulled: 0, pushed: 0, offline: false, failed: 0, pending: [] };
+
+  /*
+   * A bounded batch, most recent first. Pulling every missing conversation in one pass froze the
+   * list on a large account: 28 downloads of up to 2 MB each, on a phone, several of them over
+   * the per-request timeout. The caller re-reads the list after each batch, so the user sees rows
+   * appearing instead of an empty list and a spinner that gives up.
+   */
+  const batchSize = options.batchSize ?? PULL_BATCH_SIZE;
 
   const remoteResult = await listHistory();
 
@@ -285,14 +319,37 @@ export async function migrateLocalHistoryToServer(database: IDBDatabase, localId
     }
   }
 
-  for (const summary of remoteResult.data) {
+  /*
+   * Newest first: the conversation the user just held is the one they look for. The server list
+   * may arrive in any order, so sort on the summary timestamp rather than trusting it.
+   */
+  const sortedRemote = [...remoteResult.data].sort(
+    (a, b) => (Date.parse(b.timestamp ?? '') || 0) - (Date.parse(a.timestamp ?? '') || 0),
+  );
+
+  let pulledThisPass = 0;
+
+  for (const summary of sortedRemote) {
     if (localIds.includes(summary.id)) {
+      continue;
+    }
+
+    if (pulledThisPass >= batchSize) {
+      result.pending.push(summary.id);
+
       continue;
     }
 
     const remote = await getHistory(summary.id);
 
     if (!remote.ok || !remote.data) {
+      /*
+       * A download that failed (too large for the window, network drop) is not "nothing to do":
+       * it is retried on the next pass instead of being silently skipped forever.
+       */
+      result.failed += 1;
+      result.pending.push(summary.id);
+
       continue;
     }
 
@@ -315,8 +372,11 @@ export async function migrateLocalHistoryToServer(database: IDBDatabase, localId
     try {
       await cacheServerCopy(database, remote.data, summary.urlId ?? summary.id);
       result.pulled += 1;
+      pulledThisPass += 1;
     } catch (error) {
-      // Not counted: a pull that did not land is not a pull.
+      // Not counted as pulled: a pull that did not land is not a pull.
+      result.failed += 1;
+      result.pending.push(summary.id);
       logger.debug('could not cache a server chat', error);
     }
   }

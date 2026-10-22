@@ -134,10 +134,18 @@ describe('ControlPanel accessibility', () => {
     await waitFor(() => expect(screen.getByTestId('settings-content')).toHaveFocus());
   });
 
-  it('returns focus to the navigation when the mobile "All settings" control is used', async () => {
+  it('returns focus to the navigation when the mobile back control is used', async () => {
     render(<ControlPanel open onClose={vi.fn()} initialTab="profile" />);
 
-    fireEvent.click(screen.getByRole('button', { name: /tous les réglages|all settings/i }));
+    /*
+     * Two panes now share one header component (sidebar column and content column), and both
+     * are in the tree: the content one is the visible pane on a phone, so pick by test id.
+     */
+    const back = screen
+      .getAllByTestId('settings-back')
+      .find((element) => element.getAttribute('aria-label') === 'Retour à tous les réglages');
+    expect(back).toBeTruthy();
+    fireEvent.click(back as HTMLElement);
 
     await waitFor(() => {
       const active = document.activeElement as HTMLElement;

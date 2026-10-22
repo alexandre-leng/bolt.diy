@@ -6,11 +6,25 @@ import { describe, expect, it, vi } from 'vitest';
  * these tests are about the textarea's own handlers.
  */
 vi.mock('./APIKeyManager', () => ({ APIKeyManager: () => null, getApiKeysFromCookies: () => ({}) }));
-vi.mock('./AttachmentMenu', () => ({ AttachmentMenu: () => null }));
+vi.mock('./AttachmentMenu', () => ({
+  AttachmentMenu: ({ onScreenshot }: { onScreenshot: () => void }) => (
+    <button onClick={onScreenshot}>Ouvrir image vers code</button>
+  ),
+}));
 vi.mock('./FilePreview', () => ({ default: () => null }));
 vi.mock('./MCPTools', () => ({ McpTools: () => null }));
 vi.mock('./ScreenshotStateManager', () => ({ ScreenshotStateManager: () => null }));
-vi.mock('./ScreenshotToCode', () => ({ ScreenshotToCode: () => null }));
+vi.mock('./ScreenshotToCode', () => ({
+  ScreenshotToCode: ({ onContinue }: { onContinue?: (code: string, path: string) => void }) => (
+    <button
+      onClick={() =>
+        onContinue?.('<!doctype html><html><body>Pagia</body></html>', '/home/project/screenshot-generated.html')
+      }
+    >
+      Continuer avec Bolt
+    </button>
+  ),
+}));
 vi.mock('./SendButton.client', () => ({ SendButton: () => null }));
 vi.mock('./SupabaseConnection', () => ({ SupabaseConnection: () => null }));
 vi.mock('./ToolAccessMenu', () => ({ ToolAccessMenu: () => null }));
@@ -58,6 +72,26 @@ function renderChatBox(overrides: Record<string, unknown> = {}) {
 
   return { props, textarea: screen.getByRole('textbox') as HTMLTextAreaElement };
 }
+
+describe('screenshot continuation', () => {
+  it('prepares an editable build prompt with the exact source without sending automatically', async () => {
+    const handleInputChange = vi.fn();
+    const setChatMode = vi.fn();
+    const setAgentMode = vi.fn();
+    const { props } = renderChatBox({ handleInputChange, setChatMode, setAgentMode });
+    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir image vers code' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Continuer avec Bolt' }));
+    expect(handleInputChange).toHaveBeenCalled();
+
+    const draft = handleInputChange.mock.calls[0][0].target.value;
+    expect(draft).toContain('/home/project/screenshot-generated.html');
+    expect(draft).toContain('<!doctype html><html><body>Pagia</body></html>');
+    expect(draft).toContain('la suite');
+    expect(setChatMode).toHaveBeenCalledWith('build');
+    expect(setAgentMode).toHaveBeenCalledWith(true);
+    expect(props.handleSendMessage).not.toHaveBeenCalled();
+  });
+});
 
 describe('ChatBox: Enter during a generation (U1)', () => {
   it('delivers the correction on Enter during a generation, it does not stop it', () => {

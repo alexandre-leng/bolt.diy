@@ -6,6 +6,7 @@ import { BsRobot, BsCloud } from 'react-icons/bs';
 import { FaCloud, FaBrain } from 'react-icons/fa';
 import { SiGoogle, SiGithub, SiHuggingface, SiPerplexity } from 'react-icons/si';
 import { TbBrain, TbCloudComputing } from 'react-icons/tb';
+import { Select } from '~/components/ui/Select';
 import { Switch } from '~/components/ui/Switch';
 import { useSettings } from '~/lib/hooks/useSettings';
 import { logStore } from '~/lib/stores/logs';
@@ -322,32 +323,20 @@ const CloudProvidersTab = () => {
                         <div className="i-ph:brain text-sm" />
                         <span>Réflexion (raisonnement)</span>
                       </label>
-                      {/* Same control shape as the composer: no native arrow, one chevron, fixed height. */}
-                      <div className="relative mt-1.5">
-                        <select
+                      {/* One shared field geometry for every settings dropdown (see Select). */}
+                      <div className="mt-1.5">
+                        <Select
                           aria-label={`Niveau de réflexion pour ${provider.name}`}
                           value={provider.settings.effort ?? 'auto'}
                           onChange={(event) => handleUpdateEffort(provider, event.target.value)}
-                          className={classNames(
-                            'w-full px-3 py-1.5 pr-9 rounded-lg text-sm',
-                            'bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor',
-                            'text-bolt-elements-textPrimary',
-                            'focus:outline-none focus:ring-2 focus:ring-purple-500/30',
-                            'transition-all duration-200 appearance-none cursor-pointer truncate',
-                          )}
+                          className="px-3 py-1.5"
                         >
                           {REASONING_CHOICES.map((choice) => (
                             <option key={choice.value} value={choice.value}>
                               {choice.label}
                             </option>
                           ))}
-                        </select>
-                        <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2">
-                          <div
-                            className="i-ph:caret-down w-4 h-4 text-bolt-elements-textSecondary opacity-75"
-                            aria-hidden="true"
-                          />
-                        </div>
+                        </Select>
                       </div>
                       <p className="mt-1 text-xs text-bolt-elements-textTertiary">
                         Automatique garde le réglage qui laisse l'agent écrire des fichiers ; un niveau plus élevé fait

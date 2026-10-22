@@ -17,8 +17,22 @@ const logger = createScopedLogger('HistorySync');
 
 const BASE = '/api/history';
 
-/** Short timeout: a slow sync must never delay rendering the local history. */
+/**
+ * Read timeout for the LIST. A slow sync must never delay rendering the local history, but the
+ * list itself is small: 8 s is generous for it.
+ */
 const TIMEOUT_MS = 8000;
+
+/**
+ * Read timeout for ONE conversation.
+ *
+ * Measured in production: `/api/history/<id>` answered 200 after streaming 1.6 MB, and the next
+ * large conversation missed the 8 s window. The abort took the whole sync down with it, so the
+ * panel showed "Aucune conversation" for an account holding 28 chats. A single conversation is
+ * a download, not a page: give it the same budget as a save, and let the batch logic decide how
+ * many to fetch per pass.
+ */
+const CHAT_TIMEOUT_MS = 45_000;
 
 /*
  * A save is a background upload, not a read the UI waits on. With the read timeout, a 1 MB
@@ -125,7 +139,11 @@ export async function listHistory(): Promise<SyncResult<ChatSummary[]> & { delet
 }
 
 export async function getHistory(id: string): Promise<SyncResult<ChatHistoryItem>> {
-  const result = await request<{ ok: boolean; chat: ChatHistoryItem }>(`${BASE}/${encodeURIComponent(id)}`);
+  const result = await request<{ ok: boolean; chat: ChatHistoryItem }>(
+    `${BASE}/${encodeURIComponent(id)}`,
+    {},
+    CHAT_TIMEOUT_MS,
+  );
 
   if (!result.ok || !result.data?.chat) {
     return { ok: false, error: result.error };

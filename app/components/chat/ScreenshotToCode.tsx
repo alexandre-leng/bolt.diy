@@ -13,14 +13,16 @@ import {
   type StreamEvent,
   type Variant,
 } from '~/lib/screenshot/generate';
-import { importScreenshotHtml, validateImportableHtml } from '~/lib/screenshot/import';
+import { importScreenshotHtml, requiresScriptConsent, validateImportableHtml } from '~/lib/screenshot/import';
 import { buildProjectInstruction, pickTemplate, templateLabel } from '~/lib/screenshot/project';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
 
 type Props = {
   generate?: typeof generateScreenshotCode;
-  importCode?: (code: string) => Promise<string>;
+
+  /** Offered after a successful import, so the mockup can go straight to the chat. */
+  importCode?: (code: string, options?: { allowScripts?: boolean }) => Promise<string>;
 
   /** Text-to-image step: a prompt becomes page mockups to choose from. */
   designFor?: typeof generateDesigns;
@@ -31,6 +33,8 @@ type Props = {
    * a throwaway HTML file. When absent, the panel falls back to the flat-file import.
    */
   onStartProject?: (args: { prompt: string; image: string; template: string }) => void;
+  onContinue?: (code: string, path: string) => void;
+  hasProjectFiles?: boolean;
 };
 
 /** Cap on the streamed progress lines kept in the panel, so a long run cannot grow forever. */
@@ -93,18 +97,18 @@ async function dataUrlToFile(dataUrl: string, name: string): Promise<File> {
 function describeEvent(event: StreamEvent): string | undefined {
   switch (event.kind) {
     case 'status':
-      return event.text;
+      return localizeMessage(event.text);
 
     case 'variantCount':
-      return `Generating ${event.count} version${event.count === 1 ? '' : 's'}...`;
+      return `Génération de ${event.count} version${event.count === 1 ? '' : 's'}…`;
 
     case 'toolStart':
-      return `Running ${event.name}...`;
+      return `Exécution de ${event.name}…`;
 
     case 'thinking': {
       const text = event.text.trim();
 
-      return text ? `Thinking: ${text.slice(0, 120)}` : undefined;
+      return text ? `Réflexion : ${text.slice(0, 120)}` : undefined;
     }
 
     case 'assistant': {
@@ -414,11 +418,46 @@ function MockupViewer({
   );
 }
 
+/** Translate service messages owned by this workflow; retain unknown diagnostics verbatim. */
+function localizeMessage(text: string): string {
+  const messages: Record<string, string> = {
+    'Screenshot service connection failed.': 'Connexion au service de génération impossible. Réessayez.',
+    'Screenshot service connection closed unexpectedly.': 'La connexion au service de génération a été interrompue.',
+    'Screenshot service failed.': 'Le service de génération a échoué.',
+    'Screenshot generation cancelled.': 'Génération annulée.',
+    'Invalid screenshot service response. Nothing was imported.': 'Réponse du service invalide. Aucun fichier importé.',
+    'Screenshot generation incomplete or unsafe. Nothing was imported.':
+      'Génération incomplète ou non valide. Aucun fichier importé.',
+    'Generated code is not a complete HTML page. Nothing was imported.':
+      'Le code n’est pas une page HTML complète. Aucun fichier importé.',
+    'Choose a PNG, JPEG, or WebP screenshot under 10 MB.':
+      'Choisissez une capture PNG, JPEG ou WebP de moins de 10 Mo.',
+    'Describe the page you want (at least a few words).': 'Décrivez la page souhaitée en quelques mots.',
+    'Keep the description under 1500 characters.': 'Limitez la description à 1 500 caractères.',
+    'Design generation returned no image.': 'La génération n’a renvoyé aucune maquette.',
+    'Design generation returned no usable image.': 'La génération n’a renvoyé aucune maquette exploitable.',
+    'Could not create the generated HTML file. Impossible d’enregistrer le fichier dans le projet.':
+      'Impossible d’enregistrer le fichier HTML dans le projet.',
+  };
+
+  return (
+    messages[text] ??
+    text
+      .replace(/^Design generation failed: /, 'La génération des maquettes a échoué : ')
+      .replace(/^Generating code(?:\.\.\.|…)?$/i, 'Génération du code…')
+      .replace(/^Generating (?:your )?(?:design|page)(?:\.\.\.|…)?$/i, 'Génération de la page…')
+      .replace(/^Connecting(?:\.\.\.|…)?$/i, 'Connexion…')
+      .replace(/^Analyzing (?:the )?image(?:\.\.\.|…)?$/i, 'Analyse de l’image…')
+  );
+}
+
 export function ScreenshotToCode({
   generate = generateScreenshotCode,
   importCode = (code) => importScreenshotHtml(code, workbenchStore),
   designFor = generateDesigns,
   onStartProject,
+  onContinue,
+  hasProjectFiles = false,
 }: Props) {
   const [mode, setMode] = useState<Mode>('design');
   const [prompt, setPrompt] = useState('');
@@ -439,6 +478,8 @@ export function ScreenshotToCode({
   const [variants, setVariants] = useState<Variant[]>([]);
   const [selected, setSelected] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [showInteractiveConsent, setShowInteractiveConsent] = useState(false);
+  const [allowInteractiveImport, setAllowInteractiveImport] = useState(false);
 
   /** Index of the mockup shown full screen, or null when the viewer is closed. */
   const [viewer, setViewer] = useState<number | null>(null);
@@ -575,7 +616,7 @@ export function ScreenshotToCode({
       }
     } catch (cause) {
       if (mounted.current && !abort.signal.aborted) {
-        setError(cause instanceof Error ? cause.message : 'La génération du design a échoué.');
+        setError(cause instanceof Error ? localizeMessage(cause.message) : 'La génération du design a échoué.');
       }
     } finally {
       if (mounted.current) {
@@ -620,13 +661,13 @@ export function ScreenshotToCode({
         setVariants(result);
         setStatus(
           result.length === 1
-            ? 'Code ready. Review it before importing.'
-            : `${result.length} versions generated. Pick the one to import.`,
+            ? 'Code prêt. Vérifiez-le avant de l’importer.'
+            : `${result.length} versions générées. Choisissez celle à importer.`,
         );
       }
     } catch (cause) {
       if (mounted.current && !abort.signal.aborted) {
-        setError(cause instanceof Error ? cause.message : 'La génération a échoué.');
+        setError(cause instanceof Error ? localizeMessage(cause.message) : 'La génération a échoué.');
       }
     } finally {
       if (mounted.current) {
@@ -663,13 +704,13 @@ export function ScreenshotToCode({
         setVariants(result);
         setStatus(
           result.length === 1
-            ? 'Code ready. Review it before importing.'
-            : `${result.length} versions generated. Pick the one to import.`,
+            ? 'Code prêt. Vérifiez-le avant de l’importer.'
+            : `${result.length} versions générées. Choisissez celle à importer.`,
         );
       }
     } catch (cause) {
       if (mounted.current && !abort.signal.aborted) {
-        setError(cause instanceof Error ? cause.message : 'La génération a échoué.');
+        setError(cause instanceof Error ? localizeMessage(cause.message) : 'La génération a échoué.');
       }
     } finally {
       if (mounted.current) {
@@ -689,16 +730,26 @@ export function ScreenshotToCode({
     setError('');
 
     try {
-      validateImportableHtml(chosen.code);
+      const requiresConsent = requiresScriptConsent(chosen.code);
 
-      const path = await importCode(chosen.code);
+      if (requiresConsent && !allowInteractiveImport) {
+        setShowInteractiveConsent(true);
+        return;
+      }
+
+      validateImportableHtml(chosen.code, { allowScripts: requiresConsent });
+
+      const path = await importCode(chosen.code, { allowScripts: requiresConsent });
 
       if (mounted.current) {
-        setStatus(`Imported ${path}. Ask Bolt to refine it in the chat.`);
+        setShowInteractiveConsent(false);
+        setAllowInteractiveImport(false);
+        setStatus(`Fichier importé : ${path}. Demandez à Bolt de l’améliorer dans le chat.`);
+        onContinue?.(chosen.code, path);
       }
     } catch (cause) {
       if (mounted.current) {
-        setError(cause instanceof Error ? cause.message : 'L’import a échoué.');
+        setError(cause instanceof Error ? localizeMessage(cause.message) : 'L’import a échoué.');
       }
     } finally {
       if (mounted.current) {
@@ -956,7 +1007,7 @@ export function ScreenshotToCode({
                 className="self-start gap-2 !rounded-full px-5 !bg-accent-700 !text-white hover:!bg-accent-800 disabled:!bg-accent-700/50"
               >
                 <span className="i-ph:rocket-launch-bold" aria-hidden />
-                Créer le projet {templateLabel(pickTemplate(prompt))}
+                {hasProjectFiles ? 'Créer un nouveau projet' : 'Créer le projet'} {templateLabel(pickTemplate(prompt))}
               </Button>
             </div>
           )}
@@ -978,6 +1029,11 @@ export function ScreenshotToCode({
           />
           {file && <span className="text-xs text-bolt-elements-textSecondary">{file.name}</span>}
 
+          {hasProjectFiles && file && variants.length === 0 && (
+            <Button type="button" disabled={busy} onClick={() => void start()} className="self-start rounded-full">
+              Générer le code à intégrer
+            </Button>
+          )}
           <Button
             type="button"
             disabled={!file || busy}
@@ -985,7 +1041,7 @@ export function ScreenshotToCode({
             className="self-start gap-2 !rounded-full px-5 !bg-accent-700 !text-white hover:!bg-accent-800 disabled:!bg-accent-700/50"
           >
             <span className="i-ph:rocket-launch-bold" aria-hidden />
-            Créer le projet {templateLabel(pickTemplate(prompt))}
+            {hasProjectFiles ? 'Créer un nouveau projet' : 'Créer le projet'} {templateLabel(pickTemplate(prompt))}
           </Button>
         </div>
       )}
@@ -1038,7 +1094,8 @@ export function ScreenshotToCode({
         <>
           <p className="text-xs text-bolt-elements-textSecondary">
             L’aperçu est un rendu statique, sans script, dans une frame isolée. Le code n’est enregistré dans Bolt
-            qu’après l’import.
+            qu’après l’import. L’import sauvegarde un fichier HTML sans exécuter les scripts et ne crée pas une
+            application React multi-fichiers.
           </p>
 
           {variants.length > 1 && (
@@ -1064,6 +1121,16 @@ export function ScreenshotToCode({
 
           {current && (
             <>
+              {hasProjectFiles && onContinue && (
+                <Button
+                  type="button"
+                  onClick={() => void importFile()}
+                  disabled={busy}
+                  className="self-start rounded-full"
+                >
+                  Intégrer au projet actif
+                </Button>
+              )}
               <iframe
                 title={`Aperçu de la version ${selected + 1}`}
                 sandbox=""
@@ -1080,6 +1147,30 @@ export function ScreenshotToCode({
                   'bg-bolt-elements-background-depth-1 px-3 py-2 font-mono text-xs text-bolt-elements-textPrimary',
                 )}
               />
+              {showInteractiveConsent && (
+                <section
+                  role="alertdialog"
+                  aria-label="Vérification du code interactif"
+                  className="rounded-lg border border-amber-500 p-3"
+                >
+                  <p>
+                    Cette variante contient des scripts ou du contenu actif. Vérifiez la source avant de l’enregistrer.
+                    Bolt ne l’exécutera pas à l’import.
+                  </p>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setAllowInteractiveImport(true);
+                      setShowInteractiveConsent(false);
+                    }}
+                  >
+                    Autoriser l’import de cette variante
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setShowInteractiveConsent(false)}>
+                    Annuler
+                  </Button>
+                </section>
+              )}
               <Button
                 type="button"
                 onClick={() => void importFile()}

@@ -128,8 +128,16 @@ export const loader: LoaderFunction = async ({ context, request }) => {
       });
     }
 
+    /*
+     * `enabledProviders` is the instance switchboard: the providers the administrator enabled,
+     * whoever is asking. The composer uses it as the ceiling for its picker, so switching a
+     * provider off applies to every account and every device, not to one browser's cookie.
+     * Sent empty when no policy was ever written, which the client reads as "no rule known".
+     */
     return Response.json({
       providers: configuredProviders,
+      enabledProviders: resolved.policy.allowedProviders,
+      defaultProvider: resolved.policy.defaultModel,
     });
   } catch (error) {
     console.error('Error detecting configured providers:', error);

@@ -51,7 +51,6 @@ interface ResolvedKeys {
 }
 
 export interface ModelPolicy {
-  managedMode: boolean;
   defaultModel: { provider: string; model: string };
   allowedProviders: string[];
   allowedModels: Record<string, string[]>;
@@ -60,11 +59,10 @@ export interface ModelPolicy {
 
 /**
  * The policy when the service does not send one. It keeps the behaviour that predates the
- * policy (every provider usable, effort free, personal keys closed), because silently
- * switching an existing deployment to "managed" would lock accounts out of working models.
+ * policy (every provider served, effort free, personal keys closed), because silently
+ * narrowing an existing deployment would lock accounts out of working models.
  */
 export const NO_POLICY: ModelPolicy = {
-  managedMode: false,
   defaultModel: { provider: '', model: '' },
   allowedProviders: [],
   allowedModels: {},
@@ -241,7 +239,6 @@ function normalisePolicy(raw: unknown): ModelPolicy {
       : { provider: '', model: '' };
 
   return {
-    managedMode: Boolean(value.managedMode),
     defaultModel,
     allowedProviders: Array.isArray(value.allowedProviders) ? value.allowedProviders.filter(isString) : [],
     allowedModels,
@@ -256,6 +253,44 @@ export function policyUnavailableResponse(resolved: Pick<ResolvedKeys, 'policyUn
 }
 
 /**
+ * Is this provider served by the instance at all?
+ *
+ * `allowedProviders` is the ONE rule (the admin switchboard). An empty list means no policy was
+ * ever written, and then everything the deployment ships is served: that is the behaviour that
+ * predates the switchboard, and writing an empty default would otherwise turn a working
+ * instance into one that answers nothing.
+ */
+export function isProviderEnabled(policy: ModelPolicy, provider: string): boolean {
+  if (policy.allowedProviders.length === 0) {
+    return true;
+  }
+
+  return policy.allowedProviders.includes(provider);
+}
+
+/**
+ * The provider every account starts on when it has no saved choice of its own.
+ *
+ * The policy is the source; an EMPTY provider in the policy means "no preference", so the
+ * deployment's build-time default applies, unless the admin disabled it, in which case the
+ * first provider they did enable is used: a composer that opens on a provider the server
+ * refuses is worse than one that opens on an allowed one the user did not pick.
+ */
+export function resolveDefaultProvider(policy: ModelPolicy, fallback: string): string {
+  const chosen = policy.defaultModel.provider;
+
+  if (chosen && isProviderEnabled(policy, chosen)) {
+    return chosen;
+  }
+
+  if (policy.allowedProviders.length > 0) {
+    return isProviderEnabled(policy, fallback) ? fallback : policy.allowedProviders[0];
+  }
+
+  return fallback;
+}
+
+/**
  * Why this provider/model pair must be refused, or an empty string when it is allowed.
  *
  * This is the server-side guard. Hiding a provider in the composer is convenience; a request
@@ -264,11 +299,7 @@ export function policyUnavailableResponse(resolved: Pick<ResolvedKeys, 'policyUn
  * never set one working exactly as before.
  */
 export function modelPolicyViolation(policy: ModelPolicy, provider: string, model?: string): string {
-  if (!policy.managedMode) {
-    return '';
-  }
-
-  if (!policy.allowedProviders.includes(provider)) {
+  if (!isProviderEnabled(policy, provider)) {
     return `Le fournisseur ${provider} n'est pas autorisé sur cette instance.`;
   }
 

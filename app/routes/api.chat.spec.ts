@@ -93,7 +93,6 @@ vi.stubGlobal(
         allowUserKeys: [],
         source: { OpenCodeGo: 'instance' },
         policy: {
-          managedMode: false,
           defaultModel: { provider: '', model: '' },
           allowedProviders: [],
           allowedModels: {},
@@ -129,7 +128,6 @@ function effectiveKeysResponse() {
       allowUserKeys: [],
       source: { OpenCodeGo: 'instance' },
       policy: {
-        managedMode: false,
         defaultModel: { provider: '', model: '' },
         allowedProviders: [],
         allowedModels: {},

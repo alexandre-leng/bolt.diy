@@ -13,7 +13,6 @@ vi.mock('~/lib/modules/llm/manager', () => ({
 }));
 
 const MANAGED_POLICY = {
-  managedMode: true,
   defaultModel: { provider: 'OpenCodeGo', model: 'deepseek-v4.1-flash' },
   allowedProviders: ['OpenCodeGo'],
   allowedModels: { OpenCodeGo: ['deepseek-v4.1-flash'] },
@@ -51,7 +50,6 @@ describe('GET /api/model-policy', () => {
 
     expect(second.status).toBe(200);
     expect(body).toMatchObject({
-      managedMode: true,
       allowedProviders: ['OpenCodeGo'],
       allowedModels: { OpenCodeGo: ['deepseek-v4.1-flash'] },
       effortPolicy: 'auto-only',
@@ -66,7 +64,6 @@ describe('GET /api/model-policy', () => {
 
     expect(response.status).toBe(503);
     expect(body).toEqual({ error: 'Politique de modèles temporairement indisponible' });
-    expect(body).not.toHaveProperty('managedMode');
     expect(body).not.toHaveProperty('allowedProviders');
   });
 });

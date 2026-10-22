@@ -58,7 +58,6 @@ function effectiveKeys() {
     allowUserKeys: [],
     source: { OpenCodeGo: 'instance' },
     policy: {
-      managedMode: false,
       defaultModel: { provider: '', model: '' },
       allowedProviders: [],
       allowedModels: {},

@@ -35,17 +35,6 @@ export function fileTreePanelSizes(isSmallViewport: boolean): { defaultSize: num
   return isSmallViewport ? { defaultSize: 45, minSize: 30 } : { defaultSize: 20, minSize: 15 };
 }
 
-/*
- * Width share of the file tree. 20% is fine on a desktop but is ~78px on a 390px phone:
- * the Files/Search/Locks tabs and every file name were unreadable. Below 768px the tree
- * gets a usable share instead.
- */
-export const FILE_TREE_SMALL_VIEWPORT = 768;
-
-export function fileTreePanelSizes(isSmallViewport: boolean): { defaultSize: number; minSize: number } {
-  return isSmallViewport ? { defaultSize: 45, minSize: 30 } : { defaultSize: 20, minSize: 15 };
-}
-
 interface EditorPanelProps {
   files?: FileMap;
   unsavedFiles?: Set<string>;

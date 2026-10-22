@@ -441,9 +441,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     ) : null;
                   }}
                 </ClientOnly>
-                <ScrollToBottom />
                 {/* Reserves the fixed composer's height so the last message is not hidden behind it. */}
                 {chatStarted && <div className="shrink-0 h-[var(--composer-space,9.5rem)]" aria-hidden="true" />}
+                {/* Last: it is outside the transcript's padding, and drawn above the composer band. */}
+                <ScrollToBottom />
               </StickToBottom.Content>
               <div
                 className={classNames('flex flex-col w-full mx-auto', {
@@ -583,18 +584,26 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 function ScrollToBottom() {
   const { isAtBottom, scrollToBottom } = useStickToBottomContext();
 
+  /*
+   * The button used to sit INSIDE the scrolling transcript with `sticky z-50 bottom-0`: because it
+   * was the last child of the scroll container, "sticky" kept it pinned 5px below the container's
+   * bottom edge, which put it under the fixed composer (z-prompt), half hidden and unclickable.
+   * It is chrome like the composer, so it leaves the flow entirely and is anchored to the bottom
+   * of the chat column, just above the composer's reserved band, in a layer that stays under the
+   * composer and never covers it.
+   */
   return (
     !isAtBottom && (
-      <>
-        <div className="sticky bottom-0 left-0 right-0 bg-gradient-to-t from-bolt-elements-background-depth-1 to-transparent h-20 z-10" />
+      <div className="bolt-scroll-to-bottom">
         <button
-          className="sticky z-50 bottom-0 left-0 right-0 text-4xl rounded-lg px-1.5 py-0.5 flex items-center justify-center mx-auto gap-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor text-bolt-elements-textPrimary text-sm"
+          type="button"
+          className="rounded-lg px-1.5 py-0.5 flex items-center justify-center gap-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor text-bolt-elements-textPrimary text-sm shadow-md hover:bg-bolt-elements-background-depth-3"
           onClick={() => scrollToBottom()}
         >
           Aller au dernier message
           <span className="i-ph:arrow-down animate-bounce" />
         </button>
-      </>
+      </div>
     )
   );
 }

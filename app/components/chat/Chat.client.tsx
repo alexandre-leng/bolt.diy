@@ -33,6 +33,7 @@ import {
   type AnyPart,
 } from '~/lib/persistence/messageMigration';
 import { messagesChangedSinceLoad } from '~/lib/persistence/persistGate';
+import type { DebugScope } from '~/lib/persistence/debugChat';
 import { chatId } from '~/lib/persistence/useChatHistory';
 import { executeTextUtility, getPluginToolName, isSupportedAdapter } from '~/lib/plugins/adapters';
 import { pluginDatabase } from '~/lib/plugins/database';
@@ -74,7 +75,8 @@ const logger = createScopedLogger('Chat');
 export function Chat() {
   renderLogger.trace('Chat');
 
-  const { ready, initialMessages, chatChanged, storeMessageHistory, importChat, exportChat } = useChatHistory();
+  const { ready, initialMessages, chatChanged, storeMessageHistory, importChat, exportChat, debugScope } =
+    useChatHistory();
   const title = useStore(description);
   useEffect(() => {
     workbenchStore.setReloadedMessages(initialMessages.map((m) => m.id));
@@ -90,6 +92,7 @@ export function Chat() {
           exportChat={exportChat}
           storeMessageHistory={storeMessageHistory}
           importChat={importChat}
+          debugScope={debugScope}
         />
       )}
     </>
@@ -125,10 +128,21 @@ interface ChatProps {
   importChat: (description: string, messages: UIMessage[]) => Promise<void>;
   exportChat: () => void;
   description?: string;
+
+  /** Set when the open conversation is a debug session; see `detectDebugScope`. */
+  debugScope?: DebugScope;
 }
 
 export const ChatImpl = memo(
-  ({ description, initialMessages, chatChanged, storeMessageHistory, importChat, exportChat }: ChatProps) => {
+  ({
+    description,
+    initialMessages,
+    chatChanged,
+    storeMessageHistory,
+    importChat,
+    exportChat,
+    debugScope,
+  }: ChatProps) => {
     useShortcuts();
 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1470,6 +1484,7 @@ export const ChatImpl = memo(
         onStreamingChange={(streaming) => {
           streamingState.set(streaming);
         }}
+        debugScope={debugScope}
         enhancingPrompt={enhancingPrompt}
         promptEnhanced={promptEnhanced}
         sendMessage={sendMessage}

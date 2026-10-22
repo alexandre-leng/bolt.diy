@@ -43,6 +43,23 @@ function renderItem() {
   );
 }
 
+/**
+ * Every debug run used to persist a real conversation that looked exactly like the user's own
+ * work. The sidebar now labels it, so it can be told apart at a glance and ignored.
+ */
+function renderWithMessages(messages: unknown[]) {
+  return render(
+    <MemoryRouter>
+      <HistoryItem
+        item={{ ...item, messages } as never}
+        exportChat={vi.fn()}
+        onDuplicate={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    </MemoryRouter>,
+  );
+}
+
 /** Rename button, found by its icon so the lookup does not depend on the fix under test. */
 function renameButton(container: HTMLElement) {
   return container.querySelector('button[aria-label="Renommer"]') as HTMLButtonElement;
@@ -179,5 +196,32 @@ describe('HistoryItem: titres déjà enregistrés avec « [Model: …] [Provider
     });
 
     expect(saveCount()).toBe(0);
+  });
+});
+
+describe('HistoryItem debug marker', () => {
+  it('labels a conversation created by a debug dispatcher', () => {
+    renderWithMessages([
+      { role: 'user', content: '[Model: deepseek-v4.1-flash] [Provider: OpenCodeGo] Construis une landing page' },
+    ]);
+
+    expect(screen.getByTestId('debug-badge').textContent).toBe('DEBUG');
+  });
+
+  it('labels a throwaway probe as a probe', () => {
+    renderWithMessages([{ role: 'user', content: '[Model: x]\n\n[Provider: y]\n\nDis simplement: bonjour' }]);
+
+    expect(screen.getByTestId('debug-badge').textContent).toBe('SONDE');
+  });
+
+  it('leaves a real conversation unlabelled', () => {
+    renderWithMessages([
+      {
+        role: 'user',
+        content: '[Model: x]\n\n[Provider: y]\n\nConstruis une landing page pour une boulangerie artisanale',
+      },
+    ]);
+
+    expect(screen.queryByTestId('debug-badge')).toBeNull();
   });
 });

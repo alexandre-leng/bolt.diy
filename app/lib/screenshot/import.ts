@@ -2,8 +2,16 @@ import { validateGeneratedHtml } from './generate';
 import { WORK_DIR } from '~/utils/constants';
 
 /*
- * A generated Tailwind config is data, not executable code. Preserve that narrow, JSON-like
- * assignment as inert JSON while requiring explicit consent for every other active construct.
+ * What makes generated markup DANGEROUS once it lands in a project we then run.
+ *
+ * A `<script src="...">` is not, on its own, in that class: the pipeline emits
+ * `<script src="https://cdn.tailwindcss.com">` on essentially every HTML+Tailwind
+ * generation. The dangerous shapes are the ones that can execute code we cannot review:
+ * inline script bodies, event handlers, `javascript:` URLs and active embeds.
+ *
+ * An inline `tailwind.config = {...}` assignment is data, not code: it is preserved as inert
+ * JSON instead of costing the palette and fonts. Any OTHER inline script is refused, and
+ * external script tags are stripped from the imported output.
  */
 const INLINE_SCRIPT = /<script(?![^>]*\bsrc\s*=)([^>]*)>([\s\S]*?)<\/script\s*>/gi;
 const ANY_SCRIPT = /<script\b[^>]*>[\s\S]*?<\/script\s*>|<script\b[^>]*\/>/gi;
@@ -97,6 +105,11 @@ export function validateImportableHtml(code: string, options: ImportOptions = {}
     );
   }
 
+  /*
+   * External script tags (the Tailwind CDN, a font loader) are dropped rather than
+   * refused: the page keeps its markup and its classes, and nothing remote executes
+   * inside the project. Without this every HTML+Tailwind generation was un-importable.
+   */
   let clean = html.replace(INLINE_SCRIPT, '').replace(ANY_SCRIPT, '');
 
   if (config) {

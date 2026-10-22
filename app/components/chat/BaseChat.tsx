@@ -10,6 +10,8 @@ import ChatAlert from './ChatAlert';
 import { ChatBox, type StartProjectArgs } from './ChatBox';
 import { ConnectToolsPill } from './ConnectToolsPill';
 import { HomeHeroText, HomeImportActions } from './HomeIntro';
+import type { DebugScope } from '~/lib/persistence/debugChat';
+import GitCloneButton from './GitCloneButton';
 import LlmErrorAlert from './LLMApiAlert';
 import { Messages, type DisplayMessage } from './Messages.client';
 import ProgressCompilation from './ProgressCompilation';
@@ -61,6 +63,9 @@ interface BaseChatProps {
   enhancePrompt?: () => void;
   importChat?: (description: string, messages: UIMessage[]) => Promise<void>;
   exportChat?: () => void;
+
+  /** Set when this conversation is a debug session; renders the warning banner. */
+  debugScope?: DebugScope;
   uploadedFiles?: File[];
   setUploadedFiles?: React.Dispatch<React.SetStateAction<File[]>>;
   imageDataList?: string[];
@@ -111,6 +116,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       handleStop,
       importChat,
       exportChat,
+      debugScope,
       uploadedFiles = [],
       setUploadedFiles,
       imageDataList = [],
@@ -410,6 +416,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] lg:h-full lg:min-h-0 min-h-0',
             )}
           >
+            {debugScope && <DebugSessionBanner scope={debugScope} />}
             {!chatStarted && (
               <div id="intro" className="mt-[8vh] lg:mt-[12vh] max-w-2xl mx-auto text-center px-4 lg:px-0">
                 <ConnectToolsPill />
@@ -605,5 +612,30 @@ function ScrollToBottom() {
         </button>
       </div>
     )
+  );
+}
+
+/**
+ * Says, above the conversation, that it is a debug session.
+ *
+ * The sidebar chip is the primary mark, but it is out of sight while working: a debug run
+ * that lands in the project you are looking at looks like your own project, and reopening a
+ * real site from a mislabelled entry is how a correction ends up applied to the wrong one.
+ */
+function DebugSessionBanner({ scope }: { scope: DebugScope }) {
+  return (
+    <div
+      role="status"
+      data-testid="debug-session-banner"
+      className="mx-2 mt-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
+    >
+      <span className="font-semibold uppercase tracking-wide">
+        {scope === 'probe' ? 'Sonde' : 'Session de debug'}
+      </span>
+      {' — '}
+      {scope === 'probe'
+        ? 'conversation de test sans projet. Rien de ce qui est ici ne sera publié.'
+        : 'conversation créée par un test automatisé, identifiable dans la liste par son étiquette sonde ou debug.'}
+    </div>
   );
 }

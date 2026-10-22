@@ -46,6 +46,19 @@ type Draft = {
 const MARKETPLACE_URL = 'https://github.com/dustinwloring1988/bolt-marketplace';
 const CATEGORIES = pluginCategorySchema.options;
 
+/** Display labels for the manifest category values, which stay in English in the data. */
+const CATEGORY_LABELS: Record<string, string> = {
+  AI: 'IA',
+  'Developer Tools': 'Outils de développement',
+  Productivity: 'Productivité',
+  Data: 'Données',
+  Media: 'Médias',
+  Communication: 'Communication',
+  Other: 'Autre',
+};
+
+const categoryLabel = (category: string) => CATEGORY_LABELS[category] ?? category;
+
 const buttonClass =
   'inline-flex appearance-none items-center justify-center gap-2 rounded-lg border border-bolt-elements-borderColor bg-transparent px-3 py-2 text-sm font-medium text-bolt-elements-textPrimary transition-colors hover:bg-bolt-elements-background-depth-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 disabled:cursor-not-allowed disabled:opacity-50';
 const primaryButtonClass =
@@ -103,12 +116,12 @@ function PluginCard({
         </span>
       </button>
       <div className="mt-4 flex items-center justify-between gap-2">
-        <CategoryPill>{manifest.category}</CategoryPill>
+        <CategoryPill>{categoryLabel(manifest.category)}</CategoryPill>
         <span className="text-xs text-bolt-elements-textTertiary">
-          {updateAvailable ? 'Update available' : installed ? 'Installed' : ''}
+          {updateAvailable ? 'Mise à jour disponible' : installed ? 'Installée' : ''}
         </span>
         <button type="button" onClick={onOpen} className={buttonClass}>
-          {installed ? 'Manage' : 'Details'}
+          {installed ? 'Gérer' : 'Détails'}
         </button>
       </div>
     </article>
@@ -153,7 +166,7 @@ export default function PluginTab() {
   const [draft, setDraft] = useState<Draft>({
     id: 'boltdiy.text-utilities',
     name: 'Text Utilities',
-    description: 'Count and transform text with deterministic tools.',
+    description: 'Compter et transformer du texte avec des outils déterministes.',
     publisher: 'Bolt.diy',
     license: 'MIT',
     category: 'Productivity',
@@ -169,7 +182,7 @@ export default function PluginTab() {
     try {
       setSnapshot(await loadMarketplace());
     } catch (error) {
-      setCatalogError(error instanceof Error ? error.message : 'Could not load the marketplace.');
+      setCatalogError(error instanceof Error ? error.message : 'Impossible de charger le catalogue.');
     } finally {
       setLoadingCatalog(false);
     }
@@ -224,7 +237,7 @@ export default function PluginTab() {
     try {
       await operation();
     } catch (error) {
-      setOperationError(error instanceof Error ? error.message : 'Plugin operation failed.');
+      setOperationError(error instanceof Error ? error.message : 'L’opération sur l’extension a échoué.');
     }
   }
 
@@ -240,7 +253,7 @@ export default function PluginTab() {
       setView('installed');
       setSelectedId(null);
     } catch (error) {
-      setOperationError(error instanceof Error ? error.message : 'Could not import this plugin package.');
+      setOperationError(error instanceof Error ? error.message : 'Impossible d’importer ce paquet d’extension.');
     }
   }
 
@@ -251,7 +264,7 @@ export default function PluginTab() {
       const manifest = createDraftManifest({ ...draft, tools: draftTools });
       await exportPluginDraft(manifest);
     } catch (error) {
-      setOperationError(error instanceof Error ? error.message : 'Draft details are invalid.');
+      setOperationError(error instanceof Error ? error.message : 'Les informations du brouillon sont invalides.');
     }
   }
 
@@ -282,7 +295,7 @@ export default function PluginTab() {
       }
     } catch (error) {
       if (requestId === changelogRequestRef.current) {
-        setChangelogError(error instanceof Error ? error.message : 'Could not load this release changelog.');
+        setChangelogError(error instanceof Error ? error.message : 'Impossible de charger les notes de cette version.');
       }
     } finally {
       if (requestId === changelogRequestRef.current) {
@@ -387,9 +400,9 @@ export default function PluginTab() {
           <header className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-purple-400">Extensions</p>
-              <h2 className="mt-1 text-2xl font-semibold text-bolt-elements-textPrimary">Plugin Marketplace</h2>
+              <h2 className="mt-1 text-2xl font-semibold text-bolt-elements-textPrimary">Catalogue d’extensions</h2>
               <p className="mt-1 max-w-2xl text-sm text-bolt-elements-textSecondary">
-                Discover and manage reviewed plugins from the Bolt marketplace.
+                Découvrez et gérez des extensions vérifiées depuis le catalogue de Bolt.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -400,10 +413,10 @@ export default function PluginTab() {
                 className={buttonClass}
               >
                 {loadingCatalog ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}{' '}
-                Check for Updates
+                Rechercher des mises à jour
               </button>
               <button type="button" onClick={() => importInput.current?.click()} className={buttonClass}>
-                <Upload className="h-4 w-4" /> Install Plugin
+                <Upload className="h-4 w-4" /> Installer une extension
               </button>
               <button
                 type="button"
@@ -413,7 +426,7 @@ export default function PluginTab() {
                 }}
                 className={primaryButtonClass}
               >
-                <Plus className="h-4 w-4" /> Develop Plugin
+                <Plus className="h-4 w-4" /> Développer une extension
               </button>
             </div>
           </header>
@@ -424,9 +437,9 @@ export default function PluginTab() {
           >
             {(
               [
-                ['marketplace', 'Marketplace'],
-                ['installed', 'Installed'],
-                ['updates', 'Updates'],
+                ['marketplace', 'Catalogue'],
+                ['installed', 'Installées'],
+                ['updates', 'Mises à jour'],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -468,7 +481,7 @@ export default function PluginTab() {
               />
             </label>
             <label className="sr-only" htmlFor="plugin-category">
-              Filter by category
+              Filtrer par catégorie
             </label>
             <Select
               id="plugin-category"
@@ -476,9 +489,11 @@ export default function PluginTab() {
               value={category}
               onChange={(event) => setCategory(event.target.value)}
             >
-              <option>All categories</option>
+              <option value="All categories">Toutes les catégories</option>
               {CATEGORIES.map((item) => (
-                <option key={item}>{item}</option>
+                <option key={item} value={item}>
+                  {categoryLabel(item)}
+                </option>
               ))}
             </Select>
           </div>
@@ -487,14 +502,14 @@ export default function PluginTab() {
 
           {catalogError && !snapshot ? (
             <div className="space-y-3 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-6 text-center">
-              <h3 className="font-medium text-bolt-elements-textPrimary">Marketplace unavailable</h3>
+              <h3 className="font-medium text-bolt-elements-textPrimary">Catalogue indisponible</h3>
               <p className="text-sm text-bolt-elements-textSecondary">{catalogError}</p>
               <div className="flex flex-wrap justify-center gap-2">
                 <button type="button" className={buttonClass} onClick={() => void refreshCatalog()}>
-                  Try again
+                  Réessayer
                 </button>
                 <a className={buttonClass} href={MARKETPLACE_URL} target="_blank" rel="noreferrer">
-                  <ExternalLink className="h-4 w-4" /> Open repository
+                  <ExternalLink className="h-4 w-4" /> Ouvrir le dépôt
                 </a>
               </div>
             </div>
@@ -502,27 +517,29 @@ export default function PluginTab() {
 
           {snapshot?.stale && (
             <p role="status" className="rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
-              Showing the last saved catalog from {new Date(snapshot.fetchedAt).toLocaleString()}. Update checks may be
-              out of date.
+              Affichage du dernier catalogue enregistré le {new Date(snapshot.fetchedAt).toLocaleString()}. Les
+              recherches de mises à jour peuvent être obsolètes.
             </p>
           )}
 
           {loadingCatalog && !snapshot ? (
             <div className="flex items-center justify-center gap-2 py-16 text-sm text-bolt-elements-textSecondary">
-              <LoaderCircle className="h-4 w-4 animate-spin" /> Loading marketplace…
+              <LoaderCircle className="h-4 w-4 animate-spin" /> Chargement du catalogue…
             </div>
           ) : null}
 
           {snapshot && !catalogError && catalogPlugins.length === 0 && view === 'marketplace' ? (
             <div className="rounded-xl border border-dashed border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-6 py-12 text-center">
               <Blocks className="mx-auto h-9 w-9 text-bolt-elements-textTertiary" />
-              <h3 className="mt-3 font-medium text-bolt-elements-textPrimary">No plugins published yet</h3>
+              <h3 className="mt-3 font-medium text-bolt-elements-textPrimary">
+                Aucune extension publiée pour l’instant
+              </h3>
               <p className="mx-auto mt-1 max-w-md text-sm text-bolt-elements-textSecondary">
-                The marketplace repository is connected. Import a reviewed ZIP package or create a plugin draft to get
-                started.
+                Le dépôt du catalogue est connecté. Importez un paquet ZIP vérifié ou créez un brouillon d’extension
+                pour commencer.
               </p>
               <button type="button" onClick={() => importInput.current?.click()} className={`${buttonClass} mt-4`}>
-                <Upload className="h-4 w-4" /> Install from ZIP
+                <Upload className="h-4 w-4" /> Installer depuis un ZIP
               </button>
             </div>
           ) : null}
@@ -530,10 +547,10 @@ export default function PluginTab() {
           {snapshot && catalogPlugins.length > 0 && displayedPlugins.length === 0 && (
             <p className="rounded-xl border border-bolt-elements-borderColor p-8 text-center text-sm text-bolt-elements-textSecondary">
               {view === 'installed' && plugins.length === 0
-                ? 'No plugins installed yet.'
+                ? 'Aucune extension installée pour l’instant.'
                 : view === 'updates' && updates.length === 0
-                  ? 'All installed plugins are up to date.'
-                  : 'No plugins match these filters.'}
+                  ? 'Toutes les extensions installées sont à jour.'
+                  : 'Aucune extension ne correspond à ces filtres.'}
             </p>
           )}
 
@@ -632,15 +649,15 @@ function InstallConfirmation({
           className="fixed left-1/2 top-1/2 z-[131] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 space-y-4 rounded-2xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-6 shadow-2xl focus:outline-none"
         >
           <RadixDialog.Title className="text-lg font-semibold text-bolt-elements-textPrimary">
-            {installed ? `Update ${plugin.manifest.name}?` : `Install ${plugin.manifest.name}?`}
+            {installed ? `Mettre à jour ${plugin.manifest.name} ?` : `Installer ${plugin.manifest.name} ?`}
           </RadixDialog.Title>
           <RadixDialog.Description className="text-sm text-bolt-elements-textSecondary">
-            Version {version} by {plugin.manifest.publisher}. The package will be checked against the catalog before it
-            is stored.
+            Version {version} par {plugin.manifest.publisher}. Le paquet sera vérifié auprès du catalogue avant d’être
+            enregistré.
           </RadixDialog.Description>
           <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-300">
-            <ShieldCheck className="h-4 w-4 shrink-0" /> This plugin requests no extra capabilities.{' '}
-            {installed?.enabled ? 'Its current enabled state will be preserved.' : 'The installation starts disabled.'}
+            <ShieldCheck className="h-4 w-4 shrink-0" /> Cette extension ne demande aucune capacité supplémentaire.{' '}
+            {installed?.enabled ? 'Son état actuel (activée) sera conservé.' : 'L’installation démarre désactivée.'}
           </div>
           {installed &&
             plugin.manifest.tools.some((tool) => {
@@ -648,18 +665,19 @@ function InstallConfirmation({
               return !currentManifest.success || !currentManifest.data.tools.includes(tool);
             }) && (
               <p className="rounded-lg bg-amber-500/10 p-3 text-sm text-amber-300">
-                Newly added tools will stay disabled after the update. Review them in Settings before enabling.
+                Les nouveaux outils resteront désactivés après la mise à jour. Vérifiez-les dans les Réglages avant de
+                les activer.
               </p>
             )}
           {changelogLoading && (
             <p role="status" className="text-sm text-bolt-elements-textSecondary">
-              Loading release notes…
+              Chargement des notes de version…
             </p>
           )}
           {changelogError && <ErrorMessage message={changelogError} />}
           {changelog && (
             <section className="max-h-48 overflow-auto rounded-lg border border-bolt-elements-borderColor p-3">
-              <h3 className="mb-2 text-sm font-medium text-bolt-elements-textPrimary">Release notes</h3>
+              <h3 className="mb-2 text-sm font-medium text-bolt-elements-textPrimary">Notes de version</h3>
               <pre className="whitespace-pre-wrap break-words text-xs text-bolt-elements-textSecondary">
                 {changelog}
               </pre>
@@ -667,7 +685,7 @@ function InstallConfirmation({
           )}
           <div className="flex justify-end gap-2">
             <button type="button" className={buttonClass} onClick={onCancel} disabled={busy}>
-              Cancel
+              Annuler
             </button>
             <button
               type="button"
@@ -676,7 +694,7 @@ function InstallConfirmation({
               disabled={busy || changelogLoading || !!changelogError}
             >
               {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}{' '}
-              {installed ? 'Update' : 'Install'}
+              {installed ? 'Mettre à jour' : 'Installer'}
             </button>
           </div>
         </RadixDialog.Content>
@@ -729,7 +747,7 @@ function PluginDetails({
         onClick={onBack}
         className="inline-flex appearance-none items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-sm font-medium text-bolt-elements-textSecondary transition-colors hover:text-bolt-elements-textPrimary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
       >
-        <ChevronLeft className="h-4 w-4" /> {installed ? 'Installed Plugins' : 'Marketplace'}
+        <ChevronLeft className="h-4 w-4" /> {installed ? 'Extensions installées' : 'Catalogue'}
       </button>
       <header className="flex flex-wrap items-start justify-between gap-4 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-5">
         <div className="flex gap-4">
@@ -747,7 +765,7 @@ function PluginDetails({
         {installed && (
           <div className="flex flex-wrap items-center gap-3">
             <label className="inline-flex items-center gap-2 text-sm text-bolt-elements-textSecondary">
-              <span>{installed.enabled ? 'Enabled' : 'Disabled'}</span>
+              <span>{installed.enabled ? 'Activée' : 'Désactivée'}</span>
               <input
                 type="checkbox"
                 checked={installed.enabled}
@@ -758,7 +776,7 @@ function PluginDetails({
               />
             </label>
             <button type="button" onClick={onUninstall} disabled={busy} className={buttonClass}>
-              <Trash2 className="h-4 w-4" /> Uninstall
+              <Trash2 className="h-4 w-4" /> Désinstaller
             </button>
           </div>
         )}
@@ -767,20 +785,27 @@ function PluginDetails({
         aria-label="Détails de l’extension"
         className="flex gap-2 overflow-x-auto border-b border-bolt-elements-borderColor pb-2"
       >
-        {(['overview', 'settings', 'permissions', 'logs'] as const).map((tab) => (
+        {(
+          [
+            ['overview', 'Aperçu'],
+            ['settings', 'Réglages'],
+            ['permissions', 'Autorisations'],
+            ['logs', 'Activité'],
+          ] as const
+        ).map(([tab, label]) => (
           <button
             type="button"
             key={tab}
             onClick={() => setDetailTab(tab)}
             aria-current={detailTab === tab ? 'page' : undefined}
             className={classNames(
-              'appearance-none rounded-lg border px-3 py-1.5 text-sm font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500',
+              'appearance-none rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500',
               detailTab === tab
                 ? 'border-bolt-elements-borderColorActive bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent'
                 : 'border-bolt-elements-borderColor bg-transparent text-bolt-elements-textSecondary hover:border-bolt-elements-borderColorActive hover:text-bolt-elements-textPrimary',
             )}
           >
-            {tab}
+            {label}
           </button>
         ))}
       </nav>
@@ -788,45 +813,45 @@ function PluginDetails({
       {detailTab === 'overview' && (
         <section className="grid gap-4 md:grid-cols-[1fr_280px]">
           <div className="space-y-4 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-5">
-            <h3 className="font-semibold text-bolt-elements-textPrimary">About</h3>
+            <h3 className="font-semibold text-bolt-elements-textPrimary">À propos</h3>
             <p className="text-sm leading-6 text-bolt-elements-textSecondary">{manifest.description}</p>
             <div className="flex flex-wrap gap-2">
-              <CategoryPill>{manifest.category}</CategoryPill>
+              <CategoryPill>{categoryLabel(manifest.category)}</CategoryPill>
               <CategoryPill>{manifest.license}</CategoryPill>
             </div>
             {installed && (
               <p className="text-xs text-bolt-elements-textTertiary">
                 {installed.source === 'marketplace'
-                  ? `Marketplace · commit ${installed.sourceCommit?.slice(0, 8)}`
-                  : 'Imported local package · source not verified'}
+                  ? `Catalogue, commit ${installed.sourceCommit?.slice(0, 8)}`
+                  : 'Paquet local importé, source non vérifiée'}
               </p>
             )}
           </div>
           <div className="space-y-3 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-5">
-            <h3 className="font-semibold text-bolt-elements-textPrimary">Plugin status</h3>
+            <h3 className="font-semibold text-bolt-elements-textPrimary">État de l’extension</h3>
             <p className="text-sm text-bolt-elements-textSecondary">
               {installed
                 ? installed.enabled
-                  ? 'Enabled in this browser profile'
-                  : 'Installed and disabled'
-                : 'Available to install'}
+                  ? 'Activée dans ce profil de navigateur'
+                  : 'Installée et désactivée'
+                : 'Disponible à l’installation'}
             </p>
             <p className="text-sm text-bolt-elements-textSecondary">
-              {manifest.tools.length} tool{manifest.tools.length === 1 ? '' : 's'} · no additional capabilities
+              {manifest.tools.length} outil{manifest.tools.length === 1 ? '' : 's'} · aucune capacité supplémentaire
             </p>
             {onUpdate && (
               <button type="button" onClick={onUpdate} className={buttonClass}>
-                <RefreshCw className="h-4 w-4" /> Update available
+                <RefreshCw className="h-4 w-4" /> Mise à jour disponible
               </button>
             )}
             {onInstall && (
               <button type="button" onClick={onInstall} className={primaryButtonClass}>
-                <Download className="h-4 w-4" /> Install plugin
+                <Download className="h-4 w-4" /> Installer l’extension
               </button>
             )}
             {versions.length > 1 && (
               <button type="button" onClick={onRollback} className={buttonClass}>
-                Restore v{versions[1]}
+                Restaurer la v{versions[1]}
               </button>
             )}
           </div>
@@ -867,10 +892,12 @@ function PluginDetails({
                 </label>
               ))
             ) : (
-              <p className="text-sm text-bolt-elements-textSecondary">This plugin has no additional settings.</p>
+              <p className="text-sm text-bolt-elements-textSecondary">
+                Cette extension n’a aucun réglage supplémentaire.
+              </p>
             )
           ) : (
-            <p className="text-sm text-bolt-elements-textSecondary">Install this plugin to configure it.</p>
+            <p className="text-sm text-bolt-elements-textSecondary">Installez cette extension pour la configurer.</p>
           )}
           {installed &&
             manifest.tools.map((tool) => {
@@ -884,7 +911,7 @@ function PluginDetails({
                 >
                   <span>
                     <span className="block capitalize text-bolt-elements-textPrimary">
-                      {tool.replace('-', ' ')} tool
+                      Outil {tool.replace('-', ' ')}
                     </span>
                     <code className="text-xs">{toolName}</code>
                   </span>
@@ -905,20 +932,20 @@ function PluginDetails({
         <section className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-5">
           <div className="flex items-center gap-2 text-emerald-400">
             <ShieldCheck className="h-5 w-5" />
-            <h3 className="font-semibold">Permissions</h3>
+            <h3 className="font-semibold">Autorisations</h3>
           </div>
           <p className="mt-3 text-sm text-bolt-elements-textSecondary">
-            This reviewed adapter requests no network, project-file, credential, or storage access. Its tools only
-            process text arguments supplied by the model.
+            Cet adaptateur vérifié ne demande aucun accès au réseau, aux fichiers du projet, aux identifiants ou au
+            stockage. Ses outils traitent uniquement les arguments texte fournis par le modèle.
           </p>
-          <p className="mt-3 text-xs text-bolt-elements-textTertiary">Declared capabilities: none</p>
+          <p className="mt-3 text-xs text-bolt-elements-textTertiary">Capacités déclarées : aucune</p>
         </section>
       )}
       {detailTab === 'logs' && (
         <section className="space-y-3 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-5">
-          <h3 className="font-semibold text-bolt-elements-textPrimary">Activity</h3>
+          <h3 className="font-semibold text-bolt-elements-textPrimary">Activité</h3>
           {!installed ? (
-            <p className="text-sm text-bolt-elements-textSecondary">Install the plugin to see activity.</p>
+            <p className="text-sm text-bolt-elements-textSecondary">Installez l’extension pour voir l’activité.</p>
           ) : logs?.length ? (
             logs.map((log) => (
               <div
@@ -932,7 +959,7 @@ function PluginDetails({
               </div>
             ))
           ) : (
-            <p className="text-sm text-bolt-elements-textSecondary">No activity recorded yet.</p>
+            <p className="text-sm text-bolt-elements-textSecondary">Aucune activité enregistrée pour l’instant.</p>
           )}
         </section>
       )}
@@ -964,20 +991,20 @@ function DeveloperWizard({
   error: string | null;
 }) {
   const update = (key: keyof Draft, value: string) => setDraft({ ...draft, [key]: value });
-  const steps = ['Basic Information', 'Capabilities', 'Configuration', 'Review'];
+  const steps = ['Informations de base', 'Capacités', 'Configuration', 'Vérification'];
 
   return (
     <div className="space-y-5">
       <header className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-purple-400">Extensions</p>
-          <h2 className="mt-1 text-2xl font-semibold text-bolt-elements-textPrimary">Develop Plugin</h2>
+          <h2 className="mt-1 text-2xl font-semibold text-bolt-elements-textPrimary">Développer une extension</h2>
           <p className="mt-1 text-sm text-bolt-elements-textSecondary">
-            Create a validated draft for a supported Bolt adapter.
+            Créez un brouillon validé pour un adaptateur Bolt pris en charge.
           </p>
         </div>
         <button type="button" onClick={onCancel} className={buttonClass}>
-          Cancel
+          Annuler
         </button>
       </header>
       <ol aria-label="Étapes de création d’une extension" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1003,15 +1030,15 @@ function DeveloperWizard({
       <section className="space-y-4 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-5">
         {step === 0 && (
           <>
-            <h3 className="font-semibold text-bolt-elements-textPrimary">Basic Information</h3>
+            <h3 className="font-semibold text-bolt-elements-textPrimary">Informations de base</h3>
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-1 text-sm text-bolt-elements-textSecondary">
-                Plugin ID
+                Identifiant de l’extension
                 <input className={inputClass} value={draft.id} onChange={(event) => update('id', event.target.value)} />
-                <span className="block text-xs">Use publisher.slug, lowercase letters and hyphens.</span>
+                <span className="block text-xs">Format éditeur.slug, en minuscules et avec des traits d’union.</span>
               </label>
               <label className="space-y-1 text-sm text-bolt-elements-textSecondary">
-                Plugin Name
+                Nom de l’extension
                 <input
                   className={inputClass}
                   maxLength={80}
@@ -1020,7 +1047,7 @@ function DeveloperWizard({
                 />
               </label>
               <label className="space-y-1 text-sm text-bolt-elements-textSecondary">
-                Publisher
+                Éditeur
                 <input
                   className={inputClass}
                   maxLength={80}
@@ -1029,7 +1056,7 @@ function DeveloperWizard({
                 />
               </label>
               <label className="space-y-1 text-sm text-bolt-elements-textSecondary">
-                License
+                Licence
                 <input
                   className={inputClass}
                   maxLength={40}
@@ -1046,14 +1073,16 @@ function DeveloperWizard({
                 />
               </label>
               <label className="space-y-1 text-sm text-bolt-elements-textSecondary">
-                Category
+                Catégorie
                 <Select
                   className={inputClass}
                   value={draft.category}
                   onChange={(event) => setDraft({ ...draft, category: event.target.value as Draft['category'] })}
                 >
                   {CATEGORIES.map((item) => (
-                    <option key={item}>{item}</option>
+                    <option key={item} value={item}>
+                      {categoryLabel(item)}
+                    </option>
                   ))}
                 </Select>
               </label>
@@ -1071,14 +1100,14 @@ function DeveloperWizard({
         )}
         {step === 1 && (
           <>
-            <h3 className="font-semibold text-bolt-elements-textPrimary">Capabilities</h3>
+            <h3 className="font-semibold text-bolt-elements-textPrimary">Capacités</h3>
             <div className="flex items-start gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
               <ShieldCheck className="mt-0.5 h-5 w-5 text-emerald-400" />
               <div>
-                <p className="text-sm font-medium text-bolt-elements-textPrimary">No additional access requested</p>
+                <p className="text-sm font-medium text-bolt-elements-textPrimary">Aucun accès supplémentaire demandé</p>
                 <p className="mt-1 text-sm text-bolt-elements-textSecondary">
-                  Version 1 supports the reviewed Text Utilities host adapter. It cannot access the network, project
-                  files, credentials, or plugin storage.
+                  La version 1 prend en charge l’adaptateur hôte Text Utilities, vérifié. Il ne peut pas accéder au
+                  réseau, aux fichiers du projet, aux identifiants ni au stockage des extensions.
                 </p>
               </div>
             </div>
@@ -1088,7 +1117,8 @@ function DeveloperWizard({
           <>
             <h3 className="font-semibold text-bolt-elements-textPrimary">Configuration</h3>
             <p className="text-sm text-bolt-elements-textSecondary">
-              Choose which deterministic tools this package contributes. These tools only process text you provide.
+              Choisissez les outils déterministes que ce paquet apporte. Ces outils ne traitent que le texte que vous
+              fournissez.
             </p>
             {(['count', 'transform'] as const).map((tool) => (
               <label
@@ -1108,29 +1138,29 @@ function DeveloperWizard({
                 />{' '}
                 <Wrench className="h-4 w-4 text-purple-400" />
                 <span className="capitalize">
-                  {tool === 'count' ? 'Count words, characters, and lines' : 'Transform text'}
+                  {tool === 'count' ? 'Compter les mots, caractères et lignes' : 'Transformer le texte'}
                 </span>
               </label>
             ))}
             {tools.length === 0 && (
               <p role="alert" className="text-sm text-amber-300">
-                Choose at least one tool.
+                Choisissez au moins un outil.
               </p>
             )}
           </>
         )}
         {step === 3 && (
           <>
-            <h3 className="font-semibold text-bolt-elements-textPrimary">Review</h3>
+            <h3 className="font-semibold text-bolt-elements-textPrimary">Vérification</h3>
             <dl className="grid gap-3 text-sm sm:grid-cols-2">
-              {Object.entries({
-                Name: draft.name,
-                ID: draft.id,
-                Publisher: draft.publisher,
-                Version: draft.version,
-                License: draft.license,
-                Category: draft.category,
-              }).map(([label, value]) => (
+              {[
+                ['Nom', draft.name],
+                ['Identifiant', draft.id],
+                ['Éditeur', draft.publisher],
+                ['Version', draft.version],
+                ['Licence', draft.license],
+                ['Catégorie', categoryLabel(draft.category)],
+              ].map(([label, value]) => (
                 <div key={label}>
                   <dt className="text-xs uppercase text-bolt-elements-textTertiary">{label}</dt>
                   <dd className="mt-1 text-bolt-elements-textPrimary">{value}</dd>
@@ -1141,11 +1171,11 @@ function DeveloperWizard({
               {draft.description}
             </p>
             <p className="text-sm text-bolt-elements-textSecondary">
-              Tools: {tools.join(', ') || 'none'} · Extra capabilities: none
+              Outils : {tools.join(', ') || 'aucun'} · Capacités supplémentaires : aucune
             </p>
             <p className="text-xs text-bolt-elements-textTertiary">
-              The ZIP contains a declarative manifest only. Publishing requires a reviewed change to the marketplace
-              repository.
+              Le ZIP ne contient qu’un manifeste déclaratif. La publication demande une modification vérifiée du dépôt
+              du catalogue.
             </p>
           </>
         )}
@@ -1156,7 +1186,7 @@ function DeveloperWizard({
             disabled={step === 0}
             className={buttonClass}
           >
-            Back
+            Retour
           </button>
           {step < 3 ? (
             <button
@@ -1165,11 +1195,11 @@ function DeveloperWizard({
               disabled={step === 2 && tools.length === 0}
               className={primaryButtonClass}
             >
-              Next <ChevronLeft className="h-4 w-4 rotate-180" />
+              Suivant <ChevronLeft className="h-4 w-4 rotate-180" />
             </button>
           ) : (
             <button type="button" onClick={onExport} disabled={busy} className={primaryButtonClass}>
-              <Download className="h-4 w-4" /> Export ZIP
+              <Download className="h-4 w-4" /> Exporter le ZIP
             </button>
           )}
         </div>

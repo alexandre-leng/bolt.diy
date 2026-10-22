@@ -126,14 +126,14 @@ class CacheManagerService {
 
   static formatSize(bytes: number): string {
     if (bytes === 0) {
-      return '0 B';
+      return '0 o';
     }
 
     const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const sizes = ['o', 'Ko', 'Mo', 'Go'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
 
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)).toLocaleString('fr-FR') + ' ' + sizes[i];
   }
 }
 
@@ -232,11 +232,18 @@ export function GitHubCacheManager({ className = '', showStats = true }: GitHubC
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Database className="w-4 h-4 text-bolt-elements-item-contentAccent" />
-          <h3 className="text-sm font-medium text-bolt-elements-textPrimary">GitHub Cache Management</h3>
+          <h3 className="text-sm font-medium text-bolt-elements-textPrimary">Gestion du cache GitHub</h3>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={refreshCacheData} disabled={isLoading}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={refreshCacheData}
+            disabled={isLoading}
+            aria-label="Actualiser le cache"
+            title="Actualiser le cache"
+          >
             <RefreshCw className={classNames('w-3 h-3', isLoading ? 'animate-spin' : '')} />
           </Button>
         </div>
@@ -247,7 +254,7 @@ export function GitHubCacheManager({ className = '', showStats = true }: GitHubC
           <div className="bg-bolt-elements-background-depth-2 p-3 rounded-lg">
             <div className="flex items-center gap-2 mb-1">
               <HardDrive className="w-3 h-3 text-bolt-elements-textSecondary" />
-              <span className="text-xs font-medium text-bolt-elements-textSecondary">Total Size</span>
+              <span className="text-xs font-medium text-bolt-elements-textSecondary">Taille totale</span>
             </div>
             <p className="text-sm font-semibold text-bolt-elements-textPrimary">
               {CacheManagerService.formatSize(cacheStats.totalSize)}
@@ -257,7 +264,7 @@ export function GitHubCacheManager({ className = '', showStats = true }: GitHubC
           <div className="bg-bolt-elements-background-depth-2 p-3 rounded-lg">
             <div className="flex items-center gap-2 mb-1">
               <Database className="w-3 h-3 text-bolt-elements-textSecondary" />
-              <span className="text-xs font-medium text-bolt-elements-textSecondary">Entries</span>
+              <span className="text-xs font-medium text-bolt-elements-textSecondary">Entrées</span>
             </div>
             <p className="text-sm font-semibold text-bolt-elements-textPrimary">{cacheStats.totalEntries}</p>
           </div>
@@ -265,20 +272,20 @@ export function GitHubCacheManager({ className = '', showStats = true }: GitHubC
           <div className="bg-bolt-elements-background-depth-2 p-3 rounded-lg">
             <div className="flex items-center gap-2 mb-1">
               <Clock className="w-3 h-3 text-bolt-elements-textSecondary" />
-              <span className="text-xs font-medium text-bolt-elements-textSecondary">Oldest</span>
+              <span className="text-xs font-medium text-bolt-elements-textSecondary">Plus ancienne</span>
             </div>
             <p className="text-xs text-bolt-elements-textSecondary">
-              {cacheStats.oldestEntry ? new Date(cacheStats.oldestEntry).toLocaleDateString() : 'N/A'}
+              {cacheStats.oldestEntry ? new Date(cacheStats.oldestEntry).toLocaleDateString('fr-FR') : 'N/D'}
             </p>
           </div>
 
           <div className="bg-bolt-elements-background-depth-2 p-3 rounded-lg">
             <div className="flex items-center gap-2 mb-1">
               <CheckCircle className="w-3 h-3 text-bolt-elements-textSecondary" />
-              <span className="text-xs font-medium text-bolt-elements-textSecondary">Status</span>
+              <span className="text-xs font-medium text-bolt-elements-textSecondary">Statut</span>
             </div>
             <p className="text-xs text-green-600 dark:text-green-400">
-              {cacheStats.totalEntries > 0 ? 'Active' : 'Empty'}
+              {cacheStats.totalEntries > 0 ? 'Actif' : 'Vide'}
             </p>
           </div>
         </div>
@@ -287,7 +294,7 @@ export function GitHubCacheManager({ className = '', showStats = true }: GitHubC
       {cacheEntries.length > 0 && (
         <div className="space-y-2">
           <h4 className="text-xs font-medium text-bolt-elements-textSecondary">
-            Cache Entries ({cacheEntries.length})
+            Entrées du cache ({cacheEntries.length})
           </h4>
 
           <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -301,7 +308,8 @@ export function GitHubCacheManager({ className = '', showStats = true }: GitHubC
                     {entry.key.replace('github_', '')}
                   </p>
                   <p className="text-xs text-bolt-elements-textSecondary">
-                    {CacheManagerService.formatSize(entry.size)} • {new Date(entry.lastAccessed).toLocaleString()}
+                    {CacheManagerService.formatSize(entry.size)} •{' '}
+                    {new Date(entry.lastAccessed).toLocaleString('fr-FR')}
                   </p>
                 </div>
 
@@ -311,6 +319,8 @@ export function GitHubCacheManager({ className = '', showStats = true }: GitHubC
                   onClick={() => handleClearSpecific(entry.key)}
                   disabled={isLoading}
                   className="ml-2"
+                  aria-label={`Supprimer l’entrée ${entry.key.replace('github_', '')}`}
+                  title="Supprimer cette entrée"
                 >
                   <Trash2 className="w-3 h-3 text-red-500" />
                 </Button>
@@ -329,7 +339,7 @@ export function GitHubCacheManager({ className = '', showStats = true }: GitHubC
           className="flex items-center gap-1"
         >
           <Clock className="w-3 h-3" />
-          <span className="text-xs">Clear Expired</span>
+          <span className="text-xs">Vider les entrées expirées</span>
         </Button>
 
         <Button
@@ -340,7 +350,7 @@ export function GitHubCacheManager({ className = '', showStats = true }: GitHubC
           className="flex items-center gap-1"
         >
           <RefreshCw className="w-3 h-3" />
-          <span className="text-xs">Compact</span>
+          <span className="text-xs">Compacter</span>
         </Button>
 
         {cacheEntries.length > 0 && (
@@ -352,7 +362,7 @@ export function GitHubCacheManager({ className = '', showStats = true }: GitHubC
             className="flex items-center gap-1 text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
           >
             <Trash2 className="w-3 h-3" />
-            <span className="text-xs">Clear All</span>
+            <span className="text-xs">Tout vider</span>
           </Button>
         )}
       </div>
@@ -360,7 +370,7 @@ export function GitHubCacheManager({ className = '', showStats = true }: GitHubC
       {lastClearTime && (
         <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded text-xs text-green-700 dark:text-green-400">
           <CheckCircle className="w-3 h-3" />
-          <span>Cache cleared successfully at {new Date(lastClearTime).toLocaleTimeString()}</span>
+          <span>Cache vidé avec succès à {new Date(lastClearTime).toLocaleTimeString('fr-FR')}</span>
         </div>
       )}
     </div>

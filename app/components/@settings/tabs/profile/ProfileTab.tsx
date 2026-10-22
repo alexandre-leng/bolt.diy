@@ -25,9 +25,9 @@ export default function ProfileTab() {
       const result = await persistProfileField(field, value);
 
       if (result.ok) {
-        toast.success(`${field.charAt(0).toUpperCase() + field.slice(1)} updated`);
+        toast.success(field === 'username' ? 'Nom d’utilisateur mis à jour' : 'Biographie mise à jour');
       } else {
-        toast.error(result.error ?? 'Could not save your profile');
+        toast.error(result.error ?? 'Impossible d’enregistrer votre profil');
       }
     }, 1000),
     [],
@@ -49,7 +49,7 @@ export default function ProfileTab() {
       reader.onload = () => {
         if (typeof reader.result !== 'string') {
           setIsUploading(false);
-          toast.error('Failed to update profile picture');
+          toast.error('Impossible de mettre à jour la photo de profil');
 
           return;
         }
@@ -58,26 +58,26 @@ export default function ProfileTab() {
         updateProfile({ avatar: base64String });
         setIsUploading(false);
         setIsAvatarPickerOpen(false);
-        toast.success('Profile picture updated');
+        toast.success('Photo de profil mise à jour');
       };
 
       reader.onerror = () => {
         console.error('Error reading file:', reader.error);
         setIsUploading(false);
-        toast.error('Failed to update profile picture');
+        toast.error('Impossible de mettre à jour la photo de profil');
       };
       reader.readAsDataURL(file);
     } catch (error) {
       console.error('Error uploading avatar:', error);
       setIsUploading(false);
-      toast.error('Failed to update profile picture');
+      toast.error('Impossible de mettre à jour la photo de profil');
     }
   };
 
   const handleChooseAvatar = (avatar: string) => {
     updateProfile({ avatar });
     setIsAvatarPickerOpen(false);
-    toast.success('Profile avatar updated');
+    toast.success('Avatar du profil mis à jour');
   };
 
   const handleProfileUpdate = (field: 'username' | 'bio', value: string) => {
@@ -97,7 +97,7 @@ export default function ProfileTab() {
           <div className="flex items-start gap-6 mb-8">
             <button
               type="button"
-              aria-label="Change profile avatar"
+              aria-label="Changer l’avatar du profil"
               aria-expanded={isAvatarPickerOpen}
               onClick={() => setIsAvatarPickerOpen((open) => !open)}
               className={classNames(
@@ -123,16 +123,16 @@ export default function ProfileTab() {
             </button>
 
             <div className="flex-1 pt-1">
-              <label className="block text-base font-medium text-bolt-elements-textPrimary mb-1">Profile Picture</label>
+              <label className="block text-base font-medium text-bolt-elements-textPrimary mb-1">Photo de profil</label>
               <p className="text-sm text-bolt-elements-textSecondary">
-                Choose a default avatar or upload one from your computer.
+                Choisissez un avatar par défaut ou importez-en un depuis votre ordinateur.
               </p>
             </div>
           </div>
 
           {isAvatarPickerOpen && (
             <div className="mb-8 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
-              <h3 className="mb-3 text-sm font-medium text-bolt-elements-textPrimary">Choose your avatar</h3>
+              <h3 className="mb-3 text-sm font-medium text-bolt-elements-textPrimary">Choisissez votre avatar</h3>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {DEFAULT_AVATARS.map((avatar) => {
                   const selected = profile.avatar === avatar.src;
@@ -141,7 +141,7 @@ export default function ProfileTab() {
                     <button
                       key={avatar.id}
                       type="button"
-                      aria-label={`Use ${avatar.name} avatar`}
+                      aria-label={`Utiliser l’avatar ${avatar.name}`}
                       aria-pressed={selected}
                       onClick={() => handleChooseAvatar(avatar.src)}
                       style={{
@@ -170,7 +170,7 @@ export default function ProfileTab() {
                   <span className="flex h-14 w-14 items-center justify-center rounded-full bg-bolt-elements-background-depth-3">
                     <span className="i-ph-upload-simple h-6 w-6" />
                   </span>
-                  <span className="text-xs font-medium">Upload from computer</span>
+                  <span className="text-xs font-medium">Importer depuis l’ordinateur</span>
                 </label>
               </div>
             </div>

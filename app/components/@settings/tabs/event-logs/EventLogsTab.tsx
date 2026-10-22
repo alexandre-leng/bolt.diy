@@ -9,6 +9,21 @@ import { logStore, type LogEntry } from '~/lib/stores/logs';
 import { toast } from '~/lib/toastify';
 import { classNames } from '~/utils/classNames';
 
+const logLevelLabels: Record<string, string> = {
+  error: 'Erreur',
+  warning: 'Avertissement',
+  info: 'Information',
+  debug: 'Débogage',
+  success: 'Succès',
+};
+
+const logCategoryLabels: Record<string, string> = {
+  provider: 'Fournisseur',
+  api: 'API',
+  system: 'Système',
+  network: 'Réseau',
+};
+
 interface SelectOption {
   value: string;
   label: string;
@@ -37,25 +52,25 @@ const logLevelOptions: SelectOption[] = [
   },
   {
     value: 'error',
-    label: 'Errors',
+    label: 'Erreurs',
     icon: 'i-ph:warning-circle',
     color: '#ef4444',
   },
   {
     value: 'warning',
-    label: 'Warnings',
+    label: 'Avertissements',
     icon: 'i-ph:warning',
     color: '#f59e0b',
   },
   {
     value: 'info',
-    label: 'Info',
+    label: 'Informations',
     icon: 'i-ph:info',
     color: '#3b82f6',
   },
   {
     value: 'debug',
-    label: 'Debug',
+    label: 'Débogage',
     icon: 'i-ph:bug',
     color: '#6b7280',
   },
@@ -77,7 +92,7 @@ const LogEntryItem = ({ log, isExpanded: forceExpanded, use24Hour, showTimestamp
 
   const timestamp = useMemo(() => {
     const date = new Date(log.timestamp);
-    return date.toLocaleTimeString('en-US', { hour12: !use24Hour });
+    return date.toLocaleTimeString('fr-FR', { hour12: !use24Hour });
   }, [log.timestamp, use24Hour]);
 
   const style = useMemo(() => {
@@ -136,15 +151,15 @@ const LogEntryItem = ({ log, isExpanded: forceExpanded, use24Hour, showTimestamp
       return (
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2 text-xs text-bolt-elements-textSecondary">
-            <span>Model: {details.model}</span>
+            <span>Modèle : {details.model}</span>
             <span>•</span>
-            <span>Tokens: {details.totalTokens}</span>
+            <span>Jetons : {details.totalTokens}</span>
             <span>•</span>
-            <span>Duration: {details.duration}ms</span>
+            <span>Durée : {details.duration} ms</span>
           </div>
           {details.prompt && (
             <div className="flex flex-col gap-1">
-              <div className="text-xs font-medium text-bolt-elements-textPrimary">Prompt:</div>
+              <div className="text-xs font-medium text-bolt-elements-textPrimary">Invite :</div>
               <pre className="text-xs text-bolt-elements-textSecondary bg-bolt-elements-background-depth-2 rounded p-2 whitespace-pre-wrap">
                 {details.prompt}
               </pre>
@@ -152,7 +167,7 @@ const LogEntryItem = ({ log, isExpanded: forceExpanded, use24Hour, showTimestamp
           )}
           {details.response && (
             <div className="flex flex-col gap-1">
-              <div className="text-xs font-medium text-bolt-elements-textPrimary">Response:</div>
+              <div className="text-xs font-medium text-bolt-elements-textPrimary">Réponse :</div>
               <pre className="text-xs text-bolt-elements-textSecondary bg-bolt-elements-background-depth-2 rounded p-2 whitespace-pre-wrap">
                 {details.response}
               </pre>
@@ -168,14 +183,14 @@ const LogEntryItem = ({ log, isExpanded: forceExpanded, use24Hour, showTimestamp
           <div className="flex items-center gap-2 text-xs text-bolt-elements-textSecondary">
             <span className={details.method === 'GET' ? 'text-green-500' : 'text-blue-500'}>{details.method}</span>
             <span>•</span>
-            <span>Status: {details.statusCode}</span>
+            <span>Statut : {details.statusCode}</span>
             <span>•</span>
-            <span>Duration: {details.duration}ms</span>
+            <span>Durée : {details.duration} ms</span>
           </div>
           <div className="text-xs text-bolt-elements-textSecondary break-all">{details.url}</div>
           {details.request && (
             <div className="flex flex-col gap-1">
-              <div className="text-xs font-medium text-bolt-elements-textPrimary">Request:</div>
+              <div className="text-xs font-medium text-bolt-elements-textPrimary">Requête :</div>
               <pre className="text-xs text-bolt-elements-textSecondary bg-bolt-elements-background-depth-2 rounded p-2 whitespace-pre-wrap">
                 {JSON.stringify(details.request, null, 2)}
               </pre>
@@ -183,7 +198,7 @@ const LogEntryItem = ({ log, isExpanded: forceExpanded, use24Hour, showTimestamp
           )}
           {details.response && (
             <div className="flex flex-col gap-1">
-              <div className="text-xs font-medium text-bolt-elements-textPrimary">Response:</div>
+              <div className="text-xs font-medium text-bolt-elements-textPrimary">Réponse :</div>
               <pre className="text-xs text-bolt-elements-textSecondary bg-bolt-elements-background-depth-2 rounded p-2 whitespace-pre-wrap">
                 {JSON.stringify(details.response, null, 2)}
               </pre>
@@ -191,7 +206,7 @@ const LogEntryItem = ({ log, isExpanded: forceExpanded, use24Hour, showTimestamp
           )}
           {details.error && (
             <div className="flex flex-col gap-1">
-              <div className="text-xs font-medium text-red-500">Error:</div>
+              <div className="text-xs font-medium text-red-500">Erreur :</div>
               <pre className="text-xs text-red-400 bg-red-50 dark:bg-red-500/10 rounded p-2 whitespace-pre-wrap">
                 {JSON.stringify(details.error, null, 2)}
               </pre>
@@ -234,18 +249,18 @@ const LogEntryItem = ({ log, isExpanded: forceExpanded, use24Hour, showTimestamp
                   onClick={() => setLocalExpanded(!localExpanded)}
                   className="appearance-none self-start rounded border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-2 py-1 text-xs font-medium text-bolt-elements-textSecondary transition-colors hover:border-purple-500/40 hover:bg-bolt-elements-background-depth-3 hover:text-purple-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
                 >
-                  {localExpanded ? 'Hide' : 'Show'} Details
+                  {localExpanded ? 'Masquer les détails' : 'Afficher les détails'}
                 </button>
                 {localExpanded && renderDetails(log.details)}
               </>
             )}
             <div className="flex items-center gap-2">
               <div className={classNames('px-2 py-0.5 rounded text-xs font-medium uppercase', style.badge)}>
-                {log.level}
+                {logLevelLabels[log.level] || log.level}
               </div>
               {log.category && (
                 <div className="px-2 py-0.5 rounded-full text-xs bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary">
-                  {log.category}
+                  {logCategoryLabels[log.category] || log.category}
                 </div>
               )}
             </div>
@@ -435,17 +450,17 @@ export function EventLogsTab() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      toast.success('Event logs exported successfully as JSON');
+      toast.success('Journaux d’événements exportés au format JSON');
     } catch (error) {
       console.error('Failed to export JSON:', error);
-      toast.error('Failed to export event logs as JSON');
+      toast.error('Échec de l’export des journaux d’événements au format JSON');
     }
   };
 
   const exportAsCSV = () => {
     try {
       // Convert logs to CSV format
-      const headers = ['Timestamp', 'Level', 'Category', 'Message', 'Details'];
+      const headers = ['Horodatage', 'Niveau', 'Catégorie', 'Message', 'Détails'];
 
       const csvData = [
         headers,
@@ -471,10 +486,10 @@ export function EventLogsTab() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      toast.success('Event logs exported successfully as CSV');
+      toast.success('Journaux d’événements exportés au format CSV');
     } catch (error) {
       console.error('Failed to export CSV:', error);
-      toast.error('Failed to export event logs as CSV');
+      toast.error('Échec de l’export des journaux d’événements au format CSV');
     }
   };
 
@@ -513,16 +528,16 @@ export function EventLogsTab() {
       doc.setTextColor('#FFFFFF');
       doc.setFontSize(24);
       doc.setFont('helvetica', 'bold');
-      doc.text('Event Logs Report', margin, 35);
+      doc.text('Rapport du journal des événements', margin, 35);
 
       // Add subtitle with bolt.diy
       doc.setFontSize(12);
       doc.setFont('helvetica', 'normal');
-      doc.text('bolt.diy - AI Development Platform', margin, 45);
+      doc.text('bolt.diy - Plateforme de développement assisté par IA', margin, 45);
       yPos = 70;
 
       // Add report summary section
-      addSectionHeader('Report Summary');
+      addSectionHeader('Synthèse du rapport');
 
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
@@ -532,8 +547,8 @@ export function EventLogsTab() {
         { label: 'Généré le', value: new Date().toLocaleString() },
         { label: 'Nombre de journaux', value: filteredLogs.length.toString() },
         { label: 'Filtre appliqué', value: selectedLevel === 'all' ? 'Tous les types' : selectedLevel },
-        { label: 'Recherche', value: searchQuery || 'None' },
-        { label: 'Format horaire', value: use24Hour ? '24-hour' : '12-hour' },
+        { label: 'Recherche', value: searchQuery || 'Aucune' },
+        { label: 'Format horaire', value: use24Hour ? '24 heures' : '12 heures' },
       ];
 
       summaryItems.forEach((item) => {
@@ -547,7 +562,7 @@ export function EventLogsTab() {
       yPos += lineHeight * 2;
 
       // Add statistics section
-      addSectionHeader('Log Statistics');
+      addSectionHeader('Statistiques des journaux');
 
       // Calculate statistics
       const stats = {
@@ -598,7 +613,7 @@ export function EventLogsTab() {
       yPos += lineHeight * 2;
 
       // Add logs section
-      addSectionHeader('Event Logs');
+      addSectionHeader('Journal des événements');
 
       // Helper function to add a log entry with improved formatting
       const addLogEntry = (log: LogEntry) => {
@@ -636,7 +651,8 @@ export function EventLogsTab() {
           debug: '#6B7280',
         };
 
-        const levelWidth = doc.getTextWidth(log.level.toUpperCase()) + 10;
+        const levelLabel = (logLevelLabels[log.level] || log.level).toUpperCase();
+        const levelWidth = doc.getTextWidth(levelLabel) + 10;
         doc.setFillColor(levelColors[log.level] || '#F3F4F6');
         doc.roundedRect(margin, yPos - 4, levelWidth, lineHeight + 4, 1, 1, 'F');
 
@@ -644,7 +660,7 @@ export function EventLogsTab() {
         doc.setTextColor(textColors[log.level] || '#6B7280');
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(8);
-        doc.text(log.level.toUpperCase(), margin + 5, yPos);
+        doc.text(levelLabel, margin + 5, yPos);
 
         // Add timestamp
         doc.setTextColor('#6B7280');
@@ -657,10 +673,11 @@ export function EventLogsTab() {
           const categoryX = margin + levelWidth + doc.getTextWidth(timestamp) + 20;
           doc.setFillColor('#F3F4F6');
 
-          const categoryWidth = doc.getTextWidth(log.category) + 10;
+          const categoryLabel = logCategoryLabels[log.category] || log.category;
+          const categoryWidth = doc.getTextWidth(categoryLabel) + 10;
           doc.roundedRect(categoryX, yPos - 4, categoryWidth, lineHeight + 4, 2, 2, 'F');
           doc.setTextColor('#6B7280');
-          doc.text(log.category, categoryX + 5, yPos);
+          doc.text(categoryLabel, categoryX + 5, yPos);
         }
 
         yPos += lineHeight * 1.5;
@@ -710,12 +727,12 @@ export function EventLogsTab() {
         doc.setTextColor('#9CA3AF');
 
         // Add page numbers
-        doc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, {
+        doc.text(`Page ${i} sur ${totalPages}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, {
           align: 'center',
         });
 
         // Add footer text
-        doc.text('Généré le by bolt.diy', margin, doc.internal.pageSize.getHeight() - 10);
+        doc.text('Généré par bolt.diy', margin, doc.internal.pageSize.getHeight() - 10);
 
         const dateStr = new Date().toLocaleDateString();
         doc.text(dateStr, pageWidth - margin, doc.internal.pageSize.getHeight() - 10, { align: 'right' });
@@ -723,10 +740,10 @@ export function EventLogsTab() {
 
       // Save the PDF
       doc.save(`bolt-event-logs-${new Date().toISOString()}.pdf`);
-      toast.success('Event logs exported successfully as PDF');
+      toast.success('Journaux d’événements exportés au format PDF');
     } catch (error) {
       console.error('Failed to export PDF:', error);
-      toast.error('Failed to export event logs as PDF');
+      toast.error('Échec de l’export des journaux d’événements au format PDF');
     }
   };
 
@@ -736,14 +753,14 @@ export function EventLogsTab() {
         .map((log) => {
           const timestamp = new Date(log.timestamp).toLocaleString();
 
-          let content = `[${timestamp}] ${log.level.toUpperCase()}: ${log.message}\n`;
+          let content = `[${timestamp}] ${(logLevelLabels[log.level] || log.level).toUpperCase()}: ${log.message}\n`;
 
           if (log.category) {
-            content += `Category: ${log.category}\n`;
+            content += `Catégorie : ${logCategoryLabels[log.category] || log.category}\n`;
           }
 
           if (log.details) {
-            content += `Details:\n${JSON.stringify(log.details, null, 2)}\n`;
+            content += `Détails :\n${JSON.stringify(log.details, null, 2)}\n`;
           }
 
           return content + '-'.repeat(80) + '\n';
@@ -759,10 +776,10 @@ export function EventLogsTab() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      toast.success('Event logs exported successfully as text file');
+      toast.success('Journaux d’événements exportés au format texte');
     } catch (error) {
       console.error('Failed to export text file:', error);
-      toast.error('Failed to export event logs as text file');
+      toast.error('Échec de l’export des journaux d’événements au format texte');
     }
   };
 
@@ -820,7 +837,7 @@ export function EventLogsTab() {
           )}
         >
           <span className="i-ph:download text-lg text-gray-500 dark:text-gray-400 group-hover:text-purple-500 transition-colors" />
-          Export
+          Exporter
         </button>
 
         <Dialog showCloseButton>

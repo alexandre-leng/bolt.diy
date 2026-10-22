@@ -24,7 +24,9 @@ function useBoltHistoryDB() {
         setDb(database || null);
         setIsLoading(false);
       } catch (err) {
-        setError(err instanceof Error ? err : new Error('Erreur inconnue initializing database'));
+        setError(
+          err instanceof Error ? err : new Error('Erreur inconnue lors de l’initialisation de la base de données'),
+        );
         setIsLoading(false);
       }
     };
@@ -53,10 +55,10 @@ function createChatItem(chat: Chat): ChatItem {
     id: chat.id,
 
     // Use description as title if available, or format a short ID
-    label: (chat as ExtendedChat).title || chat.description || `Chat ${chat.id.slice(0, 8)}`,
+    label: (chat as ExtendedChat).title || chat.description || `Conversation ${chat.id.slice(0, 8)}`,
 
     // Format the description with message count and timestamp
-    description: `${chat.messages.length} messages - Last updated: ${new Date((chat as ExtendedChat).updatedAt || Date.parse(chat.timestamp)).toLocaleString()}`,
+    description: `${chat.messages.length} message${chat.messages.length > 1 ? 's' : ''}, dernière mise à jour : ${new Date((chat as ExtendedChat).updatedAt || Date.parse(chat.timestamp)).toLocaleString('fr-FR')}`,
   };
 }
 
@@ -158,7 +160,9 @@ export function DataTab() {
         })
         .catch((error) => {
           console.error('Error loading chats:', error);
-          toast.error('Failed to load chats: ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
+          toast.error(
+            'Impossible de charger les conversations : ' + (error instanceof Error ? error.message : 'Erreur inconnue'),
+          );
         });
     }
   }, [db]);
@@ -291,10 +295,10 @@ export function DataTab() {
                     <div className="i-ph-download-duotone w-5 h-5" />
                   </motion.div>
                   <CardTitle className="text-lg group-hover:text-bolt-elements-item-contentAccent transition-colors">
-                    Tout exporter les conversations
+                    Exporter toutes les conversations
                   </CardTitle>
                 </div>
-                <CardDescription>Export all your chats to a JSON file.</CardDescription>
+                <CardDescription>Exportez toutes vos conversations dans un fichier JSON.</CardDescription>
               </CardHeader>
               <CardFooter>
                 <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="w-full">
@@ -415,7 +419,7 @@ export function DataTab() {
                     {isImporting ? (
                       <>
                         <div className="i-ph-spinner-gap-bold animate-spin w-4 h-4 mr-2" />
-                        Importing...
+                        Import en cours…
                       </>
                     ) : (
                       'Importer des conversations'
@@ -430,7 +434,7 @@ export function DataTab() {
 
       {/* Settings Section */}
       <div>
-        <h2 className="text-xl font-semibold mb-4 text-bolt-elements-textPrimary">Settings</h2>
+        <h2 className="text-xl font-semibold mb-4 text-bolt-elements-textPrimary">Réglages</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <Card className="bg-bolt-elements-background-depth-2 transition-colors hover:bg-bolt-elements-background-depth-3">
             <CardHeader>
@@ -442,7 +446,7 @@ export function DataTab() {
                   Tout exporter les paramètres
                 </CardTitle>
               </div>
-              <CardDescription>Export all your settings to a JSON file.</CardDescription>
+              <CardDescription>Exportez tous vos paramètres dans un fichier JSON.</CardDescription>
             </CardHeader>
             <CardFooter>
               <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="w-full">
@@ -502,7 +506,7 @@ export function DataTab() {
                       Export en cours…
                     </>
                   ) : (
-                    'Select Settings'
+                    'Sélectionner des paramètres'
                   )}
                 </Button>
               </motion.div>
@@ -516,10 +520,10 @@ export function DataTab() {
                   <div className="i-ph-upload-duotone w-5 h-5" />
                 </motion.div>
                 <CardTitle className="text-lg group-hover:text-bolt-elements-item-contentAccent transition-colors">
-                  Import Settings
+                  Importer les paramètres
                 </CardTitle>
               </div>
-              <CardDescription>Import settings from a JSON file.</CardDescription>
+              <CardDescription>Importez des paramètres depuis un fichier JSON.</CardDescription>
             </CardHeader>
             <CardFooter>
               <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="w-full">
@@ -536,10 +540,10 @@ export function DataTab() {
                   {isImporting ? (
                     <>
                       <div className="i-ph-spinner-gap-bold animate-spin w-4 h-4 mr-2" />
-                      Importing...
+                      Import en cours…
                     </>
                   ) : (
-                    'Import Settings'
+                    'Importer les paramètres'
                   )}
                 </Button>
               </motion.div>
@@ -550,7 +554,7 @@ export function DataTab() {
 
       {/* API Keys Section */}
       <div>
-        <h2 className="text-xl font-semibold mb-4 text-bolt-elements-textPrimary">API Keys</h2>
+        <h2 className="text-xl font-semibold mb-4 text-bolt-elements-textPrimary">Clés API</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <Card className="bg-bolt-elements-background-depth-2 transition-colors hover:bg-bolt-elements-background-depth-3">
             <CardHeader>
@@ -559,10 +563,10 @@ export function DataTab() {
                   <div className="i-ph-file-text-duotone w-5 h-5" />
                 </motion.div>
                 <CardTitle className="text-lg group-hover:text-bolt-elements-item-contentAccent transition-colors">
-                  Download Template
+                  Télécharger le modèle
                 </CardTitle>
               </div>
-              <CardDescription>Download a template file for your API keys.</CardDescription>
+              <CardDescription>Téléchargez un fichier modèle pour vos clés API.</CardDescription>
             </CardHeader>
             <CardFooter>
               <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="w-full">
@@ -579,10 +583,10 @@ export function DataTab() {
                   {isDownloadingTemplate ? (
                     <>
                       <div className="i-ph-spinner-gap-bold animate-spin w-4 h-4 mr-2" />
-                      Downloading...
+                      Téléchargement…
                     </>
                   ) : (
-                    'Download'
+                    'Télécharger'
                   )}
                 </Button>
               </motion.div>
@@ -596,10 +600,10 @@ export function DataTab() {
                   <div className="i-ph-upload-duotone w-5 h-5" />
                 </motion.div>
                 <CardTitle className="text-lg group-hover:text-bolt-elements-item-contentAccent transition-colors">
-                  Import API Keys
+                  Importer des clés API
                 </CardTitle>
               </div>
-              <CardDescription>Import API keys from a JSON file.</CardDescription>
+              <CardDescription>Importez des clés API depuis un fichier JSON.</CardDescription>
             </CardHeader>
             <CardFooter>
               <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="w-full">
@@ -616,10 +620,10 @@ export function DataTab() {
                   {isImportingKeys ? (
                     <>
                       <div className="i-ph-spinner-gap-bold animate-spin w-4 h-4 mr-2" />
-                      Importing...
+                      Import en cours…
                     </>
                   ) : (
-                    'Import Keys'
+                    'Importer les clés'
                   )}
                 </Button>
               </motion.div>
@@ -630,7 +634,7 @@ export function DataTab() {
 
       {/* Danger Section */}
       <div>
-        <h2 className="text-xl font-semibold mb-4 text-red-500 dark:text-red-400">Danger</h2>
+        <h2 className="text-xl font-semibold mb-4 text-red-500 dark:text-red-400">Zone sensible</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <Card className="border-red-500/30 bg-bolt-elements-background-depth-2">
             <CardHeader>

@@ -39,22 +39,24 @@ export function RepositoryCard({
 
   const formatTimeAgo = () => {
     if (daysSinceUpdate === 0) {
-      return 'Today';
+      return 'Aujourd’hui';
     }
 
     if (daysSinceUpdate === 1) {
-      return '1 day ago';
+      return 'Il y a 1 jour';
     }
 
     if (daysSinceUpdate < 7) {
-      return `${daysSinceUpdate} days ago`;
+      return `Il y a ${daysSinceUpdate} jours`;
     }
 
     if (daysSinceUpdate < 30) {
-      return `${Math.floor(daysSinceUpdate / 7)} weeks ago`;
+      const weeks = Math.floor(daysSinceUpdate / 7);
+
+      return weeks > 1 ? `Il y a ${weeks} semaines` : 'Il y a 1 semaine';
     }
 
-    return new Date(repository.updated_at).toLocaleDateString(undefined, {
+    return new Date(repository.updated_at).toLocaleDateString('fr-FR', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -117,18 +119,18 @@ export function RepositoryCard({
 
   const getHealthTitle = () => {
     if (repository.archived) {
-      return 'Archived';
+      return 'Archivé';
     }
 
     if (daysSinceUpdate < 7) {
-      return 'Very Active';
+      return 'Très actif';
     }
 
     if (daysSinceUpdate < 30 && repository.stargazers_count > 0) {
-      return 'Healthy';
+      return 'En bonne santé';
     }
 
-    return 'Needs Attention';
+    return 'À surveiller';
   };
 
   const health = showHealthScore ? calculateHealthScore() : null;
@@ -210,7 +212,7 @@ export function RepositoryCard({
       {variant === 'detailed' && (
         <div
           className={`absolute top-2 right-2 w-2 h-2 rounded-full ${getHealthIndicatorColor()}`}
-          title={`Repository Health: ${getHealthTitle()}`}
+          title={`Santé du dépôt : ${getHealthTitle()}`}
         />
       )}
 
@@ -227,18 +229,18 @@ export function RepositoryCard({
               {repository.name}
             </h5>
             {repository.fork && (
-              <span title="Forked repository">
+              <span title="Dépôt dupliqué (fork)">
                 <GitFork className="w-3 h-3 text-bolt-elements-textTertiary" />
               </span>
             )}
             {repository.archived && (
-              <span title="Archived repository">
+              <span title="Dépôt archivé">
                 <Archive className="w-3 h-3 text-bolt-elements-textTertiary" />
               </span>
             )}
           </div>
           <div className="flex items-center gap-3 text-xs text-bolt-elements-textSecondary">
-            <span className="flex items-center gap-1" title="Stars">
+            <span className="flex items-center gap-1" title="Étoiles">
               <Star className="w-3.5 h-3.5 text-bolt-elements-icon-warning" />
               {repository.stargazers_count.toLocaleString()}
             </span>
@@ -247,13 +249,13 @@ export function RepositoryCard({
               {repository.forks_count.toLocaleString()}
             </span>
             {showExtendedMetrics && repository.issues_count !== undefined && (
-              <span className="flex items-center gap-1" title="Open Issues">
+              <span className="flex items-center gap-1" title="Tickets ouverts">
                 <Circle className="w-3.5 h-3.5 text-bolt-elements-icon-error" />
                 {repository.issues_count}
               </span>
             )}
             {showExtendedMetrics && repository.pull_requests_count !== undefined && (
-              <span className="flex items-center gap-1" title="Pull Requests">
+              <span className="flex items-center gap-1" title="Pull requests">
                 <GitPullRequest className="w-3.5 h-3.5 text-bolt-elements-icon-success" />
                 {repository.pull_requests_count}
               </span>
@@ -284,7 +286,7 @@ export function RepositoryCard({
               ))}
             {repository.archived && (
               <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400">
-                Archived
+                Archivé
               </span>
             )}
             {repository.fork && (
@@ -297,34 +299,34 @@ export function RepositoryCard({
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3 text-xs text-bolt-elements-textSecondary">
-            <span className="flex items-center gap-1" title="Default Branch">
+            <span className="flex items-center gap-1" title="Branche par défaut">
               <GitBranch className="w-3.5 h-3.5" />
               {repository.default_branch}
             </span>
             {showExtendedMetrics && repository.branches_count && (
-              <span className="flex items-center gap-1" title="Total Branches">
+              <span className="flex items-center gap-1" title="Nombre de branches">
                 <GitFork className="w-3.5 h-3.5" />
                 {repository.branches_count}
               </span>
             )}
             {showExtendedMetrics && repository.contributors_count && (
-              <span className="flex items-center gap-1" title="Contributors">
+              <span className="flex items-center gap-1" title="Contributeurs">
                 <Users className="w-3.5 h-3.5" />
                 {repository.contributors_count}
               </span>
             )}
             {repository.size && (
-              <span className="flex items-center gap-1" title="Size">
+              <span className="flex items-center gap-1" title="Taille">
                 <Database className="w-3.5 h-3.5" />
-                {(repository.size / 1024).toFixed(1)}MB
+                {(repository.size / 1024).toFixed(1)} Mo
               </span>
             )}
-            <span className="flex items-center gap-1" title="Last Updated">
+            <span className="flex items-center gap-1" title="Dernière mise à jour">
               <Clock className="w-3.5 h-3.5" />
               {formatTimeAgo()}
             </span>
             {repository.topics && repository.topics.length > 0 && (
-              <span className="flex items-center gap-1" title={`Topics: ${repository.topics.join(', ')}`}>
+              <span className="flex items-center gap-1" title={`Sujets : ${repository.topics.join(', ')}`}>
                 <Tag className="w-3.5 h-3.5" />
                 {repository.topics.length}
               </span>
@@ -336,7 +338,7 @@ export function RepositoryCard({
             {health && (
               <div
                 className="flex items-center gap-1"
-                title={`Health Score: ${health.percentage}% (${health.score}/${health.maxScore})`}
+                title={`Score de santé : ${health.percentage} % (${health.score}/${health.maxScore})`}
               >
                 <Heart className={`w-3.5 h-3.5 ${health.color}`} />
                 <span className={`text-xs font-medium ${health.color}`}>{health.percentage}%</span>
@@ -351,7 +353,7 @@ export function RepositoryCard({
                 )}
               >
                 <ExternalLink className="w-3.5 h-3.5" />
-                View
+                Voir
               </span>
             )}
           </div>

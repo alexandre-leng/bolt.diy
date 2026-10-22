@@ -27,6 +27,12 @@ const getModifierSymbol = (modifier: string): string => {
   }
 };
 
+const radiusLabels: Record<'sharp' | 'soft' | 'round', string> = {
+  sharp: 'Anguleux',
+  soft: 'Doux',
+  round: 'Arrondi',
+};
+
 export default function SettingsTab() {
   const activeTheme = useStore(themeStore);
   const fieldId = useId();
@@ -142,7 +148,7 @@ export default function SettingsTab() {
             <CardContent className="flex items-center gap-3 !p-4">
               <div className="i-ph-chats-duotone h-6 w-6 shrink-0 text-indigo-500 dark:text-indigo-400" />
               <div>
-                <p className="text-sm text-bolt-elements-textSecondary">Total Chats</p>
+                <p className="text-sm text-bolt-elements-textSecondary">Conversations au total</p>
                 <p className="text-2xl font-semibold text-bolt-elements-textPrimary">{chatStats.totalChats}</p>
               </div>
             </CardContent>
@@ -151,7 +157,7 @@ export default function SettingsTab() {
             <CardContent className="flex items-center gap-3 !p-4">
               <div className="i-ph-chat-text-duotone h-6 w-6 shrink-0 text-pink-500 dark:text-pink-400" />
               <div>
-                <p className="text-sm text-bolt-elements-textSecondary">Total Messages</p>
+                <p className="text-sm text-bolt-elements-textSecondary">Messages au total</p>
                 <p className="text-2xl font-semibold text-bolt-elements-textPrimary">{chatStats.totalMessages}</p>
               </div>
             </CardContent>
@@ -160,7 +166,7 @@ export default function SettingsTab() {
             <CardContent className="flex items-center gap-3 !p-4">
               <div className="i-ph-chart-bar-duotone h-6 w-6 shrink-0 text-green-500 dark:text-green-400" />
               <div>
-                <p className="text-sm text-bolt-elements-textSecondary">Avg. Messages / Chat</p>
+                <p className="text-sm text-bolt-elements-textSecondary">Messages par conversation (moy.)</p>
                 <p className="text-2xl font-semibold text-bolt-elements-textPrimary">
                   {chatStats.averageMessagesPerChat.toFixed(1)}
                 </p>
@@ -248,7 +254,7 @@ export default function SettingsTab() {
                   }),
                 );
 
-                toast.success(`Notifications ${checked ? 'enabled' : 'disabled'}`);
+                toast.success(`Notifications ${checked ? 'activées' : 'désactivées'}`);
               }}
             />
           </div>
@@ -301,14 +307,16 @@ export default function SettingsTab() {
       >
         <div className="flex items-center gap-2 mb-4">
           <div className="i-ph:keyboard-fill w-4 h-4 text-purple-500" />
-          <span className="text-sm font-medium text-bolt-elements-textPrimary">Keyboard Shortcuts</span>
+          <span className="text-sm font-medium text-bolt-elements-textPrimary">Raccourcis clavier</span>
         </div>
 
         <div className="space-y-2">
           <div className="flex items-center justify-between p-2 rounded-lg bg-bolt-elements-background-depth-2">
             <div className="flex flex-col">
               <span className="text-sm text-bolt-elements-textPrimary">Changer de thème</span>
-              <span className="text-xs text-bolt-elements-textSecondary">Switch between light and dark mode</span>
+              <span className="text-xs text-bolt-elements-textSecondary">
+                Basculez entre le thème clair et le thème sombre
+              </span>
             </div>
             <div className="flex items-center gap-1">
               <kbd className="px-2 py-1 text-xs font-semibold text-bolt-elements-textSecondary bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded shadow-sm">
@@ -334,15 +342,17 @@ export default function SettingsTab() {
       >
         <div className="mb-4">
           <h2 id="appearance-heading" className="text-sm font-medium text-bolt-elements-textPrimary">
-            Appearance
+            Apparence
           </h2>
           <p className="mt-1 text-xs text-bolt-elements-textSecondary">
-            Choose a light or dark color palette. Votre choix est enregistré sur cet appareil.
+            Choisissez une palette de couleurs claire ou sombre. Votre choix est enregistré sur cet appareil.
           </p>
         </div>
         {(['light', 'dark'] as const).map((mode) => (
           <div key={mode} className="mb-4 last:mb-0">
-            <h3 className="mb-2 text-xs font-medium capitalize text-bolt-elements-textSecondary">{mode} themes</h3>
+            <h3 className="mb-2 text-xs font-medium capitalize text-bolt-elements-textSecondary">
+              {mode === 'light' ? 'Thèmes clairs' : 'Thèmes sombres'}
+            </h3>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               {THEMES.filter((theme) => theme.mode === mode).map((theme) => {
                 const selected = activeTheme === theme.id || (activeTheme === 'dark' && theme.id === 'dark-dracula');
@@ -367,7 +377,7 @@ export default function SettingsTab() {
                     <span className="min-w-0">
                       <span className="block text-sm font-medium text-bolt-elements-textPrimary">{theme.name}</span>
                       <span className="block text-xs text-bolt-elements-textSecondary">
-                        {selected ? 'Selected' : 'Select theme'}
+                        {selected ? 'Sélectionné' : 'Choisir ce thème'}
                       </span>
                     </span>
                     {selected && (
@@ -393,7 +403,7 @@ export default function SettingsTab() {
             Interface
           </h2>
           <span className="rounded-full bg-purple-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-purple-500">
-            NEW
+            NOUVEAU
           </span>
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -436,15 +446,15 @@ export default function SettingsTab() {
                   onClick={() => setInterfaceOptions({ ...interfaceOptions, cornerRadius: radius })}
                   className={`appearance-none rounded border-0 px-2 py-1 text-[11px] capitalize transition-colors ${interfaceOptions.cornerRadius === radius ? 'bg-purple-500/20 text-purple-500' : 'bg-transparent text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-2'}`}
                 >
-                  {radius}
+                  {radiusLabels[radius]}
                 </button>
               ))}
             </div>
           </div>
           {(
             [
-              ['compactMode', 'Compact mode', 'Tighter spacing in lists'],
-              ['animatedTransitions', 'Animated transitions', 'Smooth theme switching'],
+              ['compactMode', 'Mode compact', 'Espacement réduit dans les listes'],
+              ['animatedTransitions', 'Transitions animées', 'Changement de thème en douceur'],
             ] as const
           ).map(([key, title, description]) => (
             <div

@@ -18,7 +18,7 @@ export const AvatarDropdown = ({ onSelectTab, onOpenDocs }: AvatarDropdownProps)
       <DropdownMenu.Trigger asChild>
         <motion.button
           type="button"
-          aria-label={`Open profile menu for ${profile?.username || 'Guest User'}`}
+          aria-label={`Ouvrir le menu du profil de ${profile?.username || 'Invité'}`}
           className="flex h-12 w-full min-w-0 items-center justify-start gap-3 rounded-lg bg-transparent px-2 text-left transition-colors hover:bg-bolt-elements-background-depth-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
@@ -33,7 +33,7 @@ export const AvatarDropdown = ({ onSelectTab, onOpenDocs }: AvatarDropdownProps)
             />
           </span>
           <span className="min-w-0 truncate text-sm font-medium text-bolt-elements-textPrimary">
-            {profile?.username?.trim() || 'Guest User'}
+            {profile?.username?.trim() || 'Invité'}
           </span>
         </motion.button>
       </DropdownMenu.Trigger>
@@ -60,7 +60,7 @@ export const AvatarDropdown = ({ onSelectTab, onOpenDocs }: AvatarDropdownProps)
             <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-white dark:bg-gray-800 shadow-sm">
               <img
                 src={profile?.avatar || DEFAULT_AVATAR}
-                alt={profile?.username || 'Profile'}
+                alt={profile?.username || 'Profil'}
                 className={classNames('w-full h-full', 'object-cover', 'transform-gpu', 'image-rendering-crisp')}
                 loading="eager"
                 decoding="sync"
@@ -68,7 +68,7 @@ export const AvatarDropdown = ({ onSelectTab, onOpenDocs }: AvatarDropdownProps)
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-medium text-sm text-gray-900 dark:text-white truncate">
-                {profile?.username || 'Guest User'}
+                {profile?.username || 'Invité'}
               </div>
               {profile?.bio && <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{profile.bio}</div>}
             </div>
@@ -87,7 +87,7 @@ export const AvatarDropdown = ({ onSelectTab, onOpenDocs }: AvatarDropdownProps)
             onClick={() => onSelectTab('profile')}
           >
             <div className="i-ph:user-circle w-4 h-4 text-gray-400 group-hover:text-purple-500 dark:group-hover:text-purple-400 transition-colors" />
-            Edit Profile
+            Modifier le profil
           </DropdownMenu.Item>
 
           <DropdownMenu.Item
@@ -103,7 +103,7 @@ export const AvatarDropdown = ({ onSelectTab, onOpenDocs }: AvatarDropdownProps)
             onClick={() => onSelectTab('settings')}
           >
             <div className="i-ph:gear-six w-4 h-4 text-gray-400 group-hover:text-purple-500 dark:group-hover:text-purple-400 transition-colors" />
-            Settings
+            Réglages
           </DropdownMenu.Item>
 
           <div className="my-1 border-t border-gray-200/50 dark:border-gray-800/50" />
@@ -123,7 +123,7 @@ export const AvatarDropdown = ({ onSelectTab, onOpenDocs }: AvatarDropdownProps)
             }
           >
             <div className="i-ph:bug w-4 h-4 text-gray-400 group-hover:text-purple-500 dark:group-hover:text-purple-400 transition-colors" />
-            Report Bug
+            Signaler un bug
           </DropdownMenu.Item>
 
           <DropdownMenu.Item
@@ -146,7 +146,7 @@ export const AvatarDropdown = ({ onSelectTab, onOpenDocs }: AvatarDropdownProps)
             }}
           >
             <div className="i-ph:download w-4 h-4 text-gray-400 group-hover:text-purple-500 dark:group-hover:text-purple-400 transition-colors" />
-            Download Debug Log
+            Télécharger le journal de débogage
           </DropdownMenu.Item>
 
           <DropdownMenu.Item
@@ -162,7 +162,7 @@ export const AvatarDropdown = ({ onSelectTab, onOpenDocs }: AvatarDropdownProps)
             onClick={onOpenDocs}
           >
             <div className="i-ph:question w-4 h-4 text-gray-400 group-hover:text-purple-500 dark:group-hover:text-purple-400 transition-colors" />
-            Help & Documentation
+            Aide et documentation
           </DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>

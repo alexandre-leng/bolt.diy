@@ -8,7 +8,7 @@ interface LoadingStateProps {
   className?: string;
 }
 
-export function LoadingState({ message = 'Loading...', size = 'md', className = '' }: LoadingStateProps) {
+export function LoadingState({ message = 'Chargement…', size = 'md', className = '' }: LoadingStateProps) {
   const sizeClasses = {
     sm: 'w-4 h-4',
     md: 'w-6 h-6',
@@ -44,10 +44,10 @@ interface ErrorStateProps {
 }
 
 export function ErrorState({
-  title = 'Error',
+  title = 'Erreur',
   message,
   onRetry,
-  retryLabel = 'Try Again',
+  retryLabel = 'Réessayer',
   size = 'md',
   className = '',
 }: ErrorStateProps) {
@@ -90,10 +90,10 @@ interface SuccessStateProps {
 }
 
 export function SuccessState({
-  title = 'Success',
+  title = 'Succès',
   message,
   onAction,
-  actionLabel = 'Continue',
+  actionLabel = 'Continuer',
   size = 'md',
   className = '',
 }: SuccessStateProps) {
@@ -135,10 +135,10 @@ export function GitHubConnectionRequired({ onConnect, className = '' }: GitHubCo
   return (
     <div className={classNames('flex flex-col items-center justify-center py-12 text-center', className)}>
       <GitBranch className="w-12 h-12 text-bolt-elements-textTertiary mb-4" />
-      <h3 className="text-lg font-medium text-bolt-elements-textPrimary mb-2">GitHub Connection Required</h3>
+      <h3 className="text-lg font-medium text-bolt-elements-textPrimary mb-2">Connexion GitHub requise</h3>
       <p className="text-sm text-bolt-elements-textSecondary mb-6 max-w-md">
-        Please connect your GitHub account to access this feature. You'll be able to browse repositories, push code, and
-        manage your GitHub integration.
+        Connectez votre compte GitHub pour accéder à cette fonctionnalité. Vous pourrez parcourir vos dépôts, pousser du
+        code et gérer votre intégration GitHub.
       </p>
       {onConnect && (
         <button
@@ -146,7 +146,7 @@ export function GitHubConnectionRequired({ onConnect, className = '' }: GitHubCo
           className="px-6 py-3 bg-bolt-elements-item-contentAccent text-white rounded-lg hover:bg-bolt-elements-item-contentAccent/90 transition-colors flex items-center gap-2"
         >
           <GitBranch className="w-4 h-4" />
-          Connect GitHub
+          Connecter GitHub
         </button>
       )}
     </div>
@@ -168,7 +168,7 @@ export function InformationState({
   message,
   icon = Info,
   onAction,
-  actionLabel = 'Got it',
+  actionLabel = 'Compris',
   size = 'md',
   className = '',
 }: InformationStateProps) {
@@ -200,6 +200,12 @@ export function InformationState({
     </div>
   );
 }
+
+const STATUS_LABELS: Record<'success' | 'error' | 'testing', string> = {
+  success: 'Succès',
+  error: 'Erreur',
+  testing: 'Test en cours…',
+};
 
 interface ConnectionTestIndicatorProps {
   status: 'success' | 'error' | 'testing' | null;
@@ -256,9 +262,11 @@ export function ConnectionTestIndicator({ status, message, timestamp, className 
     <div className={classNames(`p-4 rounded-lg border ${getStatusColor()}`, className)}>
       <div className="flex items-center gap-2">
         {getStatusIcon()}
-        <span className={classNames('text-sm font-medium', getStatusTextColor())}>{message || status}</span>
+        <span className={classNames('text-sm font-medium', getStatusTextColor())}>
+          {message || STATUS_LABELS[status]}
+        </span>
       </div>
-      {timestamp && <p className="text-xs text-gray-500 mt-1">{new Date(timestamp).toLocaleString()}</p>}
+      {timestamp && <p className="text-xs text-gray-500 mt-1">{new Date(timestamp).toLocaleString('fr-FR')}</p>}
     </div>
   );
 }

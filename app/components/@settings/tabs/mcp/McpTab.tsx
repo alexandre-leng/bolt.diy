@@ -44,7 +44,7 @@ export default function McpTab() {
   useEffect(() => {
     if (!isInitialized) {
       initialize().catch((err) => {
-        setError(`Failed to initialize MCP settings: ${err instanceof Error ? err.message : String(err)}`);
+        setError(`Impossible d’initialiser les réglages MCP : ${err instanceof Error ? err.message : String(err)}`);
         toast.error('Impossible de charger la configuration MCP');
       });
     }
@@ -61,7 +61,7 @@ export default function McpTab() {
       setError(null);
       return JSON.parse(mcpConfigText) as MCPConfig;
     } catch (e) {
-      setError(`Invalid JSON format: ${e instanceof Error ? e.message : String(e)}`);
+      setError(`Format JSON invalide : ${e instanceof Error ? e.message : String(e)}`);
       return null;
     }
   }, [mcpConfigText]);
@@ -112,7 +112,7 @@ export default function McpTab() {
     try {
       await checkServersAvailabilities();
     } catch (e) {
-      setError(`Failed to check server availability: ${e instanceof Error ? e.message : String(e)}`);
+      setError(`Impossible de vérifier la disponibilité des serveurs : ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setIsCheckingServers(false);
     }
@@ -128,7 +128,7 @@ export default function McpTab() {
     <div className="max-w-2xl mx-auto space-y-6">
       <section aria-labelledby="server-status-heading">
         <div className="flex justify-between items-center mb-3">
-          <h2 className="text-base font-medium text-bolt-elements-textPrimary">MCP Servers Configured</h2>{' '}
+          <h2 className="text-base font-medium text-bolt-elements-textPrimary">Serveurs MCP configurés</h2>{' '}
           <button
             onClick={checkServerAvailability}
             disabled={isCheckingServers || !parsedConfig || serverEntries.length === 0}
@@ -146,7 +146,7 @@ export default function McpTab() {
             ) : (
               <div className="i-ph:arrow-counter-clockwise w-3 h-3" />
             )}
-            Check availability
+            Vérifier la disponibilité
           </button>
         </div>
         <McpServerList
@@ -182,12 +182,12 @@ export default function McpTab() {
           <div>{error && <p className="mt-2 mb-2 text-sm text-bolt-elements-icon-error">{error}</p>}</div>
           <div>
             <label htmlFor="max-llm-steps" className="block text-sm text-bolt-elements-textSecondary mb-2">
-              Maximum number of sequential LLM calls (steps)
+              Nombre maximal d’appels LLM séquentiels (étapes)
             </label>
             <input
               id="max-llm-steps"
               type="number"
-              placeholder="Maximum number of sequential LLM calls"
+              placeholder="Nombre maximal d’appels LLM séquentiels"
               min="1"
               max="20"
               value={maxLLMSteps}
@@ -196,14 +196,14 @@ export default function McpTab() {
             />
           </div>
           <div className="mt-2 text-sm text-bolt-elements-textSecondary">
-            The MCP configuration format is identical to the one used in Claude Desktop.
+            Le format de configuration MCP est identique à celui utilisé dans Claude Desktop.
             <a
               href="https://modelcontextprotocol.io/examples"
               target="_blank"
               rel="noopener noreferrer"
               className="text-bolt-elements-link hover:underline inline-flex items-center gap-1"
             >
-              View example servers
+              Voir des exemples de serveurs
               <div className="i-ph:arrow-square-out w-4 h-4" />
             </a>
           </div>
@@ -217,7 +217,7 @@ export default function McpTab() {
                     bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary
                     hover:bg-bolt-elements-background-depth-3"
         >
-          Load Example
+          Charger l’exemple
         </button>
 
         <div className="flex gap-2">
@@ -233,7 +233,7 @@ export default function McpTab() {
             )}
           >
             <div className="i-ph:floppy-disk w-4 h-4" />
-            {isSaving ? 'Saving...' : 'Save Configuration'}
+            {isSaving ? 'Enregistrement…' : 'Enregistrer la configuration'}
           </button>
         </div>
       </div>

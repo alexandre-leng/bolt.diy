@@ -34,9 +34,9 @@ export function ConnectorActionPermissions({ connector, actions }: ConnectorActi
   return (
     <section className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-5">
       <div className="mb-4">
-        <h3 className="text-sm font-semibold text-bolt-elements-textPrimary">Action permissions</h3>
+        <h3 className="text-sm font-semibold text-bolt-elements-textPrimary">Autorisations des actions</h3>
         <p className="mt-1 text-xs text-bolt-elements-textSecondary">
-          Choose which {connector[0].toUpperCase() + connector.slice(1)} actions Bolt can access.
+          Choisissez les actions {connector[0].toUpperCase() + connector.slice(1)} auxquelles Bolt accède.
         </p>
       </div>
       <div className="space-y-2">
@@ -55,7 +55,7 @@ export function ConnectorActionPermissions({ connector, actions }: ConnectorActi
               </div>
               <Switch
                 checked={enabled}
-                aria-label={`${enabled ? 'Disable' : 'Enable'} ${action.name}`}
+                aria-label={`${enabled ? 'Désactiver' : 'Activer'} ${action.name}`}
                 onCheckedChange={(checked) => setToolEnabled(key, checked)}
                 disabled={!isInitialized}
                 className="shrink-0"

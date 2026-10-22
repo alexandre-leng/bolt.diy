@@ -442,7 +442,7 @@ export function AdminKeysTab() {
         <fieldset className="mt-3">
           <legend className="text-[11px] font-medium text-bolt-elements-textSecondary">
             Fournisseurs de l'instance ({policyDraft.allowedProviders.length}
-            {policyDraft.allowedProviders.length === 0 ? ' — aucune limite enregistrée' : ' activé(s)'})
+            {policyDraft.allowedProviders.length === 0 ? ', aucune limite enregistrée' : ' activé(s)'})
           </legend>
           <div className="mt-1 flex flex-wrap gap-2">
             <button

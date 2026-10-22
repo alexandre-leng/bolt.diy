@@ -43,6 +43,8 @@ const DOM_TESTS = [
   'app/components/chat/ScreenshotToCode.design.spec.tsx',
   'app/components/chat/ScreenshotToCode.viewer.spec.tsx',
   'app/components/ui/CloseButton.aria.spec.tsx',
+  'app/components/ui/ThemeSwitch.spec.tsx',
+  'app/lib/toastify.aria.spec.tsx',
   'app/components/ui/Dialog.audit.spec.tsx',
   'app/components/ui/useConfirmDialog.spec.tsx',
   'app/components/@settings/tabs/providers/local/LocalProvidersTab.confirm.spec.tsx',

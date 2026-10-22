@@ -66,7 +66,7 @@ export default function GitHubTab() {
     if (!connection?.user) {
       setConnectionTest({
         status: 'error',
-        message: 'No connection established',
+        message: 'Aucune connexion établie',
         timestamp: Date.now(),
       });
       return;
@@ -74,7 +74,7 @@ export default function GitHubTab() {
 
     setConnectionTest({
       status: 'testing',
-      message: 'Testing connection...',
+      message: 'Test de la connexion…',
     });
 
     try {
@@ -83,20 +83,20 @@ export default function GitHubTab() {
       if (isValid) {
         setConnectionTest({
           status: 'success',
-          message: `Connected successfully as ${connection.user.login}`,
+          message: `Connecté avec succès en tant que ${connection.user.login}`,
           timestamp: Date.now(),
         });
       } else {
         setConnectionTest({
           status: 'error',
-          message: 'Connection test failed',
+          message: 'Échec du test de connexion',
           timestamp: Date.now(),
         });
       }
     } catch (error) {
       setConnectionTest({
         status: 'error',
-        message: `Connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        message: `Échec de la connexion : ${error instanceof Error ? error.message : 'Erreur inconnue'}`,
         timestamp: Date.now(),
       });
     }
@@ -108,9 +108,9 @@ export default function GitHubTab() {
       <div className="space-y-6">
         <div className="flex items-center gap-2">
           <GithubLogo />
-          <h2 className="text-lg font-medium text-bolt-elements-textPrimary">GitHub Integration</h2>
+          <h2 className="text-lg font-medium text-bolt-elements-textPrimary">Intégration GitHub</h2>
         </div>
-        <LoadingState message="Checking GitHub connection..." />
+        <LoadingState message="Vérification de la connexion GitHub…" />
       </div>
     );
   }
@@ -121,13 +121,13 @@ export default function GitHubTab() {
       <div className="space-y-6">
         <div className="flex items-center gap-2">
           <GithubLogo />
-          <h2 className="text-lg font-medium text-bolt-elements-textPrimary">GitHub Integration</h2>
+          <h2 className="text-lg font-medium text-bolt-elements-textPrimary">Intégration GitHub</h2>
         </div>
         <ErrorState
-          title="Connection Error"
+          title="Erreur de connexion"
           message={error}
           onRetry={() => window.location.reload()}
-          retryLabel="Reload Page"
+          retryLabel="Recharger la page"
         />
       </div>
     );
@@ -139,11 +139,11 @@ export default function GitHubTab() {
       <div className="space-y-6">
         <div className="flex items-center gap-2">
           <GithubLogo />
-          <h2 className="text-lg font-medium text-bolt-elements-textPrimary">GitHub Integration</h2>
+          <h2 className="text-lg font-medium text-bolt-elements-textPrimary">Intégration GitHub</h2>
         </div>
         <p className="text-sm text-bolt-elements-textSecondary">
-          Connect your GitHub account to enable advanced repository management features, statistics, and seamless
-          integration.
+          Connectez votre compte GitHub pour activer la gestion avancée des dépôts, les statistiques et une intégration
+          fluide.
         </p>
         <GitHubConnection connectionTest={connectionTest} onTestConnection={handleTestConnection} />
         <ConnectorActionPermissions
@@ -151,10 +151,14 @@ export default function GitHubTab() {
           actions={[
             {
               id: 'read_account',
-              name: 'Read account profile',
-              description: 'Show the connected GitHub account profile.',
+              name: 'Lire le profil du compte',
+              description: 'Afficher le profil du compte GitHub connecté.',
             },
-            { id: 'read_repositories', name: 'Read repositories', description: 'Fetch repository and activity data.' },
+            {
+              id: 'read_repositories',
+              name: 'Lire les dépôts',
+              description: 'Récupérer les données des dépôts et de l’activité.',
+            },
           ]}
         />
       </div>
@@ -174,7 +178,7 @@ export default function GitHubTab() {
           <div className="flex items-center gap-2">
             <GithubLogo />
             <h2 className="text-lg font-medium text-bolt-elements-textPrimary dark:text-bolt-elements-textPrimary">
-              GitHub Integration
+              Intégration GitHub
             </h2>
           </div>
           <div className="flex items-center gap-2">
@@ -190,7 +194,7 @@ export default function GitHubTab() {
         </motion.div>
 
         <p className="text-sm text-bolt-elements-textSecondary dark:text-bolt-elements-textSecondary">
-          Manage your GitHub integration with advanced repository features and comprehensive statistics
+          Gérez votre intégration GitHub avec des fonctions avancées pour les dépôts et des statistiques complètes
         </p>
 
         {/* Connection Test Results */}
@@ -209,10 +213,14 @@ export default function GitHubTab() {
           actions={[
             {
               id: 'read_account',
-              name: 'Read account profile',
-              description: 'Show the connected GitHub account profile.',
+              name: 'Lire le profil du compte',
+              description: 'Afficher le profil du compte GitHub connecté.',
             },
-            { id: 'read_repositories', name: 'Read repositories', description: 'Fetch repository and activity data.' },
+            {
+              id: 'read_repositories',
+              name: 'Lire les dépôts',
+              description: 'Récupérer les données des dépôts et de l’activité.',
+            },
           ]}
         />
 
@@ -237,7 +245,7 @@ export default function GitHubTab() {
                   <div className="flex items-center gap-2">
                     <div className="i-ph:folder w-4 h-4 text-bolt-elements-item-contentAccent" />
                     <span className="text-sm font-medium text-bolt-elements-textPrimary">
-                      All Repositories ({stats.repos.length})
+                      Tous les dépôts ({stats.repos.length})
                     </span>
                   </div>
                   <ChevronDown
@@ -271,7 +279,7 @@ export default function GitHubTab() {
                         onClick={() => setIsReposExpanded(true)}
                         className="text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary"
                       >
-                        Show {stats.repos.length - 12} more repositories
+                        Afficher {stats.repos.length - 12} dépôts de plus
                       </Button>
                     </div>
                   )}
@@ -284,10 +292,10 @@ export default function GitHubTab() {
         {/* Stats Error State */}
         {statsError && !stats && (
           <ErrorState
-            title="Failed to Load Statistics"
+            title="Échec du chargement des statistiques"
             message={statsError}
             onRetry={() => window.location.reload()}
-            retryLabel="Retry"
+            retryLabel="Réessayer"
           />
         )}
 
@@ -295,13 +303,18 @@ export default function GitHubTab() {
         {isStatsLoading && !stats && (
           <GitHubProgressiveLoader
             isLoading={isStatsLoading}
-            loadingMessage="Loading GitHub statistics..."
+            loadingMessage="Chargement des statistiques GitHub…"
             showProgress={true}
             progressSteps={[
-              { key: 'user', label: 'Fetching user info', completed: !!connection?.user, loading: !connection?.user },
-              { key: 'repos', label: 'Loading repositories', completed: false, loading: true },
-              { key: 'stats', label: 'Calculating statistics', completed: false },
-              { key: 'cache', label: 'Updating cache', completed: false },
+              {
+                key: 'user',
+                label: 'Récupération des infos utilisateur',
+                completed: !!connection?.user,
+                loading: !connection?.user,
+              },
+              { key: 'repos', label: 'Chargement des dépôts', completed: false, loading: true },
+              { key: 'stats', label: 'Calcul des statistiques', completed: false },
+              { key: 'cache', label: 'Mise à jour du cache', completed: false },
             ]}
           >
             <div />

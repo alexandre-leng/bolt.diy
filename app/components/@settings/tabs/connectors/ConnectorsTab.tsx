@@ -89,7 +89,7 @@ const CONNECTORS: Connector[] = [
   {
     id: 'gitlab',
     name: 'GitLab',
-    description: "Intégrez GitLab pour l'hébergement du code et les pipelines CI/CD",
+    description: 'Intégrez GitLab pour l’hébergement du code et les pipelines CI/CD',
     icon: <GitLabIcon />,
     category: 'source-control',
   },
@@ -110,7 +110,7 @@ const CONNECTORS: Connector[] = [
   {
     id: 'supabase',
     name: 'Supabase',
-    description: "Connectez Supabase pour la base de données, l'authentification et le stockage",
+    description: 'Connectez Supabase pour la base de données, l’authentification et le stockage',
     icon: <SupabaseIcon />,
     category: 'database',
   },
@@ -126,7 +126,7 @@ const CONNECTORS: Connector[] = [
 const CATEGORY_LABELS = {
   'source-control': 'Contrôle de version',
   deployment: 'Déploiement',
-  database: 'Base de données & backend',
+  database: 'Base de données et backend',
   'browser-automation': 'Navigation automatisée',
 };
 

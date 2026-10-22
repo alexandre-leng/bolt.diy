@@ -32,8 +32,8 @@ export function GitHubProgressiveLoader({
   onRefresh,
   children,
   className = '',
-  loadingMessage = 'Loading...',
-  refreshingMessage = 'Refreshing...',
+  loadingMessage = 'Chargement…',
+  refreshingMessage = 'Actualisation…',
   showProgress = false,
   progressSteps = [],
 }: ProgressiveLoaderProps) {
@@ -87,7 +87,7 @@ export function GitHubProgressiveLoader({
                 onClick={handleToggleExpanded}
                 className="flex items-center justify-center gap-2 text-xs text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
               >
-                <span>Show details</span>
+                <span>Afficher les détails</span>
                 <ChevronDown
                   className={classNames(
                     'w-3 h-3 transform transition-transform duration-200',
@@ -151,7 +151,7 @@ export function GitHubProgressiveLoader({
         </div>
 
         <div>
-          <h3 className="text-sm font-medium text-bolt-elements-textPrimary mb-1">Failed to Load</h3>
+          <h3 className="text-sm font-medium text-bolt-elements-textPrimary mb-1">Échec du chargement</h3>
           <p className="text-xs text-bolt-elements-textSecondary mb-4 max-w-sm">{error}</p>
         </div>
 
@@ -159,13 +159,13 @@ export function GitHubProgressiveLoader({
           {onRetry && (
             <Button variant="outline" size="sm" onClick={onRetry} className="text-xs">
               <RefreshCw className="w-3 h-3 mr-1" />
-              Try Again
+              Réessayer
             </Button>
           )}
           {onRefresh && (
             <Button variant="outline" size="sm" onClick={onRefresh} className="text-xs">
               <RefreshCw className="w-3 h-3 mr-1" />
-              Refresh
+              Actualiser
             </Button>
           )}
         </div>

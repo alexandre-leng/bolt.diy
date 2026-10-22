@@ -16,14 +16,14 @@ interface ErrorStateProps {
 
 export function ErrorState({
   error,
-  title = 'Something went wrong',
+  title = 'Une erreur est survenue',
   onRetry,
   onDismiss,
-  retryLabel = 'Try again',
+  retryLabel = 'Réessayer',
   className,
   showDetails = false,
 }: ErrorStateProps) {
-  const errorMessage = typeof error === 'string' ? error : error?.message || 'An unknown error occurred';
+  const errorMessage = typeof error === 'string' ? error : error?.message || 'Une erreur inconnue est survenue';
   const isServiceError = typeof error === 'object' && error !== null;
 
   return (
@@ -44,7 +44,7 @@ export function ErrorState({
           {showDetails && isServiceError && error.details && (
             <details className="mt-3">
               <summary className="text-xs text-red-600 dark:text-red-400 cursor-pointer hover:underline">
-                Technical details
+                Détails techniques
               </summary>
               <pre className="mt-2 text-xs text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 p-2 rounded overflow-auto">
                 {JSON.stringify(error.details, null, 2)}
@@ -71,7 +71,7 @@ export function ErrorState({
                 size="sm"
                 className="text-red-700 border-red-300 hover:bg-red-100 dark:text-red-300 dark:border-red-600 dark:hover:bg-red-900/30"
               >
-                Dismiss
+                Fermer
               </Button>
             )}
           </div>
@@ -92,10 +92,10 @@ export function ConnectionError({ service, error, onRetryConnection, onClearErro
   return (
     <ErrorState
       error={error}
-      title={`Failed to connect to ${service}`}
+      title={`Connexion à ${service} impossible`}
       onRetry={onRetryConnection}
       onDismiss={onClearError}
-      retryLabel="Retry connection"
+      retryLabel="Réessayer la connexion"
       showDetails={true}
     />
   );

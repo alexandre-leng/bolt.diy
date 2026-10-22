@@ -16,28 +16,28 @@ function HealthStatusBadge({ status, responseTime, className }: HealthStatusBadg
           color: 'text-green-500',
           bgColor: 'bg-green-500/10 border-green-500/20',
           Icon: CheckCircle,
-          label: 'Healthy',
+          label: 'Opérationnel',
         };
       case 'unhealthy':
         return {
           color: 'text-red-500',
           bgColor: 'bg-red-500/10 border-red-500/20',
           Icon: XCircle,
-          label: 'Unhealthy',
+          label: 'Indisponible',
         };
       case 'checking':
         return {
           color: 'text-blue-500',
           bgColor: 'bg-blue-500/10 border-blue-500/20',
           Icon: Loader2,
-          label: 'Checking',
+          label: 'Vérification…',
         };
       default:
         return {
           color: 'text-bolt-elements-textTertiary',
           bgColor: 'bg-bolt-elements-background-depth-3 border-bolt-elements-borderColor',
           Icon: AlertCircle,
-          label: 'Unknown',
+          label: 'Inconnu',
         };
     }
   };

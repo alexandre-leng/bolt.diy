@@ -13,15 +13,15 @@ export function StatsDisplay({ stats, onRefresh, isRefreshing }: StatsDisplayPro
     <div className="space-y-4">
       {/* Repository Stats */}
       <div>
-        <h5 className="text-sm font-medium text-bolt-elements-textPrimary mb-2">Repository Stats</h5>
+        <h5 className="text-sm font-medium text-bolt-elements-textPrimary mb-2">Statistiques des dépôts</h5>
         <div className="grid grid-cols-2 gap-4">
           {[
             {
-              label: 'Public Repos',
+              label: 'Dépôts publics',
               value: stats.publicProjects,
             },
             {
-              label: 'Private Repos',
+              label: 'Dépôts privés',
               value: stats.privateProjects,
             },
           ].map((stat, index) => (
@@ -38,11 +38,11 @@ export function StatsDisplay({ stats, onRefresh, isRefreshing }: StatsDisplayPro
 
       {/* Contribution Stats */}
       <div>
-        <h5 className="text-sm font-medium text-bolt-elements-textPrimary mb-2">Contribution Stats</h5>
+        <h5 className="text-sm font-medium text-bolt-elements-textPrimary mb-2">Statistiques de contribution</h5>
         <div className="grid grid-cols-3 gap-4">
           {[
             {
-              label: 'Stars',
+              label: 'Étoiles',
               value: stats.stars || 0,
               icon: 'i-ph:star',
               iconColor: 'text-bolt-elements-icon-warning',
@@ -54,7 +54,7 @@ export function StatsDisplay({ stats, onRefresh, isRefreshing }: StatsDisplayPro
               iconColor: 'text-bolt-elements-icon-info',
             },
             {
-              label: 'Followers',
+              label: 'Abonnés',
               value: stats.followers || 0,
               icon: 'i-ph:users',
               iconColor: 'text-bolt-elements-icon-success',
@@ -77,11 +77,11 @@ export function StatsDisplay({ stats, onRefresh, isRefreshing }: StatsDisplayPro
       <div className="pt-2 border-t border-bolt-elements-borderColor">
         <div className="flex items-center justify-between">
           <span className="text-xs text-bolt-elements-textSecondary">
-            Last updated: {new Date(stats.lastUpdated).toLocaleString()}
+            Dernière mise à jour : {new Date(stats.lastUpdated).toLocaleString('fr-FR')}
           </span>
           {onRefresh && (
             <Button onClick={onRefresh} disabled={isRefreshing} variant="outline" size="sm" className="text-xs">
-              {isRefreshing ? 'Refreshing...' : 'Refresh'}
+              {isRefreshing ? 'Actualisation…' : 'Actualiser'}
             </Button>
           )}
         </div>

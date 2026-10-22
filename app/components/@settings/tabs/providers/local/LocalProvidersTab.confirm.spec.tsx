@@ -56,7 +56,7 @@ afterEach(() => {
 async function openDeleteConfirmation() {
   render(<LocalProvidersTab />);
 
-  const deleteButton = await screen.findByRole('button', { name: /delete/i });
+  const deleteButton = await screen.findByRole('button', { name: /supprimer/i });
   deleteButton.focus();
   fireEvent.click(deleteButton);
 

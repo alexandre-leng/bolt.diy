@@ -160,7 +160,7 @@ export const Menu = () => {
 
   /*
    * Sidebar visibility lives in a shared store (not useState) so the toggle
-   * icon in the header — a sibling component — can drive it. Touch devices
+   * icon in the header : a sibling component : can drive it. Touch devices
    * start collapsed: on a phone the 340px panel would cover the whole chat.
    */
   const open = useStore(sidebarOpenStore);
@@ -199,7 +199,7 @@ export const Menu = () => {
     /*
      * Local cache first so the list renders immediately, then reconcile with bolt-history:
      * a conversation started on another device exists only on the server. Failures are
-     * silent by design — an unreachable server must not empty a list the user can see.
+     * silent by design : an unreachable server must not empty a list the user can see.
      */
     setSyncState('syncing');
     setPendingPulls(pendingPullsRef.current);
@@ -207,7 +207,7 @@ export const Menu = () => {
     getAll(database)
       .then((all) => {
         /*
-         * The list shows the presentable chats; the migration gets every cached id — see
+         * The list shows the presentable chats; the migration gets every cached id : see
          * `syncableChatIds` for why those two sets must not be the same.
          */
         setList(listableChats(all));
@@ -269,7 +269,7 @@ export const Menu = () => {
        * Order matters. This function used to only wipe IndexedDB, and the very next
        * `loadEntries()` called `migrateLocalHistoryToServer`, which still saw the chat on
        * the server, counted it as "pulled" and wrote it straight back into the local
-       * cache — the conversation reappeared a second after being deleted. The server is
+       * cache : the conversation reappeared a second after being deleted. The server is
        * the source of truth across devices, so it has to be purged for the deletion to
        * stick. Purging the server first also means a failure there aborts before the
        * local copy is gone, so the user never ends up with a half-deleted chat.
@@ -515,8 +515,8 @@ export const Menu = () => {
   }, [loadEntries]);
 
   /*
-   * `loadEntries` returns early while `db` is still undefined — the database opens
-   * asynchronously — so the mount-time call above usually does nothing, and nothing ever
+   * `loadEntries` returns early while `db` is still undefined : the database opens
+   * asynchronously : so the mount-time call above usually does nothing, and nothing ever
    * retried it: the sync simply never ran, so local conversations never reached the server
    * and server conversations never appeared. Re-run when the database becomes available.
    */
@@ -771,7 +771,7 @@ export const Menu = () => {
               {syncState === 'offline' && (
                 <span
                   data-testid="history-sync-offline"
-                  title="Historique local uniquement — le serveur est injoignable"
+                  title="Historique local uniquement : le serveur est injoignable"
                   className="flex items-center gap-1 rounded-full border border-amber-500/40 px-2 py-0.5 text-[11px] text-amber-600 dark:text-amber-400"
                 >
                   <span className="i-ph:cloud-slash text-xs" aria-hidden="true" />
@@ -941,7 +941,7 @@ export const Menu = () => {
                            *
                            * The selection can shrink while the dialog is open (a chat is deleted
                            * elsewhere, or a sync removes it), which would make the confirm button
-                           * delete fewer — or, as here, the user deselects an item after opening
+                           * delete fewer : or, as here, the user deselects an item after opening
                            * the dialog and the count on screen no longer matches what gets
                            * deleted. Deriving the ids from `dialogContent.items` makes the action
                            * match the confirmation the user read.

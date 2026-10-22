@@ -49,9 +49,7 @@ export function RepositoryList({ repositories, onClone, onRefresh, isRefreshing 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-medium text-bolt-elements-textPrimary">
-          Repositories ({filteredRepositories.length})
-        </h4>
+        <h4 className="text-sm font-medium text-bolt-elements-textPrimary">Dépôts ({filteredRepositories.length})</h4>
         {onRefresh && (
           <Button
             onClick={onRefresh}
@@ -65,7 +63,7 @@ export function RepositoryList({ repositories, onClone, onRefresh, isRefreshing 
             ) : (
               <div className="i-ph:arrows-clockwise w-4 h-4" />
             )}
-            Refresh
+            Actualiser
           </Button>
         )}
       </div>
@@ -74,7 +72,7 @@ export function RepositoryList({ repositories, onClone, onRefresh, isRefreshing 
       <div className="relative">
         <input
           type="text"
-          placeholder="Search repositories..."
+          placeholder="Rechercher des dépôts…"
           value={searchQuery}
           onChange={(e) => handleSearch(e.target.value)}
           className="w-full px-4 py-2 pl-10 rounded-lg bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary focus:outline-none focus:ring-1 focus:ring-bolt-elements-borderColorActive"
@@ -92,7 +90,7 @@ export function RepositoryList({ repositories, onClone, onRefresh, isRefreshing 
       <div className="space-y-4">
         {filteredRepositories.length === 0 ? (
           <div className="text-center py-8 text-bolt-elements-textSecondary">
-            {searchQuery ? 'No repositories found matching your search.' : 'No repositories available.'}
+            {searchQuery ? 'Aucun dépôt ne correspond à votre recherche.' : 'Aucun dépôt disponible.'}
           </div>
         ) : (
           <>
@@ -106,8 +104,9 @@ export function RepositoryList({ repositories, onClone, onRefresh, isRefreshing 
             {totalPages > 1 && (
               <div className="flex items-center justify-between pt-4 border-t border-bolt-elements-borderColor">
                 <div className="text-sm text-bolt-elements-textSecondary">
-                  Showing {Math.min(startIndex + 1, filteredRepositories.length)} to{' '}
-                  {Math.min(endIndex, filteredRepositories.length)} of {filteredRepositories.length} repositories
+                  Affichage de {Math.min(startIndex + 1, filteredRepositories.length)} à{' '}
+                  {Math.min(endIndex, filteredRepositories.length)} sur {filteredRepositories.length}{' '}
+                  {filteredRepositories.length > 1 ? 'dépôts' : 'dépôt'}
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
@@ -117,10 +116,10 @@ export function RepositoryList({ repositories, onClone, onRefresh, isRefreshing 
                     size="sm"
                   >
                     <div className="i-ph:caret-left w-4 h-4" />
-                    Previous
+                    Précédent
                   </Button>
                   <span className="text-sm text-bolt-elements-textSecondary px-3">
-                    {currentPage} of {totalPages}
+                    {currentPage} sur {totalPages}
                   </span>
                   <Button
                     onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
@@ -128,7 +127,7 @@ export function RepositoryList({ repositories, onClone, onRefresh, isRefreshing 
                     variant="outline"
                     size="sm"
                   >
-                    Next
+                    Suivant
                     <div className="i-ph:caret-right w-4 h-4" />
                   </Button>
                 </div>

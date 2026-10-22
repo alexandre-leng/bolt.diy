@@ -211,8 +211,8 @@ export default function LlmErrorAlert({ alert, clearAlert, onContinue }: Props) 
                 <button
                   ref={copyButtonRef}
                   type="button"
-                  title="Copy error details"
-                  aria-label="Copy error details"
+                  title="Copier le détail de l’erreur"
+                  aria-label="Copier le détail de l’erreur"
                   className={classNames(
                     'flex items-center gap-1.5 px-2 py-1.5 rounded-md text-sm font-medium',
                     'bg-bolt-elements-button-secondary-background',

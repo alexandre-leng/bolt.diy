@@ -22,7 +22,7 @@ export const ThemeSwitch = memo(({ className }: ThemeSwitchProps) => {
         className={className}
         icon={getThemeMode(theme) === 'dark' ? 'i-ph-sun-dim-duotone' : 'i-ph-moon-stars-duotone'}
         size="xl"
-        title="Toggle Theme"
+        title="Changer de thème"
         onClick={toggleTheme}
       />
     )

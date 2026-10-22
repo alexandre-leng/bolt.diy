@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import React, { useId, useState } from 'react';
 import { Button } from '~/components/ui/Button';
+import { SecretInput } from '~/components/ui/SecretInput';
 import { useGitLabConnection } from '~/lib/hooks';
 import { toast } from '~/lib/toastify';
 import { classNames } from '~/utils/classNames';
@@ -132,9 +133,8 @@ export default function GitLabConnection({
               <label htmlFor={tokenId} className="block text-sm text-bolt-elements-textSecondary mb-2">
                 Jeton d’accès
               </label>
-              <input
+              <SecretInput
                 id={tokenId}
-                type="password"
                 aria-invalid={error ? true : undefined}
                 aria-describedby={[tokenHelpId, error ? errorId : undefined].filter(Boolean).join(' ')}
                 value={token}

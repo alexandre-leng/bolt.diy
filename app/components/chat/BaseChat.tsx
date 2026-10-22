@@ -452,7 +452,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 {chatStarted && <div className="shrink-0 h-[var(--composer-space,9.5rem)]" aria-hidden="true" />}
               </StickToBottom.Content>
               <div
-                className={classNames('flex flex-col w-full mx-auto mb-6', {
+                className={classNames('flex flex-col w-full mx-auto', {
                   'bolt-composer-dock': chatStarted,
                   'my-auto max-w-[44rem] z-prompt': !chatStarted,
                 })}
@@ -460,7 +460,13 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               >
                 <div
                   className={classNames('w-full mx-auto pointer-events-auto', {
-                    'max-w-chat pb-2 mt-auto': chatStarted,
+                    /*
+                     * No bottom padding when docked: the dock already carries the gap to the
+                     * viewport edge, and the two together (24 + 8) pushed the composer's bottom
+                     * 15px above the terminal panel's, which reads as "not aligned" on a
+                     * two-column layout. Aligned means one number: the dock's padding.
+                     */
+                    'max-w-chat mt-auto': chatStarted,
                   })}
                   data-testid="composer-sticky"
                 >

@@ -413,7 +413,13 @@ body {
   left: calc(var(--chat-fixed-left, 0px) + 1.5rem);
   width: calc(var(--chat-fixed-width, 100vw) - 3rem);
   z-index: 3;
-  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+
+  /*
+   * The bottom gap is spelled out ONCE, here: the composer column no longer adds a margin of its
+   * own. Measured before this fix, the composer bottom sat 15px above the terminal panel's on a
+   * two-column layout, which the operator reads as "the two bottom edges are not aligned".
+   */
+  padding-bottom: calc(25px + env(safe-area-inset-bottom, 0px));
   pointer-events: none;
 
   /*

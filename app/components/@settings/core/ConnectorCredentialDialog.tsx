@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ConnectorCredentialRequest } from '~/components/@settings/tabs/connectors/ConnectorsTab';
 import { Dialog, DialogButton, DialogDescription, DialogRoot, DialogTitle } from '~/components/ui/Dialog';
 import { activateConnector, type ConnectorActivationId } from '~/lib/services/connectorActivation';
@@ -31,6 +31,7 @@ interface ConnectorCredentialDialogProps {
  * dialog, in its own portal, with a single mount.
  */
 export function ConnectorCredentialDialog({ request, onClose, onActivated }: ConnectorCredentialDialogProps) {
+  const openerRef = useRef<HTMLElement | null>(null);
   const [apiKey, setApiKey] = useState('');
   const [error, setError] = useState(request?.initialError ?? '');
   const [visible, setVisible] = useState(false);
@@ -40,6 +41,10 @@ export function ConnectorCredentialDialog({ request, onClose, onActivated }: Con
   const connectorId = request?.connectorId ?? null;
 
   useEffect(() => {
+    if (request) {
+      openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    }
+
     setApiKey('');
     setVisible(false);
     setError(request?.initialError ?? '');
@@ -80,6 +85,7 @@ export function ConnectorCredentialDialog({ request, onClose, onActivated }: Con
 
     toast.info(`${name} reste désactivé tant qu’aucune clé API valide n’est saisie.`);
     onClose();
+    requestAnimationFrame(() => openerRef.current?.focus());
   };
 
   return (

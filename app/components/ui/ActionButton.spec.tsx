@@ -19,7 +19,7 @@ describe('ActionButton', () => {
     render(<ActionButton tone="primary">Enregistrer</ActionButton>);
 
     const button = screen.getByRole('button', { name: 'Enregistrer' });
-    expect(button.className).toContain('bg-bolt-elements-button-primary-background');
+    expect(button.className).toContain('!bg-accent-700');
     expect(button.className).not.toContain('bg-bolt-elements-background-depth-2');
   });
 

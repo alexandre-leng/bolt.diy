@@ -1,6 +1,6 @@
 import type { LoaderFunction } from 'react-router';
 
-import { resolveProviderKeys } from '~/lib/.server/api/instance-keys';
+import { policyUnavailableResponse, resolveProviderKeys } from '~/lib/.server/api/instance-keys';
 import { LLMManager } from '~/lib/modules/llm/manager';
 
 /**
@@ -20,6 +20,12 @@ export const loader: LoaderFunction = async ({ context, request }) => {
     env,
     userId: request.headers.get('X-Bolt-User-Id'),
   });
+
+  const policyUnavailable = policyUnavailableResponse(resolved);
+
+  if (policyUnavailable) {
+    return policyUnavailable;
+  }
 
   const policy = resolved.policy;
 

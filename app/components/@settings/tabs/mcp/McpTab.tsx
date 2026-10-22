@@ -45,7 +45,7 @@ export default function McpTab() {
     if (!isInitialized) {
       initialize().catch((err) => {
         setError(`Failed to initialize MCP settings: ${err instanceof Error ? err.message : String(err)}`);
-        toast.error('Failed to load MCP configuration');
+        toast.error('Impossible de charger la configuration MCP');
       });
     }
   }, [isInitialized]);
@@ -85,12 +85,12 @@ export default function McpTab() {
         connectorEnabled: settings.connectorEnabled,
         toolEnabled: settings.toolEnabled,
       });
-      toast.success('MCP configuration saved');
+      toast.success('Configuration MCP enregistrée');
 
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save configuration');
-      toast.error('Failed to save MCP configuration');
+      setError(e instanceof Error ? e.message : 'Impossible d’enregistrer la configuration');
+      toast.error('Impossible d’enregistrer la configuration MCP');
     } finally {
       setIsSaving(false);
     }

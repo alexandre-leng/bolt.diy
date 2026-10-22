@@ -11,8 +11,10 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('./AssistantMessage', () => ({
   AssistantMessage: (props: { messageId?: string; onRewind?: unknown; onFork?: unknown }) => (
     <div data-testid={`assistant-${props.messageId}`}>
-      {props.onRewind ? <button>rewind {props.messageId}</button> : null}
-      {props.onFork ? <button>fork {props.messageId}</button> : null}
+      {props.onRewind ? <button aria-label="Revenir à ce message">rewind {props.messageId}</button> : null}
+      {props.onFork ? (
+        <button aria-label="Repartir d’ici dans une nouvelle conversation">fork {props.messageId}</button>
+      ) : null}
     </div>
   ),
 }));

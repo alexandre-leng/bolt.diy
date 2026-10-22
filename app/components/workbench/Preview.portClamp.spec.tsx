@@ -49,7 +49,7 @@ describe('Preview active port clamp', () => {
     rerender(<Preview />);
 
     await waitFor(() => {
-      const frames = screen.getAllByTitle('preview') as HTMLIFrameElement[];
+      const frames = screen.getAllByTitle('Aperçu du projet') as HTMLIFrameElement[];
       expect(frames.some((frame) => frame.getAttribute('src') === 'https://3000--preview.localhost')).toBe(true);
     });
 
@@ -64,7 +64,7 @@ describe('Preview active port clamp', () => {
     rerender(<Preview />);
 
     await waitFor(() => {
-      const frames = screen.getAllByTitle('preview') as HTMLIFrameElement[];
+      const frames = screen.getAllByTitle('Aperçu du projet') as HTMLIFrameElement[];
       expect(frames.some((frame) => frame.getAttribute('src') === 'https://5173--preview.localhost')).toBe(true);
     });
 
@@ -77,7 +77,7 @@ describe('Preview active port clamp', () => {
       expect(screen.queryByText('No preview available')).toBeNull();
     });
 
-    const frames = screen.getAllByTitle('preview') as HTMLIFrameElement[];
+    const frames = screen.getAllByTitle('Aperçu du projet') as HTMLIFrameElement[];
     expect(frames.some((frame) => frame.getAttribute('src') === 'https://3000--preview.localhost')).toBe(true);
   });
 
@@ -88,11 +88,11 @@ describe('Preview active port clamp', () => {
     rerender(<Preview />);
 
     await waitFor(() => {
-      const frames = screen.getAllByTitle('preview') as HTMLIFrameElement[];
+      const frames = screen.getAllByTitle('Aperçu du projet') as HTMLIFrameElement[];
       expect(frames.some((frame) => frame.getAttribute('src') === 'https://3000--preview.localhost')).toBe(true);
     });
 
-    const before = screen.getAllByTitle('preview')[0] as HTMLIFrameElement;
+    const before = screen.getAllByTitle('Aperçu du projet')[0] as HTMLIFrameElement;
 
     /*
      * The old reload wrote `iframeRef.current.src = iframeRef.current.src` directly on the
@@ -105,7 +105,7 @@ describe('Preview active port clamp', () => {
       fireEvent.click(screen.getByLabelText('Recharger l’aperçu'));
     });
 
-    const after = screen.getAllByTitle('preview')[0] as HTMLIFrameElement;
+    const after = screen.getAllByTitle('Aperçu du projet')[0] as HTMLIFrameElement;
 
     expect(after).not.toBe(before);
     expect(after.getAttribute('src')).toBe('https://3000--preview.localhost');

@@ -75,36 +75,15 @@ export interface TabWindowConfig {
   userTabs: UserTabConfig[];
 }
 
-export const TAB_LABELS: Record<TabType, string> = {
-  account: 'Mon compte',
-  profile: 'Profile',
-  settings: 'Settings',
-  notifications: 'Notifications',
-  features: 'Features',
-  data: 'Data Management',
-  'cloud-providers': 'Cloud Providers',
-  'local-providers': 'Local Providers',
-  connectors: 'Connectors',
-  github: 'GitHub',
-  gitlab: 'GitLab',
-  netlify: 'Netlify',
-  vercel: 'Vercel',
-  supabase: 'Supabase',
-  'event-logs': 'Event Logs',
-  mcp: 'MCP Servers',
-  voice: 'Voix',
-  plugins: 'Plugins',
-  'admin-keys': "Clés API de l'instance",
-  'ia-access': 'Mon accès IA',
-};
+export { TAB_LABELS } from './constants';
 
 export const categoryLabels: Record<SettingCategory, string> = {
-  profile: 'Profile & Account',
-  file_sharing: 'File Sharing',
-  connectivity: 'Connectivity',
-  system: 'System',
+  profile: 'Profil et compte',
+  file_sharing: 'Partage de fichiers',
+  connectivity: 'Connectivité',
+  system: 'Système',
   services: 'Services',
-  preferences: 'Preferences',
+  preferences: 'Préférences',
 };
 
 export const categoryIcons: Record<SettingCategory, React.ComponentType<{ className?: string }>> = {

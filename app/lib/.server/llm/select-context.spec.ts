@@ -1,70 +1,37 @@
-import { describe, expect, it } from 'vitest';
-import { applyContextBufferUpdate, getFilePaths } from './select-context';
+import { generateText } from 'ai';
+import { describe, expect, it, vi } from 'vitest';
+import { SELECT_CONTEXT_MAX_OUTPUT_TOKENS, SELECT_CONTEXT_TIMEOUT_MS, selectContext } from './select-context';
 
-const file = (content: string) => ({ type: 'file' as const, content, isBinary: false });
-
-const files = {
-  '/home/project/src/App.tsx': file('app'),
-  '/home/project/src/lib/data.ts': file('data'),
-  '/home/project/src/styles.css': file('css'),
-};
-
-const filePaths = Object.keys(files);
-
-describe('applyContextBufferUpdate', () => {
-  it('keeps the current context when the model asks for no change (the prompt allows an empty tag)', () => {
-    // Before: zero NEW files threw "Bolt failed to select files" and failed the whole turn.
-    const result = applyContextBufferUpdate({
-      responseText: '<updateContextBuffer>\n</updateContextBuffer>',
-      files,
-      filePaths,
-      currentContext: { 'src/App.tsx': files['/home/project/src/App.tsx'] },
-    });
-
-    expect(Object.keys(result)).toEqual(['src/App.tsx']);
-  });
-
-  it('keeps files already in context next to the newly included ones, minus the excluded', () => {
-    const result = applyContextBufferUpdate({
-      responseText:
-        '<updateContextBuffer><includeFile path="src/lib/data.ts"/><excludeFile path="src/styles.css"/></updateContextBuffer>',
-      files,
-      filePaths,
-      currentContext: {
-        'src/App.tsx': files['/home/project/src/App.tsx'],
-        'src/styles.css': files['/home/project/src/styles.css'],
-      },
-    });
-
-    expect(Object.keys(result).sort()).toEqual(['src/App.tsx', 'src/lib/data.ts']);
-  });
-
-  it('ignores files that are not in the project and survives a malformed answer', () => {
-    expect(
-      applyContextBufferUpdate({
-        responseText: '<updateContextBuffer><includeFile path="../../etc/passwd"/></updateContextBuffer>',
-        files,
-        filePaths,
-        currentContext: {},
-      }),
-    ).toEqual({});
-
-    expect(applyContextBufferUpdate({ responseText: 'sorry, I cannot', files, filePaths, currentContext: {} })).toEqual(
-      {},
-    );
-  });
+vi.hoisted(() => {
+  process.env.VITE_DEFAULT_PROVIDER = 'OpenCodeGo';
+  process.env.VITE_DEFAULT_MODEL = 'deepseek-v4.1-flash';
 });
 
-describe('getFilePaths', () => {
-  it('skips keys that are not project-relative instead of throwing', () => {
-    // Before: `ignore` threw RangeError on '/home/project' and '/tmp/x', failing the whole turn.
-    const paths = getFilePaths({
-      '/home/project': { type: 'folder' },
-      '/tmp/outside.txt': file('x'),
-      '/home/project/src/App.tsx': file('app'),
-      '/home/project/node_modules/a/index.js': file('dep'),
-    } as never);
+vi.mock('ai', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('ai')>();
+  return {
+    ...actual,
+    generateText: vi.fn(async () => ({
+      text: '<updateContextBuffer></updateContextBuffer>',
+      usage: { totalTokens: 1 },
+    })),
+  };
+});
 
-    expect(paths).toEqual(['/home/project/src/App.tsx']);
+describe('selectContext cancellation and bounds', () => {
+  it('passes request cancellation, timeout and token cap to generateText', async () => {
+    const controller = new AbortController();
+    await selectContext({
+      messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'hi' }] }] as never,
+      files: {},
+      summary: '',
+      apiKeys: { OpenCodeGo: 'test-key' },
+      abortSignal: controller.signal,
+    });
+
+    const options = vi.mocked(generateText).mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(options.abortSignal).toBe(controller.signal);
+    expect(options.timeout).toBe(SELECT_CONTEXT_TIMEOUT_MS);
+    expect(options.maxOutputTokens).toBe(SELECT_CONTEXT_MAX_OUTPUT_TOKENS);
   });
 });

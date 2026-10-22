@@ -5,6 +5,8 @@ import '~/utils/clearLocks';
 import { restoreApiKeysFromAccount, syncAccountSettings } from '~/lib/accountSettings';
 import { syncPreferences } from '~/lib/preferences';
 import { installStaleChunkReload } from '~/lib/staleChunkReload';
+import { setTheme } from '~/lib/stores/theme';
+import { THEMES, type Theme } from '~/types/theme';
 
 installStaleChunkReload();
 
@@ -69,10 +71,8 @@ void syncPreferences().then((result) => {
     // Re-apply the theme attribute: the inline script ran before the server values arrived.
     const theme = localStorage.getItem('bolt_theme');
 
-    if (theme) {
-      const mode = theme.startsWith('dark') ? 'dark' : 'light';
-      document.documentElement.setAttribute('data-theme', mode);
-      document.documentElement.setAttribute('data-color-theme', theme === 'dark' ? 'dark-dracula' : theme);
+    if (theme && (theme === 'dark' || THEMES.some(({ id }) => id === theme))) {
+      setTheme(theme as Theme);
     }
   }
 });

@@ -1,7 +1,14 @@
 import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { requireAdmin } from '~/lib/.server/api/admin-auth';
 
-export async function loader() {
+export async function loader({ request }: { request: Request }) {
+  const denied = requireAdmin(request);
+
+  if (denied) {
+    return denied;
+  }
+
   try {
     // Check if we're in a git repository
     if (!existsSync('.git')) {

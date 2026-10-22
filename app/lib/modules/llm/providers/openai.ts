@@ -26,15 +26,15 @@ export default class OpenAIProvider extends BaseProvider {
    * the previous list carried stale limits and missed models. Regenerate with
    * `node scripts/generate-model-catalog.mjs --all`.
    */
-  staticModels: ModelInfo[] = OPENAI_CATALOG
-    .filter((entry) => entry.tools && entry.status !== 'deprecated')
-    .map((entry) => ({
+  staticModels: ModelInfo[] = OPENAI_CATALOG.filter((entry) => entry.tools && entry.status !== 'deprecated').map(
+    (entry) => ({
       name: entry.id,
       label: entry.label,
       provider: 'OpenAI',
       maxTokenAllowed: entry.context,
       maxCompletionTokens: entry.maxOutput,
-    }));
+    }),
+  );
 
   async getDynamicModels(
     apiKeys?: Record<string, string>,

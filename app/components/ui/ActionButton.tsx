@@ -31,7 +31,7 @@ export const ActionButton = forwardRef<HTMLButtonElement, ActionButtonProps>(
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500',
           'disabled:cursor-not-allowed disabled:opacity-50',
           tone === 'primary'
-            ? 'border border-transparent bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text hover:bg-bolt-elements-button-primary-backgroundHover'
+            ? 'border border-transparent !bg-accent-700 !text-white hover:!bg-accent-800'
             : 'border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary hover:border-bolt-elements-borderColorActive hover:bg-bolt-elements-item-backgroundActive',
           className,
         )}

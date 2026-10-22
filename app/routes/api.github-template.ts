@@ -329,12 +329,15 @@ export async function loader({ request, context }: { request: Request; context: 
     console.error('Repository:', repo);
     console.error('Error details:', error instanceof Error ? error.message : String(error));
 
+    const notFound =
+      error instanceof Error && /Repository not found|No main or master branch archive found/i.test(error.message);
+
     return Response.json(
       {
-        error: 'Failed to fetch template files',
+        error: notFound ? 'Template introuvable' : 'Failed to fetch template files',
         details: error instanceof Error ? error.message : String(error),
       },
-      { status: 500 },
+      { status: notFound ? 404 : 500 },
     );
   }
 }

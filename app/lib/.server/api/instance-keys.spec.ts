@@ -99,6 +99,62 @@ describe('resolveProviderKeys', () => {
     expect(resolved.apiKeys).toEqual({});
   });
 
+  it('fails closed and keeps the last valid keys and policy on a service outage', async () => {
+    fetchMock.mockResolvedValueOnce(
+      ACCOUNTS_ANSWER({
+        allowUserKeys: ['Anthropic'],
+        policy: {
+          managedMode: true,
+          allowedProviders: ['OpenAI'],
+          allowedModels: {},
+          defaultModel: { provider: 'OpenAI', model: 'x' },
+          effortPolicy: 'auto-only',
+        },
+      }),
+    );
+
+    const good = await resolveProviderKeys({ userId: 'stale-policy', cookieKeys: { Anthropic: 'personal' } });
+    expect(good.apiKeys.Anthropic).toBe('personal');
+    fetchMock.mockRejectedValueOnce(new Error('offline'));
+
+    const stale = await resolveProviderKeys({ userId: 'stale-policy', cookieKeys: { Anthropic: 'personal' } });
+    expect(stale.policy.managedMode).toBe(true);
+    expect(stale.apiKeys.Anthropic).toBe('personal');
+  });
+
+  it('marks policy unavailable when no valid answer exists', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('offline'));
+
+    const resolved = await resolveProviderKeys({ userId: 'unknown-policy', cookieKeys: { Anthropic: 'personal' } });
+    expect(resolved.policyUnavailable).toBe(true);
+    expect(resolved.apiKeys).toEqual({});
+  });
+
+  it('retains last-known-good instance keys and policy through an accounts outage', async () => {
+    fetchMock.mockResolvedValueOnce(
+      ACCOUNTS_ANSWER({
+        policy: {
+          managedMode: true,
+          defaultModel: { provider: 'OpenAI', model: 'gpt-4o' },
+          allowedProviders: ['OpenAI'],
+          allowedModels: { OpenAI: ['gpt-4o'] },
+          effortPolicy: 'auto-only',
+        },
+      }),
+    );
+
+    const first = await resolveProviderKeys({ userId: 'user-stale' });
+    expect(first.policyUnavailable).toBe(false);
+
+    fetchMock.mockRejectedValueOnce(new Error('request timed out'));
+
+    const stale = await resolveProviderKeys({ userId: 'user-stale' });
+    expect(stale.apiKeys.OpenAI).toBe('sk-instance');
+    expect(stale.policy.managedMode).toBe(true);
+    expect(stale.policy.allowedProviders).toEqual(['OpenAI']);
+    expect(stale.policyUnavailable).toBe(false);
+  });
+
   it('never throws when the service answers garbage', async () => {
     fetchMock.mockResolvedValueOnce(new Response('not json', { status: 200 }));
 
@@ -167,6 +223,7 @@ describe('model policy', () => {
     expect(resolved.policy.managedMode).toBe(true);
     expect(resolved.policy.allowedProviders).toEqual(['OpenCodeGo']);
     expect(resolved.policy.effortPolicy).toBe('auto-only');
+    expect(resolved.policyUnavailable).toBe(false);
 
     vi.unstubAllGlobals();
   });

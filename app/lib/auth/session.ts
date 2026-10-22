@@ -52,7 +52,30 @@ function parseUser(payload: unknown): SessionUser | null {
   };
 }
 
-export async function fetchSession(signal?: AbortSignal): Promise<Session> {
+let sessionPromise: Promise<Session> | null = null;
+
+/**
+ * Forget the in-flight read. The deduplication only exists to spare the server several
+ * `/api/auth/me` calls in the same tick; a caller that aborts its own check must not leave the
+ * next reader with an aborted answer, and tests need one answer per stub.
+ */
+export function resetSessionCache(): void {
+  sessionPromise = null;
+}
+
+export function fetchSession(signal?: AbortSignal): Promise<Session> {
+  if (sessionPromise) {
+    return sessionPromise;
+  }
+
+  sessionPromise = fetchSessionUncached(signal).finally(() => {
+    sessionPromise = null;
+  });
+
+  return sessionPromise;
+}
+
+async function fetchSessionUncached(signal?: AbortSignal): Promise<Session> {
   try {
     const response = await fetch('/api/auth/me', {
       method: 'GET',

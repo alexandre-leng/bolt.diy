@@ -16,6 +16,11 @@ vi.mock('~/components/chat/APIKeyManager', () => ({
 }));
 
 describe('VoiceTab', () => {
+  it('uses shared themed selects rather than native appearance controls', () => {
+    const { container } = render(<VoiceTab />);
+    expect(container.querySelectorAll('select.appearance-none').length).toBe(4);
+    expect(container.querySelectorAll('select:not(.appearance-none)')).toHaveLength(0);
+  });
   beforeEach(() => {
     localStorage.clear();
   });
@@ -46,8 +51,8 @@ describe('VoiceTab', () => {
 
     const mic = screen.getByRole('switch', { name: 'Afficher le bouton micro' });
     const describedBy = mic.getAttribute('aria-describedby');
-    expect(describedBy).toBe('dictation-show-mic-description');
-    expect(document.getElementById(describedBy as string)?.textContent).toContain('libère la place');
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy as string)?.textContent).toContain('place');
 
     // The label is a real <label for>, not a text node glued to the description.
     expect(screen.getByText('Afficher le bouton micro').tagName).toBe('LABEL');

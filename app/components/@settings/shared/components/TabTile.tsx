@@ -36,9 +36,9 @@ export const TabTile: React.FC<TabTileProps> = ({
                 onClick={onClick}
                 className={classNames(
                   'relative flex flex-col items-center justify-center h-full p-4 rounded-lg',
-                  'bg-bolt-elements-background-depth-2',
+                  'bg-bolt-elements-background-depth-3',
                   'group cursor-pointer',
-                  'hover:bg-bolt-elements-background-depth-3',
+                  'hover:bg-bolt-elements-background-depth-4',
                   'transition-colors duration-100 ease-out',
                   isActive ? 'bg-purple-500/5 dark:bg-purple-500/10' : '',
                   isLoading ? 'cursor-wait opacity-70 pointer-events-none' : '',

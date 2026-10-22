@@ -18,15 +18,15 @@ export default class CohereProvider extends BaseProvider {
    * the previous list carried stale limits and missed models. Regenerate with
    * `node scripts/generate-model-catalog.mjs --all`.
    */
-  staticModels: ModelInfo[] = COHERE_CATALOG
-    .filter((entry) => entry.tools && entry.status !== 'deprecated')
-    .map((entry) => ({
+  staticModels: ModelInfo[] = COHERE_CATALOG.filter((entry) => entry.tools && entry.status !== 'deprecated').map(
+    (entry) => ({
       name: entry.id,
       label: entry.label,
       provider: 'Cohere',
       maxTokenAllowed: entry.context,
       maxCompletionTokens: entry.maxOutput,
-    }));
+    }),
+  );
 
   getModelInstance(options: {
     model: string;

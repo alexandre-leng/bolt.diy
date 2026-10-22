@@ -673,7 +673,9 @@ export default function NetlifyConnection() {
                                         e.stopPropagation();
 
                                         if (action.requiresConfirmation) {
-                                          if (!confirm(`Are you sure you want to ${action.name.toLowerCase()}?`)) {
+                                          if (
+                                            !window.confirm(`Êtes-vous sûr de vouloir ${action.name.toLowerCase()} ?`)
+                                          ) {
                                             return;
                                           }
                                         }

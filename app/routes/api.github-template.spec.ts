@@ -36,3 +36,19 @@ describe('GitHub template loader', () => {
     );
   });
 });
+
+describe('GitHub template missing repositories', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it('returns 404 when both default-branch archives are absent', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 404 })),
+    );
+
+    const response = await loader({
+      request: new Request('https://bolt.example/api/github-template?repo=missing/repository'),
+      context: { cloudflare: { ctx: { waitUntil: () => undefined } } },
+    });
+    expect(response.status).toBe(404);
+  });
+});

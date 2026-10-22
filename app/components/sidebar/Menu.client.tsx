@@ -30,7 +30,7 @@ import {
   type ChatHistoryItem,
   useChatHistory,
 } from '~/lib/persistence';
-import { PULL_BATCH_SIZE, migrateLocalHistoryToServer, markDeleted } from '~/lib/persistence/historySync';
+import { PULL_BATCH_SIZE, migrateLocalHistoryToServer, markDeleted, clearDeleted } from '~/lib/persistence/historySync';
 import { deleteHistory } from '~/lib/persistence/syncClient';
 import { chatStore } from '~/lib/stores/chat';
 import {
@@ -135,6 +135,8 @@ export function syncableChatIds(items: ChatHistoryItem[]): string[] {
 export const Menu = () => {
   const { duplicateCurrentChat, exportChat } = useChatHistory({ loadHistory: false });
   const menuRef = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLElement | null>(null);
+  const settingsOpenerRef = useRef<HTMLElement | null>(null);
   const [list, setList] = useState<ChatHistoryItem[]>([]);
 
   /*
@@ -252,7 +254,7 @@ export const Menu = () => {
   const deleteChat = useCallback(
     async (id: string): Promise<void> => {
       if (!db) {
-        throw new Error('Database not available');
+        throw new Error('Base de données indisponible');
       }
 
       /*
@@ -287,10 +289,13 @@ export const Menu = () => {
 
       let serverConfirmed = false;
 
+      // Tombstone the chat before the writes, so a batch stopping halfway leaves no resurrected row.
+      markDeleted(id, urlId);
+
       for (const serverId of serverIds) {
         const serverResult = await deleteHistory(serverId);
 
-        // 404: the server never had (or already dropped) this key — the outcome we want.
+        // 404: the server never had (or already dropped) this key, the outcome we want.
         if (serverResult.ok || isNotFound(serverResult)) {
           serverConfirmed = true;
           break;
@@ -305,15 +310,9 @@ export const Menu = () => {
        * devices, all under a "deleted" success toast.
        */
       if (!serverConfirmed) {
+        clearDeleted(id, urlId);
         throw new Error('Le serveur n’a pas confirmé la suppression.');
       }
-
-      /*
-       * Record the deletion BEFORE the list refresh. `loadEntries` runs a sync that would
-       * otherwise pull the chat back from a server response that raced this DELETE, or
-       * re-push it from a cache read taken before the wipe below.
-       */
-      markDeleted(id, urlId);
 
       // Delete chat snapshot from localStorage
       try {
@@ -363,7 +362,7 @@ export const Menu = () => {
           }
         })
         .catch((error) => {
-          console.error('Failed to delete chat:', error);
+          console.error('Échec de la suppression de la conversation :', error);
           toast.error('Échec de la suppression : la conversation est conservée. Réessayez plus tard.', {
             position: 'bottom-right',
             autoClose: 5000,
@@ -468,7 +467,7 @@ export const Menu = () => {
     const selectedChats = list.filter((item) => selectedItems.includes(item.id));
 
     if (selectedChats.length === 0) {
-      toast.error('Could not find selected chats');
+      toast.error('Impossible de trouver les conversations sélectionnées');
       return;
     }
 
@@ -592,6 +591,7 @@ export const Menu = () => {
 
   useEffect(() => {
     const handleOpenGitHubSettings = () => {
+      settingsOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setSettingsInitialTab('github');
       setIsSettingsOpen(true);
       unpeekSidebar();
@@ -599,6 +599,7 @@ export const Menu = () => {
 
     // Mobile bottom navigation's Settings tab.
     const handleOpenSettings = (event: Event) => {
+      settingsOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setSettingsInitialTab((event as CustomEvent<{ tab?: string }>).detail?.tab);
       setIsSettingsOpen(true);
       unpeekSidebar();
@@ -619,13 +620,37 @@ export const Menu = () => {
   };
 
   const handleSettingsClick = () => {
+    settingsOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setIsSettingsOpen(true);
     unpeekSidebar();
   };
 
+  useEffect(() => {
+    if (open) {
+      const handleEscape = (event: KeyboardEvent) => {
+        if (event.key !== 'Escape') {
+          return;
+        }
+
+        event.preventDefault();
+        closeSidebar();
+        requestAnimationFrame(() => toggleRef.current?.focus());
+      };
+
+      document.addEventListener('keydown', handleEscape);
+
+      return () => {
+        document.removeEventListener('keydown', handleEscape);
+      };
+    }
+
+    return undefined;
+  }, [open]);
+
   const handleSettingsClose = () => {
     setIsSettingsOpen(false);
     setSettingsInitialTab(undefined);
+    requestAnimationFrame(() => settingsOpenerRef.current?.focus());
 
     /*
      * Tell the /settings route the panel is gone. That route only exists to keep a URL working;
@@ -642,20 +667,34 @@ export const Menu = () => {
 
   return (
     <>
-      {/* Full screen on phones (Lovable's Projects tab), a 340px panel from 768px. */}
+      {/* Panneau Projets: ouvert */}
       <motion.div
         ref={menuRef}
         id="sidebar-panel"
+        role={typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches ? 'dialog' : 'region'}
+        aria-modal={typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches ? true : undefined}
+        aria-label="Projets"
+        tabIndex={-1}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && sidebarOpenStore.get()) {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleRef.current = document.querySelector('[data-testid="sidebar-toggle"]');
+            closeSidebar();
+            requestAnimationFrame(() => toggleRef.current?.focus());
+          }
+        }}
         data-settings-open={isSettingsOpen ? 'true' : 'false'}
         initial="closed"
         animate={open ? 'open' : 'closed'}
         variants={menuVariants}
         className={classNames(
-          'flex selection-accent flex-col side-menu fixed top-0 h-full w-screen md:w-[340px] md:rounded-r-2xl',
+          'flex selection-accent flex-col side-menu fixed top-[var(--header-height)] h-[calc(100dvh-var(--header-height))] w-screen md:w-[340px] md:rounded-r-2xl',
           'bg-bolt-elements-background-depth-1 border-r border-bolt-elements-borderColor',
           'shadow-sm text-sm',
           isSettingsOpen ? 'z-40' : 'z-sidebar',
         )}
+        style={{ top: 'var(--header-height)', height: 'calc(100dvh - var(--header-height))' }}
       >
         {/*
          * Panel header. It holds only the help and account controls: the close button that used
@@ -686,7 +725,7 @@ export const Menu = () => {
                 className={classNames(
                   'flex gap-1 items-center rounded-lg px-3 py-2 transition-colors',
                   selectionMode
-                    ? 'bg-accent-500 text-white'
+                    ? '!bg-accent-700 !text-white'
                     : 'bg-transparent border border-bolt-elements-borderColor text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary',
                 )}
                 aria-label={selectionMode ? 'Quitter la sélection' : 'Sélectionner des conversations'}
@@ -760,13 +799,27 @@ export const Menu = () => {
           <div className="flex-1 overflow-auto modern-scrollbar px-3 pb-3">
             {filteredList.length === 0 && (
               <div className="px-4 text-gray-500 dark:text-gray-400 text-sm">
-                {list.length === 0
-                  ? syncState === 'offline'
-                    ? 'Aucune conversation en local — historique hors ligne'
-                    : pendingPulls > 0
-                      ? 'Chargement de vos conversations…'
-                      : 'Aucune conversation'
-                  : 'Aucun résultat'}
+                {list.length === 0 ? (
+                  syncState === 'offline' ? (
+                    <span role="status">Aucune conversation en local, historique hors ligne</span>
+                  ) : syncState === 'syncing' || pendingPulls > 0 ? (
+                    <span role="status">Chargement de vos conversations…</span>
+                  ) : syncState === 'unknown' ? null : (
+                    <div className="space-y-2">
+                      <p>Aucun projet pour l'instant.</p>
+                      <p>Décrivez une application sur l’accueil pour commencer.</p>
+                      <a
+                        href="/"
+                        className="inline-flex items-center gap-2 rounded-lg !bg-accent-700 px-3 py-2 !text-white hover:!bg-accent-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500"
+                      >
+                        <span className="i-ph:plus" aria-hidden="true" />
+                        Nouveau projet
+                      </a>
+                    </div>
+                  )
+                ) : (
+                  'Aucun résultat'
+                )}
               </div>
             )}
             {/* onOpenChange: Radix closes on Escape (and Android back) only through it. */}

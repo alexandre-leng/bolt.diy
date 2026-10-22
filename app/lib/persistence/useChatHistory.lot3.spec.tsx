@@ -464,7 +464,6 @@ describe('useChatHistory — lot 3 regressions', () => {
     const actions = artifactStart === -1 ? replay : replay.slice(artifactStart);
     const remove = actions.indexOf('rm -rf "/home/project/src/App.css"');
     const install = actions.indexOf('npm install');
-    const start = actions.indexOf('<boltAction type="start">');
 
     expect(replay).toContain('restored-agent-files');
     expect(remove).toBeGreaterThan(-1);

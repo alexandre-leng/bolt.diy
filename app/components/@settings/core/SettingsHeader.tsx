@@ -41,7 +41,7 @@ export const SettingsHeader = forwardRef<HTMLDivElement, SettingsHeaderProps>(
           onClick={onBack}
           data-testid="settings-back"
           className={classNames(
-            'flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-lg px-2 text-sm text-bolt-elements-textSecondary',
+            'flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-lg bg-transparent px-2 text-sm text-bolt-elements-textSecondary',
             'transition-colors hover:bg-bolt-elements-item-backgroundActive hover:text-bolt-elements-textPrimary',
             'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500',
           )}

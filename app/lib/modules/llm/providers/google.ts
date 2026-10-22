@@ -18,15 +18,15 @@ export default class GoogleProvider extends BaseProvider {
    * the previous list carried stale limits and missed models. Regenerate with
    * `node scripts/generate-model-catalog.mjs --all`.
    */
-  staticModels: ModelInfo[] = GOOGLE_CATALOG
-    .filter((entry) => entry.tools && entry.status !== 'deprecated')
-    .map((entry) => ({
+  staticModels: ModelInfo[] = GOOGLE_CATALOG.filter((entry) => entry.tools && entry.status !== 'deprecated').map(
+    (entry) => ({
       name: entry.id,
       label: entry.label,
       provider: 'Google',
       maxTokenAllowed: entry.context,
       maxCompletionTokens: entry.maxOutput,
-    }));
+    }),
+  );
 
   async getDynamicModels(
     apiKeys?: Record<string, string>,

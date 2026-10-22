@@ -187,20 +187,24 @@ export const AssistantMessage = memo(
               {(onRewind || onFork) && messageId && (
                 <div className="flex gap-2 flex-col lg:flex-row ml-auto">
                   {onRewind && (
-                    <WithTooltip tooltip="Revert to this message">
+                    <WithTooltip tooltip="Revenir à ce message">
                       <button
+                        type="button"
+                        aria-label="Revenir à ce message"
                         onClick={() => onRewind(messageId)}
                         key="i-ph:arrow-u-up-left"
-                        className="i-ph:arrow-u-up-left text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+                        className="i-ph:arrow-u-up-left text-xl min-w-11 min-h-11 p-2 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
                       />
                     </WithTooltip>
                   )}
                   {onFork && (
-                    <WithTooltip tooltip="Fork chat from this message">
+                    <WithTooltip tooltip="Repartir d’ici dans une nouvelle conversation">
                       <button
+                        type="button"
+                        aria-label="Repartir d’ici dans une nouvelle conversation"
                         onClick={() => onFork(messageId)}
                         key="i-ph:git-fork"
-                        className="i-ph:git-fork text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+                        className="i-ph:git-fork text-xl min-w-11 min-h-11 p-2 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
                       />
                     </WithTooltip>
                   )}

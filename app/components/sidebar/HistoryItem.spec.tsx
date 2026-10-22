@@ -45,7 +45,7 @@ function renderItem() {
 
 /** Rename button, found by its icon so the lookup does not depend on the fix under test. */
 function renameButton(container: HTMLElement) {
-  return container.querySelector('button.i-ph\\:pencil-fill') as HTMLButtonElement;
+  return container.querySelector('button[aria-label="Renommer"]') as HTMLButtonElement;
 }
 
 function saveCount() {

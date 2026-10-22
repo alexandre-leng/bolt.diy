@@ -46,6 +46,36 @@ const enhancerBody = {
   provider: { name: 'OpenCodeGo' },
 };
 
+/**
+ * The routes resolve the operator's keys through the accounts service, which is not running in
+ * this test process. Answering that one lookup keeps the cases on the provider path they test:
+ * without it the resolver fails closed and every case would read a 503.
+ */
+function effectiveKeys() {
+  return Response.json({
+    apiKeys: { OpenCodeGo: 'test-key' },
+    baseUrls: {},
+    allowUserKeys: [],
+    source: { OpenCodeGo: 'instance' },
+    policy: {
+      managedMode: false,
+      defaultModel: { provider: '', model: '' },
+      allowedProviders: [],
+      allowedModels: {},
+      effortPolicy: 'free',
+    },
+  });
+}
+
+function stubProvider(handler: () => Response | Promise<Response>) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: RequestInfo | URL) =>
+      String(input).includes('/internal/effective-keys') ? effectiveKeys() : handler(),
+    ),
+  );
+}
+
 describe('streaming model routes', () => {
   beforeEach(() => vi.stubEnv('OPENCODE_GO_API_KEY', 'test-key'));
 
@@ -55,10 +85,7 @@ describe('streaming model routes', () => {
   });
 
   it('/api/llmcall streams the text when the provider answers', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => okStream()),
-    );
+    stubProvider(async () => okStream());
 
     const response = await call(llmCallAction, llmCallBody);
 
@@ -67,10 +94,7 @@ describe('streaming model routes', () => {
   }, 30_000);
 
   it('/api/llmcall answers with a real error status when the provider rejects the request', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => providerFailure()),
-    );
+    stubProvider(async () => providerFailure());
 
     const response = await call(llmCallAction, llmCallBody);
 
@@ -81,10 +105,7 @@ describe('streaming model routes', () => {
   }, 30_000);
 
   it('/api/enhancer streams the enhanced prompt when the provider answers', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => okStream()),
-    );
+    stubProvider(async () => okStream());
 
     const response = await call(enhancerAction as typeof llmCallAction, enhancerBody);
 
@@ -93,10 +114,7 @@ describe('streaming model routes', () => {
   }, 30_000);
 
   it('/api/enhancer reports the provider failure instead of streaming an empty 200', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => providerFailure()),
-    );
+    stubProvider(async () => providerFailure());
 
     const response = await call(enhancerAction as typeof llmCallAction, enhancerBody);
     const body = await response.text();

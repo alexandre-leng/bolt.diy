@@ -18,7 +18,7 @@ import {
   toMissingCredentialError,
   toSafeStreamErrorMessage,
 } from '~/lib/.server/api/errors';
-import { modelPolicyViolation, resolveProviderKeys } from '~/lib/.server/api/instance-keys';
+import { modelPolicyViolation, policyUnavailableResponse, resolveProviderKeys } from '~/lib/.server/api/instance-keys';
 import { readJsonBody } from '~/lib/.server/api/read-body';
 import {
   REQUEST_LIMITS,
@@ -116,7 +116,13 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     cookieKeys: cookieApiKeys,
   });
 
-  const apiKeys = { ...cookieApiKeys, ...resolvedKeys.apiKeys };
+  const unavailable = policyUnavailableResponse(resolvedKeys);
+
+  if (unavailable) {
+    return unavailable;
+  }
+
+  const apiKeys = resolvedKeys.apiKeys;
 
   /*
    * The model policy is enforced HERE, before any provider work. The composer already lists
@@ -360,6 +366,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               promptId,
               contextOptimization,
               summary,
+              abortSignal: request.signal,
               onFinish(resp) {
                 if (resp.usage) {
                   logger.debug('selectContext token usage', JSON.stringify(resp.usage));
@@ -370,6 +377,10 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               },
             });
           } catch (error) {
+            if (request.signal.aborted) {
+              throw error;
+            }
+
             /*
              * Choosing which files to show the model is an optimisation. When that extra
              * model call fails (rate limit, malformed answer, network), the turn used to

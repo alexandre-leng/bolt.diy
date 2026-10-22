@@ -39,7 +39,7 @@ describe('ImportZipButton', () => {
     expect(input).not.toBeNull();
     fireEvent.change(input!, { target: { files: [new File(['zip'], 'project.zip')] } });
 
-    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('ZIP imported successfully'));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('ZIP importé avec succès'));
 
     expect(localStorage.getItem('bolt_zip_autorun')).toBeNull();
   });

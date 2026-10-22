@@ -47,6 +47,7 @@ interface ResolvedKeys {
    * permitted. Absent (older accounts service) means "no policy": see NO_POLICY.
    */
   policy: ModelPolicy;
+  policyUnavailable: boolean;
 }
 
 export interface ModelPolicy {
@@ -70,7 +71,14 @@ export const NO_POLICY: ModelPolicy = {
   effortPolicy: 'free',
 };
 
-const EMPTY: ResolvedKeys = { apiKeys: {}, baseUrls: {}, allowUserKeys: [], source: {}, policy: NO_POLICY };
+const EMPTY: ResolvedKeys = {
+  apiKeys: {},
+  baseUrls: {},
+  allowUserKeys: [],
+  source: {},
+  policy: NO_POLICY,
+  policyUnavailable: true,
+};
 
 const cache = new Map<string, { at: number; value: ResolvedKeys }>();
 
@@ -109,7 +117,7 @@ export async function resolveProviderKeys(args: {
     return mergeLocalKeys(hit.value, cookieKeys);
   }
 
-  let remote = EMPTY;
+  let remote: ResolvedKeys | undefined;
 
   try {
     const url = new URL(`${accountsUrl(env)}/internal/effective-keys`);
@@ -128,16 +136,26 @@ export async function resolveProviderKeys(args: {
         allowUserKeys: Array.isArray(body.allowUserKeys) ? body.allowUserKeys.filter(isString) : [],
         source: (body.source && typeof body.source === 'object' ? body.source : {}) as ResolvedKeys['source'],
         policy: normalisePolicy(body.policy),
+        policyUnavailable: false,
       };
+      cache.set(cacheKey, { at: Date.now(), value: remote });
     } else {
-      logger.warn(`accounts service answered ${response.status}; using cookie and environment keys`);
+      logger.warn(`accounts service answered ${response.status}; preserving last known policy`);
     }
   } catch {
     /* No log line with any value: only the fact that the lookup failed. */
-    logger.warn('accounts service unreachable; using cookie and environment keys');
+    logger.warn('accounts service unreachable; preserving last known policy');
   }
 
-  cache.set(cacheKey, { at: Date.now(), value: remote });
+  if (!remote) {
+    remote = hit?.value ?? EMPTY;
+
+    if (!hit) {
+      return { ...EMPTY, policyUnavailable: true };
+    }
+  } else {
+    cache.set(cacheKey, { at: Date.now(), value: remote });
+  }
 
   return mergeLocalKeys(remote, cookieKeys);
 }
@@ -170,7 +188,14 @@ function mergeLocalKeys(remote: ResolvedKeys, cookieKeys?: Record<string, string
     source[provider] = 'instance';
   }
 
-  return { apiKeys, baseUrls: remote.baseUrls, allowUserKeys: remote.allowUserKeys, source, policy: remote.policy };
+  return {
+    apiKeys,
+    baseUrls: remote.baseUrls,
+    allowUserKeys: remote.allowUserKeys,
+    source,
+    policy: remote.policy,
+    policyUnavailable: remote.policyUnavailable,
+  };
 }
 
 /** Which providers a user may key themselves. Empty means "the admin decides for everyone". */
@@ -222,6 +247,12 @@ function normalisePolicy(raw: unknown): ModelPolicy {
     allowedModels,
     effortPolicy: value.effortPolicy === 'auto-only' ? 'auto-only' : 'free',
   };
+}
+
+export function policyUnavailableResponse(resolved: Pick<ResolvedKeys, 'policyUnavailable'>): Response | undefined {
+  return resolved.policyUnavailable
+    ? Response.json({ error: 'Politique de modèles temporairement indisponible' }, { status: 503 })
+    : undefined;
 }
 
 /**

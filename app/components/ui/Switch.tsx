@@ -27,7 +27,7 @@ export const Switch = memo(
     return (
       <SwitchPrimitive.Root
         className={classNames(
-          'relative h-6 w-11 cursor-pointer rounded-full bg-bolt-elements-button-primary-background',
+          'relative min-h-11 min-w-11 cursor-pointer rounded-full bg-bolt-elements-button-primary-background',
           'transition-colors duration-200 ease-in-out',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2',
           'disabled:cursor-not-allowed disabled:opacity-50',

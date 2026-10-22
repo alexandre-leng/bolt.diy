@@ -37,23 +37,70 @@ export const useConnectionStatus = () => {
   };
 
   useEffect(() => {
-    // Check immediately and then every 10 seconds
-    checkStatus();
+    let interval: ReturnType<typeof setInterval> | undefined;
+    let stopped = false;
 
-    const interval = setInterval(checkStatus, 10 * 1000);
+    const visible = () => document.visibilityState === 'visible' && document.hasFocus();
 
-    return () => clearInterval(interval);
+    const stop = () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+
+      interval = undefined;
+    };
+
+    const start = () => {
+      stop();
+
+      if (stopped || !visible()) {
+        return;
+      }
+
+      void checkStatus();
+      interval = setInterval(() => {
+        if (visible()) {
+          void checkStatus();
+        } else {
+          stop();
+        }
+      }, 10_000);
+    };
+
+    const onVisibility = () => (visible() ? start() : stop());
+    start();
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onVisibility);
+    window.addEventListener('blur', onVisibility);
+
+    return () => {
+      stopped = true;
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onVisibility);
+      window.removeEventListener('blur', onVisibility);
+    };
   }, [acknowledgedIssue]);
 
   const acknowledgeIssue = () => {
     setAcknowledgedIssue(currentIssue);
-    setAcknowledgedIssue(currentIssue);
+
+    try {
+      localStorage.setItem(ACKNOWLEDGED_CONNECTION_ISSUE_KEY, currentIssue ?? '');
+    } catch {
+      /* Storage may be unavailable. */
+    }
     setHasConnectionIssues(false);
   };
 
   const resetAcknowledgment = () => {
     setAcknowledgedIssue(null);
-    setAcknowledgedIssue(null);
+
+    try {
+      localStorage.removeItem(ACKNOWLEDGED_CONNECTION_ISSUE_KEY);
+    } catch {
+      /* Storage may be unavailable. */
+    }
     checkStatus();
   };
 

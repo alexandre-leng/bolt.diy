@@ -30,7 +30,12 @@ const requestSchema = z.object({
    * gets its own deadline), so without this every call rebuilt the prompt from slot 0 and three
    * "different" mockups came back as three tries at the same direction.
    */
-  directionIndex: z.number().int().min(0).max(DIRECTIONS.length - 1).default(0),
+  directionIndex: z
+    .number()
+    .int()
+    .min(0)
+    .max(DIRECTIONS.length - 1)
+    .default(0),
   model: z.enum(['gpt-image-1', 'dall-e-3']).default('gpt-image-1'),
   size: z.enum(['1024x1024', '1536x1024', '1024x1536']).default('1024x1024'),
 });
@@ -153,7 +158,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
     /* Each mockup must own a DISTINCT direction: wrapping would repeat the first one. */
     if (parsed.directionIndex + parsed.count > DIRECTIONS.length) {
       return Response.json(
-        { error: `Demandez au plus ${DIRECTIONS.length - parsed.directionIndex} maquette(s) à partir de cette direction.` },
+        {
+          error: `Demandez au plus ${DIRECTIONS.length - parsed.directionIndex} maquette(s) à partir de cette direction.`,
+        },
         { status: 400 },
       );
     }

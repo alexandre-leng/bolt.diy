@@ -505,7 +505,7 @@ export default function VoiceTab() {
                         aria-label={visible ? `Masquer la clé ${provider.label}` : `Afficher la clé ${provider.label}`}
                         aria-pressed={visible}
                         title={visible ? 'Masquer' : 'Afficher'}
-                        className="absolute right-1 top-1/2 min-h-9 min-w-9 -translate-y-1/2 px-2 text-bolt-elements-textSecondary"
+                        className="absolute right-1 top-1/2 min-h-11 min-w-11 -translate-y-1/2 rounded-lg bg-transparent px-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-item-backgroundActive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
                       >
                         <span className={visible ? 'i-ph:eye-slash h-4 w-4' : 'i-ph:eye h-4 w-4'} aria-hidden="true" />
                       </ActionButton>
@@ -531,7 +531,7 @@ export default function VoiceTab() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <ActionButton onClick={testTranscription} disabled={testing}>
+            <ActionButton className="bg-transparent" onClick={testTranscription} disabled={testing}>
               <span
                 className={testing ? 'i-ph:circle-notch-bold h-4 w-4 animate-spin' : 'i-ph:waveform h-4 w-4'}
                 aria-hidden="true"

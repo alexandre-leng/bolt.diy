@@ -1,5 +1,5 @@
 import type { LoaderFunction } from 'react-router';
-import { resolveProviderKeys } from '~/lib/.server/api/instance-keys';
+import { policyUnavailableResponse, resolveProviderKeys } from '~/lib/.server/api/instance-keys';
 import { getApiKeysFromCookie } from '~/lib/api/cookies';
 import { LLMManager } from '~/lib/modules/llm/manager';
 
@@ -35,7 +35,13 @@ export const loader: LoaderFunction = async ({ context, request }) => {
     cookieKeys: cookieApiKeys,
   });
 
-  const apiKeys = { ...cookieApiKeys, ...resolved.apiKeys };
+  const unavailable = policyUnavailableResponse(resolved);
+
+  if (unavailable) {
+    return unavailable;
+  }
+
+  const apiKeys = resolved.apiKeys;
   const managed = resolved.source[provider] === 'instance';
 
   /*

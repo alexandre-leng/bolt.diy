@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 /*
@@ -34,8 +35,8 @@ vi.mock('~/components/workbench/ExpoQrModal', () => ({ ExpoQrModal: () => null }
 
 import { ChatBox } from './ChatBox';
 
-function renderChatBox(overrides: Record<string, unknown> = {}) {
-  const props = {
+function baseProps() {
+  return {
     isModelSettingsCollapsed: true,
     setIsModelSettingsCollapsed: vi.fn(),
     provider: undefined,
@@ -65,8 +66,11 @@ function renderChatBox(overrides: Record<string, unknown> = {}) {
     setImageDataList: vi.fn(),
     handleInputChange: vi.fn(),
     chatMode: 'build' as const,
-    ...overrides,
   };
+}
+
+function renderChatBox(overrides: Record<string, unknown> = {}) {
+  const props = { ...baseProps(), ...overrides };
 
   render(<ChatBox {...(props as any)} />);
 
@@ -138,6 +142,14 @@ describe('ChatBox: Enter during a generation (U1)', () => {
   });
 });
 
+/** Replays the setter calls (values or functional updates) on top of an empty list. */
+function appliedState<T>(setter: ReturnType<typeof vi.fn>): T[] {
+  return setter.mock.calls.reduce<T[]>(
+    (current, [next]) => (typeof next === 'function' ? (next as (value: T[]) => T[])(current) : (next as T[])),
+    [],
+  );
+}
+
 describe('ChatBox: dropping several images (U8)', () => {
   it('attaches every dropped image, not only the last one read', async () => {
     const { props, textarea } = renderChatBox();
@@ -149,12 +161,52 @@ describe('ChatBox: dropping several images (U8)', () => {
 
     await waitFor(() => expect(props.setUploadedFiles).toHaveBeenCalled());
 
-    const lastFiles = props.setUploadedFiles.mock.calls.at(-1)?.[0] as File[];
-    const lastImages = props.setImageDataList.mock.calls.at(-1)?.[0] as string[];
+    const lastFiles = appliedState<File>(props.setUploadedFiles);
+    const lastImages = appliedState<string>(props.setImageDataList);
 
     expect(lastFiles.map((file) => file.name)).toEqual(['a.png', 'b.png', 'c.png']);
     expect(lastImages).toHaveLength(3);
     expect(lastImages.every((url) => url.startsWith('data:image/png'))).toBe(true);
+  });
+});
+
+describe('ChatBox: two drops close together (LK-5)', () => {
+  function StatefulChatBox() {
+    const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+    const [imageDataList, setImageDataList] = useState<string[]>([]);
+
+    return (
+      <>
+        <ChatBox
+          {...({
+            ...baseProps(),
+            uploadedFiles,
+            imageDataList,
+            setUploadedFiles,
+            setImageDataList,
+          } as any)}
+        />
+        <output data-testid="attached">{uploadedFiles.map((file) => file.name).join(',')}</output>
+        <output data-testid="data-urls">{imageDataList.length}</output>
+      </>
+    );
+  }
+
+  it('keeps both batches when the second drop lands before the first one is read', async () => {
+    render(<StatefulChatBox />);
+
+    const textarea = screen.getByRole('textbox');
+    const first = ['a.png', 'b.png'].map((name) => new File(['x'], name, { type: 'image/png' }));
+    const second = [new File(['y'], 'c.png', { type: 'image/png' })];
+
+    // Both drops fire in the same tick: neither FileReader has resolved yet.
+    await act(async () => {
+      fireEvent.drop(textarea, { dataTransfer: { files: first } });
+      fireEvent.drop(textarea, { dataTransfer: { files: second } });
+    });
+
+    await waitFor(() => expect(screen.getByTestId('data-urls').textContent).toBe('3'));
+    expect(screen.getByTestId('attached').textContent?.split(',').sort()).toEqual(['a.png', 'b.png', 'c.png']);
   });
 });
 

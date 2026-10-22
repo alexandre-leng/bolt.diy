@@ -9,6 +9,7 @@ import {
 import { ServiceHeader, ConnectionTestIndicator } from '~/components/@settings/shared/service-integration';
 import { Button } from '~/components/ui/Button';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '~/components/ui/Collapsible';
+import { useConfirmDialog, actionConfirmOptions, type ConfirmOptions } from '~/components/ui/useConfirmDialog';
 import { useConnectionTest } from '~/lib/hooks';
 import { logStore } from '~/lib/stores/logs';
 import { useMCPStore } from '~/lib/stores/mcp';
@@ -32,6 +33,7 @@ interface ProjectAction {
   action: (projectId: string) => Promise<void>;
   requiresConfirmation?: boolean;
   variant?: 'default' | 'destructive' | 'outline';
+  confirmation?: Partial<ConfirmOptions>;
 }
 
 // Vercel logo SVG component
@@ -49,6 +51,7 @@ export default function VercelTab() {
   const fetchingStats = useStore(isFetchingStats);
   const [isProjectsExpanded, setIsProjectsExpanded] = useState(false);
   const [isProjectActionLoading, setIsProjectActionLoading] = useState(false);
+  const { askConfirmation, confirmDialog } = useConfirmDialog();
 
   // Use shared connection test hook
   const {
@@ -181,6 +184,12 @@ export default function VercelTab() {
         },
         requiresConfirmation: true,
         variant: 'destructive',
+        confirmation: {
+          title: 'Supprimer ce projet Vercel ?',
+          description:
+            'Le projet et ses déploiements seront définitivement supprimés de Vercel. Cette action est irréversible.',
+          confirmLabel: 'Supprimer le projet',
+        },
       },
     ],
     [connection.token],
@@ -291,17 +300,20 @@ export default function VercelTab() {
     toast.success('Disconnected from Vercel');
   };
 
-  const handleProjectAction = useCallback(async (projectId: string, action: ProjectAction) => {
-    if (action.requiresConfirmation) {
-      if (!window.confirm(`Êtes-vous sûr de vouloir ${action.name.toLowerCase()} ?`)) {
-        return;
+  const handleProjectAction = useCallback(
+    async (projectId: string, action: ProjectAction) => {
+      if (action.requiresConfirmation) {
+        if (!(await askConfirmation(actionConfirmOptions(action)))) {
+          return;
+        }
       }
-    }
 
-    setIsProjectActionLoading(true);
-    await action.action(projectId);
-    setIsProjectActionLoading(false);
-  }, []);
+      setIsProjectActionLoading(true);
+      await action.action(projectId);
+      setIsProjectActionLoading(false);
+    },
+    [askConfirmation],
+  );
 
   const renderProjects = useCallback(() => {
     if (fetchingStats) {
@@ -743,6 +755,7 @@ export default function VercelTab() {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <ServiceHeader
         icon={VercelLogo}
         title="Vercel Integration"

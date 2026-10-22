@@ -432,8 +432,12 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
              */
             Promise.all(images.map(readImageAsDataUrl))
               .then((dataUrls) => {
-                props.setUploadedFiles?.([...props.uploadedFiles, ...images]);
-                props.setImageDataList?.([...props.imageDataList, ...dataUrls]);
+                /*
+                 * Functional updates (LK-5): two drops close together used to both start from
+                 * the list captured at drop time, so the second one erased the first batch.
+                 */
+                props.setUploadedFiles?.((current) => [...current, ...images]);
+                props.setImageDataList?.((current) => [...current, ...dataUrls]);
               })
               .catch((error) => console.error('Could not read the dropped images:', error));
           }}

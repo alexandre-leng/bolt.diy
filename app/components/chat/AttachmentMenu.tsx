@@ -25,6 +25,29 @@ interface AttachmentMenuProps {
   isEnhanceDisabled?: boolean;
 }
 
+const itemClassName = classNames(
+  'flex min-h-11 items-center gap-2 px-3 py-2 rounded-md text-sm cursor-pointer touch-manipulation',
+  'text-bolt-elements-textPrimary outline-none transition-colors',
+  'data-[highlighted]:bg-bolt-elements-background-depth-3',
+  'data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed',
+);
+
+const contentClassName = classNames(
+  'min-w-[220px] max-w-[calc(100vw-1rem)] rounded-lg p-1',
+  'max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto',
+  'bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-lg z-[1000]',
+);
+
+function CheckedIndicator() {
+  return (
+    <span className="ml-auto flex h-5 w-5 items-center justify-center" aria-hidden="true">
+      <DropdownMenu.ItemIndicator>
+        <span className="i-ph:check text-lg" />
+      </DropdownMenu.ItemIndicator>
+    </span>
+  );
+}
+
 export function AttachmentMenu({
   onAttachFile,
   onScreenshot,
@@ -44,182 +67,81 @@ export function AttachmentMenu({
       <DropdownMenu.Trigger asChild>
         <button
           type="button"
-          title="Add attachment or connector"
+          data-testid="attachment-menu-trigger"
+          title="Ajouter une pièce jointe ou un outil"
+          aria-label="Ajouter une pièce jointe ou un outil"
           className={classNames(
-            'flex items-center text-bolt-elements-item-contentDefault bg-transparent',
-            'hover:text-bolt-elements-item-contentActive rounded-md p-1',
-            'hover:bg-bolt-elements-item-backgroundActive',
-            'focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus focus:ring-offset-1',
-            'transition-all',
+            'flex h-11 w-11 shrink-0 items-center justify-center bg-transparent rounded-md touch-manipulation',
+            'text-bolt-elements-item-contentDefault hover:text-bolt-elements-item-contentActive',
+            'hover:bg-bolt-elements-item-backgroundActive transition-colors',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-borderColorActive',
           )}
         >
-          <div className="i-ph:plus text-xl"></div>
+          <div className="i-ph:plus text-xl" aria-hidden="true" />
         </button>
       </DropdownMenu.Trigger>
 
       <DropdownMenu.Portal>
-        <DropdownMenu.Content
-          className={classNames(
-            'min-w-[200px] rounded-lg p-1',
-            'bg-bolt-elements-background-depth-2',
-            'border border-bolt-elements-borderColor',
-            'shadow-lg',
-            'animate-in fade-in-80 zoom-in-95',
-            'data-[side=bottom]:slide-in-from-top-2',
-            'data-[side=left]:slide-in-from-right-2',
-            'data-[side=right]:slide-in-from-left-2',
-            'data-[side=top]:slide-in-from-bottom-2',
-            'z-[1000]',
-          )}
-          sideOffset={5}
-          align="start"
-        >
-          <DropdownMenu.Item
-            className={classNames(
-              'flex items-center gap-2 px-3 py-2 rounded-md text-sm cursor-pointer',
-              'text-bolt-elements-textPrimary',
-              'hover:bg-bolt-elements-background-depth-3',
-              'data-[highlighted]:bg-bolt-elements-background-depth-3',
-              'outline-none transition-colors',
-            )}
-            onSelect={onAttachFile}
-          >
-            <div className="i-ph:paperclip text-lg"></div>
-            <span>Attach File</span>
+        <DropdownMenu.Content className={contentClassName} sideOffset={5} align="start">
+          <DropdownMenu.Item className={itemClassName} onSelect={onAttachFile}>
+            <div className="i-ph:paperclip text-lg" aria-hidden="true" />
+            <span>Joindre une image</span>
+          </DropdownMenu.Item>
+          <DropdownMenu.Item className={itemClassName} onSelect={onScreenshot}>
+            <div className="i-ph:image text-lg" aria-hidden="true" />
+            <span>Créer à partir d’une image</span>
+          </DropdownMenu.Item>
+          <DropdownMenu.Item className={itemClassName} onSelect={onOpenDesignDialog}>
+            <div className="i-ph:palette text-lg" aria-hidden="true" />
+            <span>Palette de couleurs</span>
           </DropdownMenu.Item>
           <DropdownMenu.Item
-            className="flex items-center gap-2 px-3 py-2 rounded-md text-sm cursor-pointer text-bolt-elements-textPrimary data-[highlighted]:bg-bolt-elements-background-depth-3 outline-none"
-            onSelect={onScreenshot}
-          >
-            <div className="i-ph:image text-lg" />
-            <span>From a screenshot</span>
-          </DropdownMenu.Item>
-
-          <DropdownMenu.Item
-            className={classNames(
-              'flex items-center gap-2 px-3 py-2 rounded-md text-sm cursor-pointer',
-              'text-bolt-elements-textPrimary',
-              'hover:bg-bolt-elements-background-depth-3',
-              'data-[highlighted]:bg-bolt-elements-background-depth-3',
-              'outline-none transition-colors',
-            )}
-            onSelect={onOpenDesignDialog}
-          >
-            <div className="i-ph:palette text-lg"></div>
-            <span>Design Palette</span>
-          </DropdownMenu.Item>
-
-          <DropdownMenu.Item
-            className={classNames(
-              'flex items-center gap-2 px-3 py-2 rounded-md text-sm cursor-pointer',
-              'text-bolt-elements-textPrimary',
-              'hover:bg-bolt-elements-background-depth-3',
-              'data-[highlighted]:bg-bolt-elements-background-depth-3',
-              'outline-none transition-colors',
-              isEnhanceDisabled && 'opacity-50 cursor-not-allowed',
-            )}
+            className={itemClassName}
             onSelect={onEnhancePrompt}
-            disabled={isEnhanceDisabled}
+            disabled={isEnhanceDisabled || enhancingPrompt}
           >
-            {enhancingPrompt ? (
-              <div className="i-svg-spinners:90-ring-with-bg text-bolt-elements-loader-progress text-lg animate-spin"></div>
-            ) : (
-              <div className="i-bolt:stars text-lg"></div>
-            )}
-            <span>Enhance Prompt</span>
+            <div
+              className={
+                enhancingPrompt ? 'i-svg-spinners:90-ring-with-bg text-lg animate-spin' : 'i-bolt:stars text-lg'
+              }
+              aria-hidden="true"
+            />
+            <span>{enhancingPrompt ? 'Amélioration en cours…' : 'Améliorer la consigne'}</span>
           </DropdownMenu.Item>
-
-          <DropdownMenu.Item
-            className={classNames(
-              'flex items-center gap-2 px-3 py-2 rounded-md text-sm cursor-pointer',
-              'text-bolt-elements-textPrimary',
-              'hover:bg-bolt-elements-background-depth-3',
-              'data-[highlighted]:bg-bolt-elements-background-depth-3',
-              'outline-none transition-colors',
-              !mcpToolsInitialized && 'opacity-50 cursor-not-allowed',
-            )}
-            onSelect={onOpenMcpTools}
-            disabled={!mcpToolsInitialized}
-          >
-            <div className="i-bolt:mcp text-lg"></div>
-            <span>MCP Tools Available</span>
+          <DropdownMenu.Item className={itemClassName} onSelect={onOpenMcpTools} disabled={!mcpToolsInitialized}>
+            <div className="i-bolt:mcp text-lg" aria-hidden="true" />
+            <span>Outils MCP</span>
           </DropdownMenu.Item>
 
           <DropdownMenu.Separator className="h-px bg-bolt-elements-borderColor my-1" />
-
           <DropdownMenu.Sub>
-            <DropdownMenu.SubTrigger
-              className={classNames(
-                'flex items-center justify-between gap-2 px-3 py-2 rounded-md text-sm cursor-pointer',
-                'text-bolt-elements-textPrimary',
-                'hover:bg-bolt-elements-background-depth-3',
-                'outline-none transition-colors',
-              )}
-            >
-              <div className="flex items-center gap-2">
-                <div className="i-ph:plug text-lg"></div>
-                <span>Connectors</span>
-              </div>
-              <div className="i-ph:caret-right text-sm"></div>
+            <DropdownMenu.SubTrigger className={itemClassName}>
+              <div className="i-ph:plug text-lg" aria-hidden="true" />
+              <span>Connecteurs</span>
+              <div className="i-ph:caret-right text-sm ml-auto" aria-hidden="true" />
             </DropdownMenu.SubTrigger>
-
             <DropdownMenu.Portal>
-              <DropdownMenu.SubContent
-                className={classNames(
-                  'min-w-[180px] rounded-lg p-1',
-                  'bg-bolt-elements-background-depth-2',
-                  'border border-bolt-elements-borderColor',
-                  'shadow-lg',
-                  'animate-in fade-in-80 zoom-in-95',
-                  'data-[side=right]:slide-in-from-left-2',
-                  'data-[side=left]:slide-in-from-right-2',
-                  'z-[1000]',
-                )}
-                sideOffset={8}
-              >
-                <DropdownMenu.Item
-                  onSelect={() => onWebSearchEnabledChange(!webSearchEnabled)}
-                  className={classNames(
-                    'flex items-center gap-2 px-3 py-2 rounded-md text-sm cursor-pointer',
-                    'justify-between',
-                    'text-bolt-elements-textPrimary',
-                    'hover:bg-bolt-elements-background-depth-3',
-                    'outline-none transition-colors',
-                  )}
+              <DropdownMenu.SubContent className={contentClassName} sideOffset={8}>
+                <DropdownMenu.CheckboxItem
+                  checked={webSearchEnabled}
+                  onCheckedChange={(checked) => onWebSearchEnabledChange(checked === true)}
+                  className={itemClassName}
                 >
-                  <div className="i-ph:magnifying-glass text-lg" />
-                  <span>Web Search</span>
-                  <span
-                    aria-label={webSearchEnabled ? 'Enabled' : 'Disabled'}
-                    className={classNames(
-                      'ml-auto h-2 w-2 rounded-full',
-                      webSearchEnabled ? 'bg-green-500' : 'bg-red-500',
-                    )}
-                  />
-                </DropdownMenu.Item>
-
+                  <div className="i-ph:magnifying-glass text-lg" aria-hidden="true" />
+                  <span>Recherche web</span>
+                  <CheckedIndicator />
+                </DropdownMenu.CheckboxItem>
                 {connectors.map((connector) => (
-                  <DropdownMenu.Item
+                  <DropdownMenu.CheckboxItem
                     key={connector.id}
-                    className={classNames(
-                      'flex items-center gap-2 px-3 py-2 rounded-md text-sm cursor-pointer',
-                      'justify-between',
-                      'text-bolt-elements-textPrimary',
-                      'hover:bg-bolt-elements-background-depth-3',
-                      'outline-none transition-colors',
-                    )}
-                    onSelect={() => onConnectorEnabledChange(connector.id, !connector.enabled)}
+                    checked={connector.enabled}
+                    onCheckedChange={(checked) => onConnectorEnabledChange(connector.id, checked === true)}
+                    className={itemClassName}
                   >
-                    {connector.icon}
+                    <span aria-hidden="true">{connector.icon}</span>
                     <span>{connector.name}</span>
-                    <span
-                      aria-label={connector.enabled ? 'Enabled' : 'Disabled'}
-                      className={classNames(
-                        'ml-auto h-2 w-2 rounded-full',
-                        connector.enabled ? 'bg-green-500' : 'bg-red-500',
-                      )}
-                    />
-                  </DropdownMenu.Item>
+                    <CheckedIndicator />
+                  </DropdownMenu.CheckboxItem>
                 ))}
               </DropdownMenu.SubContent>
             </DropdownMenu.Portal>

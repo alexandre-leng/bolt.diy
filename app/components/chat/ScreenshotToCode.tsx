@@ -33,14 +33,14 @@ const MODES: Array<{ value: Mode; icon: string; title: string; hint: string }> =
   {
     value: 'design',
     icon: 'i-ph:sparkle-duotone',
-    title: 'Generate a design',
-    hint: 'Describe the page, get mockups, pick one',
+    title: 'Créer une maquette',
+    hint: 'Décrivez la page, puis choisissez une maquette',
   },
   {
     value: 'screenshot',
     icon: 'i-ph:image-duotone',
-    title: 'Use an image',
-    hint: 'Turn a screenshot or exported mockup into code',
+    title: 'Utiliser une image',
+    hint: 'Transformez une capture ou une maquette en code',
   },
 ];
 
@@ -48,7 +48,7 @@ const readImage = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error('Could not read screenshot.'));
+    reader.onerror = () => reject(new Error('Impossible de lire la capture.'));
     reader.readAsDataURL(file);
   });
 
@@ -73,15 +73,15 @@ function describeEvent(event: StreamEvent): string | undefined {
       return event.text;
 
     case 'variantCount':
-      return `Generating ${event.count} version${event.count === 1 ? '' : 's'}...`;
+      return `Génération de ${event.count} version${event.count > 1 ? 's' : ''}…`;
 
     case 'toolStart':
-      return `Running ${event.name}...`;
+      return `Exécution de ${event.name}…`;
 
     case 'thinking': {
       const text = event.text.trim();
 
-      return text ? `Thinking: ${text.slice(0, 120)}` : undefined;
+      return text ? `Réflexion : ${text.slice(0, 120)}` : undefined;
     }
 
     case 'assistant': {
@@ -93,6 +93,33 @@ function describeEvent(event: StreamEvent): string | undefined {
     default:
       return undefined;
   }
+}
+
+/** Only known client messages are localized; provider details stay intact. */
+function clientError(message: string): string {
+  const messages: Record<string, string> = {
+    'Describe the page you want (at least a few words).': 'Décrivez la page souhaitée en quelques mots.',
+    'Keep the description under 1500 characters.': 'Limitez la description à 1 500 caractères.',
+    'Choose a PNG, JPEG, or WebP screenshot under 10 MB.':
+      'Choisissez une capture PNG, JPEG ou WebP de moins de 10 Mo.',
+    'Generated code is not a complete HTML page. Nothing was imported.':
+      'Le code généré n’est pas une page HTML complète. Aucun fichier n’a été importé.',
+    'Generated HTML contains active content. Review the source and remove scripts before importing into Bolt.':
+      'Import bloqué : le HTML contient du contenu actif. Téléchargez le code pour le vérifier et le corriger dans un éditeur externe. Aucun fichier n’a été écrit dans le projet.',
+    'screenshot-generated.html already exists. Rename it before importing another screenshot.':
+      'Le fichier screenshot-generated.html existe déjà. Renommez-le avant un nouvel import.',
+    'Could not create the generated HTML file.': 'Impossible de créer le fichier HTML généré.',
+    'Screenshot service connection failed.': 'La connexion au service de génération a échoué.',
+    'Screenshot service connection closed unexpectedly.': 'La connexion au service de génération a été interrompue.',
+    'Invalid screenshot service response. Nothing was imported.':
+      'La réponse du service de génération est invalide. Aucun fichier n’a été importé.',
+    'Screenshot generation incomplete or unsafe. Nothing was imported.':
+      'La génération est incomplète ou non sécurisée. Aucun fichier n’a été importé.',
+    'Design generation returned no image.': 'La génération n’a renvoyé aucune image.',
+    'Design generation returned no usable image.': 'La génération n’a renvoyé aucune image utilisable.',
+  };
+
+  return Object.hasOwn(messages, message) ? messages[message] : message;
 }
 
 export function ScreenshotToCode({
@@ -130,6 +157,8 @@ export function ScreenshotToCode({
 
   const reset = () => {
     controller.current?.abort();
+    controller.current = null;
+    setBusy(false);
     setStatus('');
     setLog([]);
     setError('');
@@ -161,7 +190,7 @@ export function ScreenshotToCode({
       !['image/png', 'image/jpeg', 'image/webp'].includes(selectedFile.type) ||
       selectedFile.size > 10 * 1024 * 1024
     ) {
-      setError('Choose a PNG, JPEG, or WebP screenshot under 10 MB.');
+      setError('Choisissez une capture PNG, JPEG ou WebP de moins de 10 Mo.');
 
       return;
     }
@@ -175,7 +204,7 @@ export function ScreenshotToCode({
       stack,
       signal: abort.signal,
       onEvent: (event) => {
-        if (!mounted.current || abort.signal.aborted) {
+        if (!mounted.current || controller.current !== abort || abort.signal.aborted) {
           return;
         }
 
@@ -193,6 +222,18 @@ export function ScreenshotToCode({
       return;
     }
 
+    let text: string;
+
+    try {
+      text = validateDesignPrompt(prompt);
+    } catch (cause) {
+      setStatus('');
+      setLog([]);
+      setError(cause instanceof Error ? clientError(cause.message) : 'Description invalide.');
+
+      return;
+    }
+
     const abort = new AbortController();
     controller.current = abort;
     setBusy(true);
@@ -201,24 +242,26 @@ export function ScreenshotToCode({
     setVariants([]);
     setDesigns([]);
     setChosenDesign(0);
-    setStatus('Generating page mockups...');
+    setStatus('Génération des maquettes…');
 
     try {
-      const text = validateDesignPrompt(prompt);
       const result = await designFor({ prompt: text, count: DESIGN_COUNT, signal: abort.signal });
 
-      if (mounted.current && !abort.signal.aborted) {
+      if (mounted.current && controller.current === abort && !abort.signal.aborted) {
         setDesigns(result);
         setStatus(
-          `${result.length} mockup${result.length === 1 ? '' : 's'} generated. Pick the one to turn into code.`,
+          `${result.length} maquette${result.length > 1 ? 's' : ''} générée${result.length > 1 ? 's' : ''}. Choisissez celle à transformer en code.`,
         );
       }
     } catch (cause) {
-      if (mounted.current && !abort.signal.aborted) {
-        setError(cause instanceof Error ? cause.message : 'Design generation failed.');
+      if (mounted.current && controller.current === abort && !abort.signal.aborted) {
+        setStatus('');
+        setLog([]);
+        setError(cause instanceof Error ? clientError(cause.message) : 'La génération des maquettes a échoué.');
       }
     } finally {
-      if (mounted.current) {
+      if (mounted.current && controller.current === abort) {
+        controller.current = null;
         setBusy(false);
       }
     }
@@ -243,7 +286,7 @@ export function ScreenshotToCode({
     setError('');
     setVariants([]);
     setSelected(0);
-    setStatus('Turning the mockup into code...');
+    setStatus('Transformation de la maquette en code…');
     setLog([]);
 
     try {
@@ -256,20 +299,23 @@ export function ScreenshotToCode({
 
       const result = await runGeneration(image, abort);
 
-      if (mounted.current && !abort.signal.aborted) {
+      if (mounted.current && controller.current === abort && !abort.signal.aborted) {
         setVariants(result);
         setStatus(
           result.length === 1
-            ? 'Code ready. Review it before importing.'
-            : `${result.length} versions generated. Pick the one to import.`,
+            ? 'Le code est prêt. Vérifiez-le avant de l’importer.'
+            : `${result.length} versions générées. Choisissez celle à importer.`,
         );
       }
     } catch (cause) {
-      if (mounted.current && !abort.signal.aborted) {
-        setError(cause instanceof Error ? cause.message : 'Generation failed.');
+      if (mounted.current && controller.current === abort && !abort.signal.aborted) {
+        setStatus('');
+        setLog([]);
+        setError(cause instanceof Error ? clientError(cause.message) : 'La génération a échoué.');
       }
     } finally {
-      if (mounted.current) {
+      if (mounted.current && controller.current === abort) {
+        controller.current = null;
         setBusy(false);
       }
     }
@@ -287,7 +333,7 @@ export function ScreenshotToCode({
     setError('');
     setVariants([]);
     setSelected(0);
-    setStatus('Reading the image...');
+    setStatus('Lecture de l’image…');
     setLog([]);
 
     try {
@@ -299,20 +345,23 @@ export function ScreenshotToCode({
 
       const result = await runGeneration(image, abort);
 
-      if (mounted.current && !abort.signal.aborted) {
+      if (mounted.current && controller.current === abort && !abort.signal.aborted) {
         setVariants(result);
         setStatus(
           result.length === 1
-            ? 'Code ready. Review it before importing.'
-            : `${result.length} versions generated. Pick the one to import.`,
+            ? 'Le code est prêt. Vérifiez-le avant de l’importer.'
+            : `${result.length} versions générées. Choisissez celle à importer.`,
         );
       }
     } catch (cause) {
-      if (mounted.current && !abort.signal.aborted) {
-        setError(cause instanceof Error ? cause.message : 'Generation failed.');
+      if (mounted.current && controller.current === abort && !abort.signal.aborted) {
+        setStatus('');
+        setLog([]);
+        setError(cause instanceof Error ? clientError(cause.message) : 'La génération a échoué.');
       }
     } finally {
-      if (mounted.current) {
+      if (mounted.current && controller.current === abort) {
+        controller.current = null;
         setBusy(false);
       }
     }
@@ -325,8 +374,11 @@ export function ScreenshotToCode({
       return;
     }
 
+    controller.current = null;
     setBusy(true);
     setError('');
+    setStatus('Import dans Bolt…');
+    setLog([]);
 
     try {
       validateImportableHtml(chosen.code);
@@ -334,16 +386,51 @@ export function ScreenshotToCode({
       const path = await importCode(chosen.code);
 
       if (mounted.current) {
-        setStatus(`Imported ${path}. Ask Bolt to refine it in the chat.`);
+        setStatus(`Importé : ${path}. Demandez à Bolt de l’affiner dans la discussion.`);
       }
     } catch (cause) {
       if (mounted.current) {
-        setError(cause instanceof Error ? cause.message : 'Import failed.');
+        setStatus('');
+        setLog([]);
+        setError(cause instanceof Error ? clientError(cause.message) : 'L’import a échoué.');
       }
     } finally {
       if (mounted.current) {
         setBusy(false);
       }
+    }
+  };
+
+  const cancel = () => {
+    controller.current?.abort();
+    controller.current = null;
+    setBusy(false);
+    setError('');
+    setLog([]);
+    setStatus('Génération annulée. Vous pouvez réessayer.');
+  };
+
+  const downloadHtml = () => {
+    const code = variants[selected]?.code;
+
+    if (code === undefined) {
+      return;
+    }
+
+    // Plain text avoids executing untrusted HTML when the downloaded file is opened.
+    const url = URL.createObjectURL(new Blob([code], { type: 'text/plain;charset=utf-8' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'screenshot-generated.html.txt';
+    document.body.appendChild(anchor);
+
+    try {
+      anchor.click();
+    } finally {
+      anchor.remove();
+
+      // Give the browser time to start the download before releasing the URL.
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
   };
 
@@ -353,7 +440,7 @@ export function ScreenshotToCode({
   return (
     <div className="flex flex-col gap-4 text-sm text-bolt-elements-textPrimary">
       {/* Mode switch: two visible cards, so the choice is seen rather than hunted. */}
-      <div role="radiogroup" aria-label="Starting point" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <div role="radiogroup" aria-label="Point de départ" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {MODES.map((option) => {
           const active = mode === option.value;
 
@@ -400,14 +487,14 @@ export function ScreenshotToCode({
       {/* ---- Design mode: prompt -> mockups -> code ---- */}
       {mode === 'design' && (
         <div className="flex flex-col gap-3">
-          <Label htmlFor="design-prompt">What page do you want?</Label>
+          <Label htmlFor="design-prompt">Quelle page souhaitez-vous créer ?</Label>
           <textarea
             id="design-prompt"
-            aria-label="Design description"
+            aria-label="Description de la maquette"
             value={prompt}
             disabled={busy}
             onChange={(event) => setPrompt(event.target.value)}
-            placeholder="A landing page for a bakery: hero, three product cards, opening hours, footer"
+            placeholder="Une page pour une boulangerie : accueil, trois produits, horaires, pied de page"
             rows={3}
             className={classNames(
               'w-full resize-y rounded-lg border border-bolt-elements-borderColor px-3 py-2',
@@ -420,17 +507,17 @@ export function ScreenshotToCode({
             type="button"
             disabled={busy || prompt.trim().length < 3}
             onClick={() => void createDesigns()}
-            className="self-start bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text !rounded-full px-5"
+            className="self-start h-auto min-h-11 max-w-full !whitespace-normal bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text !rounded-full px-5"
           >
-            Generate {DESIGN_COUNT} mockups
+            Générer {DESIGN_COUNT} maquettes
           </Button>
 
           {designs.length > 0 && (
             <div className="flex flex-col gap-3">
               <p className="text-xs text-bolt-elements-textSecondary">
-                Pick the mockup to build. Each one is a different direction.
+                Choisissez la maquette à réaliser. Chacune propose une direction différente.
               </p>
-              <div role="radiogroup" aria-label="Generated mockups" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div role="radiogroup" aria-label="Maquettes générées" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {designs.map((design, index) => {
                   const active = index === chosenDesign;
 
@@ -440,7 +527,7 @@ export function ScreenshotToCode({
                       type="button"
                       role="radio"
                       aria-checked={active}
-                      aria-label={`${design.direction} mockup`}
+                      aria-label={`Maquette ${design.direction}`}
                       disabled={busy}
                       onClick={() => setChosenDesign(index)}
                       className={classNames(
@@ -452,7 +539,7 @@ export function ScreenshotToCode({
                     >
                       <img
                         src={design.image}
-                        alt={`${design.direction} mockup preview`}
+                        alt={`Aperçu de la maquette ${design.direction}`}
                         className="h-40 w-full bg-white object-cover"
                       />
                       <span className="flex items-center gap-2 px-3 py-2">
@@ -473,9 +560,9 @@ export function ScreenshotToCode({
                 type="button"
                 disabled={busy || !chosenMockup}
                 onClick={() => void codeFromDesign()}
-                className="self-start bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text !rounded-full px-5"
+                className="self-start h-auto min-h-11 max-w-full !whitespace-normal bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text !rounded-full px-5"
               >
-                Turn this mockup into code
+                Transformer cette maquette en code
               </Button>
             </div>
           )}
@@ -485,10 +572,10 @@ export function ScreenshotToCode({
       {/* ---- Screenshot mode: upload -> code ---- */}
       {mode === 'screenshot' && (
         <div className="flex flex-col gap-3">
-          <Label htmlFor="screenshot-image">Screenshot image</Label>
+          <Label htmlFor="screenshot-image">Image de la capture</Label>
           <Input
             id="screenshot-image"
-            aria-label="Screenshot image"
+            aria-label="Image de la capture"
             type="file"
             accept="image/png,image/jpeg,image/webp"
             onChange={(event) => select(event.target.files?.[0])}
@@ -501,18 +588,18 @@ export function ScreenshotToCode({
             type="button"
             disabled={!file || busy}
             onClick={() => void start()}
-            className="self-start bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text !rounded-full px-5"
+            className="self-start h-auto min-h-11 max-w-full !whitespace-normal bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text !rounded-full px-5"
           >
-            Turn this image into code
+            Transformer cette image en code
           </Button>
         </div>
       )}
 
       {/* ---- Shared output side ---- */}
-      <Label htmlFor="screenshot-stack">Output stack</Label>
+      <Label htmlFor="screenshot-stack">Technologies de sortie</Label>
       <select
         id="screenshot-stack"
-        aria-label="Output stack"
+        aria-label="Technologies de sortie"
         value={stack}
         disabled={busy}
         onChange={(event) => setStack(event.target.value as Stack)}
@@ -528,9 +615,9 @@ export function ScreenshotToCode({
         ))}
       </select>
 
-      {busy && (
-        <Button type="button" variant="outline" onClick={() => controller.current?.abort()} className="self-start">
-          Cancel
+      {busy && controller.current && (
+        <Button type="button" variant="outline" onClick={cancel} className="self-start">
+          Annuler
         </Button>
       )}
 
@@ -543,9 +630,9 @@ export function ScreenshotToCode({
       {log.length > 0 && (
         <details className="rounded-md border border-bolt-elements-borderColor px-3 py-2">
           <summary className="cursor-pointer text-xs text-bolt-elements-textSecondary">
-            Generation progress ({log.length})
+            Progression de la génération ({log.length})
           </summary>
-          <ul aria-label="Generation progress" className="mt-2 flex flex-col gap-0.5">
+          <ul aria-label="Progression de la génération" className="mt-2 flex flex-col gap-0.5">
             {log.map((line, index) => (
               <li key={`${index}-${line}`} className="truncate text-xs text-bolt-elements-textSecondary">
                 {line}
@@ -564,12 +651,12 @@ export function ScreenshotToCode({
       {variants.length > 0 && (
         <>
           <p className="text-xs text-bolt-elements-textSecondary">
-            The preview is a static, scriptless rendering in an isolated frame. The source is saved in Bolt only after
-            you import it.
+            L’aperçu est statique, sans scripts et isolé. Le code source n’est enregistré dans Bolt qu’après votre
+            confirmation d’import.
           </p>
 
           {variants.length > 1 && (
-            <div role="group" aria-label="Generated versions" className="flex flex-wrap gap-2">
+            <div role="group" aria-label="Versions générées" className="flex flex-wrap gap-2">
               {variants.map((variant, index) => (
                 <button
                   key={variant.index}
@@ -592,14 +679,14 @@ export function ScreenshotToCode({
           {current && (
             <>
               <iframe
-                title={`Generated version ${selected + 1} preview`}
+                title={`Aperçu de la version ${selected + 1}`}
                 sandbox=""
                 referrerPolicy="no-referrer"
                 srcDoc={`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'">${current.code}`}
                 className="h-64 w-full rounded-md border border-bolt-elements-borderColor bg-white"
               />
               <textarea
-                aria-label="Generated HTML source"
+                aria-label="Source HTML générée"
                 readOnly
                 value={current.code}
                 className={classNames(
@@ -607,13 +694,27 @@ export function ScreenshotToCode({
                   'bg-bolt-elements-background-depth-1 px-3 py-2 font-mono text-xs text-bolt-elements-textPrimary',
                 )}
               />
+              <p id="html-download-help" className="text-xs text-bolt-elements-textSecondary">
+                Téléchargez le code exact au format texte (.html.txt) pour le corriger dans un éditeur externe. Ce
+                téléchargement n’écrit rien dans votre projet. Le code peut contenir des scripts : ne l’exécutez pas
+                sans l’avoir vérifié.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={downloadHtml}
+                aria-describedby="html-download-help"
+                className="self-start"
+              >
+                Télécharger le HTML
+              </Button>
               <Button
                 type="button"
                 onClick={() => void importFile()}
                 disabled={busy}
-                className="self-start bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text !rounded-full px-5"
+                className="self-start h-auto min-h-11 max-w-full !whitespace-normal bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text !rounded-full px-5"
               >
-                Import into Bolt
+                Importer dans Bolt
               </Button>
             </>
           )}

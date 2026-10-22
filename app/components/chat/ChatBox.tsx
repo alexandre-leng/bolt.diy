@@ -434,7 +434,7 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
                      * dialog returns focus there on close (see onCloseAutoFocus in ScreenshotDialog).
                      */
                     screenshotOpenerRef.current = document.querySelector<HTMLElement>(
-                      '[title="Add attachment or connector"]',
+                      '[data-testid="attachment-menu-trigger"]',
                     );
                     setIsScreenshotOpen(true);
                   }}

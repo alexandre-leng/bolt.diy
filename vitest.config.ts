@@ -85,6 +85,7 @@ const DOM_TESTS = [
   'app/components/chat/ChatControls.a11y.spec.tsx',
   'app/components/chat/ModelSelector.a11y.spec.tsx',
   'app/components/ui/ColorSchemeDialog.spec.tsx',
+  'app/components/ui/SecretInput.spec.tsx',
   'app/components/ui/SelectionDialog.spec.tsx',
   'app/components/workbench/PortDropdown.spec.tsx',
 

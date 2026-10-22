@@ -15,7 +15,7 @@ const noDesigns = async () => [] as Design[];
 
 /** The panel opens on design mode; tests that target the image path switch first. */
 async function useImageMode() {
-  await userEvent.click(screen.getByRole('radio', { name: 'Use an image' }));
+  await userEvent.click(screen.getByRole('radio', { name: 'Utiliser une image' }));
 }
 
 function renderPanel(props: Partial<Parameters<typeof ScreenshotToCode>[0]> = {}) {
@@ -26,8 +26,8 @@ describe('mode selection', () => {
   it('offers both starting points as visible, mutually exclusive options', () => {
     renderPanel();
 
-    const designMode = screen.getByRole('radio', { name: 'Generate a design' });
-    const imageMode = screen.getByRole('radio', { name: 'Use an image' });
+    const designMode = screen.getByRole('radio', { name: 'Créer une maquette' });
+    const imageMode = screen.getByRole('radio', { name: 'Utiliser une image' });
 
     expect(designMode).toBeTruthy();
     expect(imageMode).toBeTruthy();
@@ -41,22 +41,22 @@ describe('mode selection', () => {
     renderPanel();
 
     // Design mode shows the prompt, not the file picker.
-    expect(screen.getByLabelText('Design description')).toBeTruthy();
-    expect(screen.queryByLabelText('Screenshot image')).toBeNull();
+    expect(screen.getByLabelText('Description de la maquette')).toBeTruthy();
+    expect(screen.queryByLabelText('Image de la capture')).toBeNull();
 
     await useImageMode();
 
-    expect(screen.getByLabelText('Screenshot image')).toBeTruthy();
-    expect(screen.queryByLabelText('Design description')).toBeNull();
-    expect(screen.getByRole('radio', { name: 'Use an image' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByLabelText('Image de la capture')).toBeTruthy();
+    expect(screen.queryByLabelText('Description de la maquette')).toBeNull();
+    expect(screen.getByRole('radio', { name: 'Utiliser une image' }).getAttribute('aria-checked')).toBe('true');
   });
 
   it('keeps the output stack selector available in both modes', async () => {
     renderPanel();
-    expect(screen.getByLabelText('Output stack')).toBeTruthy();
+    expect(screen.getByLabelText('Technologies de sortie')).toBeTruthy();
 
     await useImageMode();
-    expect(screen.getByLabelText('Output stack')).toBeTruthy();
+    expect(screen.getByLabelText('Technologies de sortie')).toBeTruthy();
   });
 });
 
@@ -71,12 +71,12 @@ describe('design mode', () => {
     const designFor = vi.fn().mockResolvedValue(mockups);
     renderPanel({ designFor });
 
-    await userEvent.type(screen.getByLabelText('Design description'), 'A bakery landing page');
-    await userEvent.click(screen.getByRole('button', { name: /Generate 3 mockups/ }));
+    await userEvent.type(screen.getByLabelText('Description de la maquette'), 'A bakery landing page');
+    await userEvent.click(screen.getByRole('button', { name: /Générer 3 maquettes/ }));
 
-    expect(await screen.findByRole('radio', { name: 'Minimal mockup' })).toBeTruthy();
-    expect(screen.getByRole('radio', { name: 'Bold mockup' })).toBeTruthy();
-    expect(screen.getByRole('radio', { name: 'Friendly mockup' })).toBeTruthy();
+    expect(await screen.findByRole('radio', { name: 'Maquette Minimal' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Maquette Bold' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Maquette Friendly' })).toBeTruthy();
     expect(designFor).toHaveBeenCalledWith(expect.objectContaining({ prompt: 'A bakery landing page', count: 3 }));
   });
 
@@ -84,7 +84,7 @@ describe('design mode', () => {
     const designFor = vi.fn();
     renderPanel({ designFor });
 
-    expect(screen.getByRole('button', { name: /Generate 3 mockups/ })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: /Générer 3 maquettes/ })).toHaveProperty('disabled', true);
     expect(designFor).not.toHaveBeenCalled();
   });
 
@@ -93,12 +93,12 @@ describe('design mode', () => {
     const generate = vi.fn().mockResolvedValue(oneVariant(generated));
     renderPanel({ designFor: vi.fn().mockResolvedValue(mockups), generate });
 
-    await userEvent.type(screen.getByLabelText('Design description'), 'A bakery landing page');
-    await userEvent.click(screen.getByRole('button', { name: /Generate 3 mockups/ }));
-    await screen.findByRole('radio', { name: 'Bold mockup' });
+    await userEvent.type(screen.getByLabelText('Description de la maquette'), 'A bakery landing page');
+    await userEvent.click(screen.getByRole('button', { name: /Générer 3 maquettes/ }));
+    await screen.findByRole('radio', { name: 'Maquette Bold' });
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Bold mockup' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Turn this mockup into code' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Maquette Bold' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette maquette en code' }));
 
     await waitFor(() =>
       expect(generate).toHaveBeenCalledWith(expect.stringContaining('data:image/'), expect.anything()),
@@ -121,11 +121,11 @@ describe('screenshot mode', () => {
     renderPanel({ generate, importCode });
     await useImageMode();
 
-    fireEvent.change(screen.getByLabelText('Screenshot image'), {
+    fireEvent.change(screen.getByLabelText('Image de la capture'), {
       target: { files: [new File(['image bytes'], 'example.png', { type: 'image/png' })] },
     });
     expect(await screen.findByText('example.png')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Turn this image into code' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
 
     /*
      * The real backend emits frames AFTER the socket opens, asynchronously; emitting
@@ -135,7 +135,7 @@ describe('screenshot mode', () => {
     expect(importCode).not.toHaveBeenCalled();
     await act(async () => complete(oneVariant(generated)));
     expect(importCode).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Import into Bolt' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Importer dans Bolt' }));
     expect(await screen.findByRole('status')).toHaveProperty(
       'textContent',
       expect.stringContaining('screenshot-generated.html'),
@@ -149,11 +149,11 @@ describe('screenshot mode', () => {
     await useImageMode();
 
     await userEvent.upload(
-      screen.getByLabelText('Screenshot image'),
+      screen.getByLabelText('Image de la capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.selectOptions(screen.getByLabelText('Output stack'), 'react_tailwind');
-    await userEvent.click(screen.getByRole('button', { name: 'Turn this image into code' }));
+    await userEvent.selectOptions(screen.getByLabelText('Technologies de sortie'), 'react_tailwind');
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
 
     expect(generate).toHaveBeenCalledWith(
       expect.stringContaining('data:image/png'),
@@ -166,12 +166,12 @@ describe('screenshot mode', () => {
     renderPanel({ generate });
     await useImageMode();
 
-    fireEvent.change(screen.getByLabelText('Screenshot image'), {
+    fireEvent.change(screen.getByLabelText('Image de la capture'), {
       target: { files: [new File(['data'], 'not.svg', { type: 'image/svg+xml' })] },
     });
     expect(await screen.findByRole('alert')).toHaveProperty(
       'textContent',
-      expect.stringContaining('PNG, JPEG, or WebP'),
+      expect.stringContaining('PNG, JPEG ou WebP'),
     );
     expect(generate).not.toHaveBeenCalled();
   });
@@ -187,13 +187,13 @@ describe('screenshot mode', () => {
     await useImageMode();
 
     await userEvent.upload(
-      screen.getByLabelText('Screenshot image'),
+      screen.getByLabelText('Image de la capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Turn this image into code' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
 
     /*
-     * The status line also carries the intermediate "Reading the image...", so wait for
+     * The status line also carries the intermediate "Lecture de l’image…", so wait for
      * the final summary rather than for the element to exist.
      */
     await waitFor(() => expect(screen.getByRole('status').textContent).toContain('3 versions'));
@@ -213,22 +213,22 @@ describe('variant selection', () => {
     await useImageMode();
 
     await userEvent.upload(
-      screen.getByLabelText('Screenshot image'),
+      screen.getByLabelText('Image de la capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Turn this image into code' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
 
     // All three are offered, not only the last one that completed.
     expect(await screen.findByRole('button', { name: 'Version 1' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Version 2' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Version 3' })).toBeTruthy();
 
-    expect(screen.getByTitle('Generated version 1 preview').getAttribute('srcdoc')).toContain('<h1>First</h1>');
+    expect(screen.getByTitle('Aperçu de la version 1').getAttribute('srcdoc')).toContain('<h1>First</h1>');
 
     await userEvent.click(screen.getByRole('button', { name: 'Version 3' }));
-    expect(screen.getByTitle('Generated version 3 preview').getAttribute('srcdoc')).toContain('<h1>Third</h1>');
+    expect(screen.getByTitle('Aperçu de la version 3').getAttribute('srcdoc')).toContain('<h1>Third</h1>');
 
-    await userEvent.click(screen.getByRole('button', { name: 'Import into Bolt' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Importer dans Bolt' }));
     expect(importCode).toHaveBeenCalledWith(versions[2].code);
   });
 });
@@ -248,12 +248,12 @@ describe('streamed progress', () => {
     await useImageMode();
 
     await userEvent.upload(
-      screen.getByLabelText('Screenshot image'),
+      screen.getByLabelText('Image de la capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Turn this image into code' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
 
-    const log = await screen.findByLabelText('Generation progress');
+    const log = await screen.findByLabelText('Progression de la génération');
     expect(log.textContent).toContain('4 versions');
     expect(log.textContent).toContain('Considering the hero layout');
     expect(log.textContent).toContain('create_file');
@@ -264,13 +264,16 @@ describe('streamed progress', () => {
     await useImageMode();
 
     await userEvent.upload(
-      screen.getByLabelText('Screenshot image'),
+      screen.getByLabelText('Image de la capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Turn this image into code' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
 
-    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Screenshot service connection failed.');
-    expect(screen.queryByRole('button', { name: 'Import into Bolt' })).toBeNull();
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      'La connexion au service de génération a échoué.',
+    );
+    expect(screen.queryByRole('button', { name: 'Importer dans Bolt' })).toBeNull();
   });
 });
 
@@ -281,12 +284,12 @@ describe('preview safety', () => {
     await useImageMode();
 
     await userEvent.upload(
-      screen.getByLabelText('Screenshot image'),
+      screen.getByLabelText('Image de la capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Turn this image into code' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
 
-    const frame = await screen.findByTitle('Generated version 1 preview');
+    const frame = await screen.findByTitle('Aperçu de la version 1');
     expect(frame.getAttribute('sandbox')).toBe('');
     expect(frame.getAttribute('srcdoc')).toContain('<h1>Safe</h1>');
     expect(frame.getAttribute('srcdoc')).toContain("script-src 'none'");
@@ -299,13 +302,13 @@ describe('preview safety', () => {
     await useImageMode();
 
     await userEvent.upload(
-      screen.getByLabelText('Screenshot image'),
+      screen.getByLabelText('Image de la capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Turn this image into code' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
     expect(await screen.findByDisplayValue(active)).toBeTruthy();
-    await userEvent.click(screen.getByRole('button', { name: 'Import into Bolt' }));
-    expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('active content'));
+    await userEvent.click(screen.getByRole('button', { name: 'Importer dans Bolt' }));
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('contenu actif'));
     expect(importCode).not.toHaveBeenCalled();
   });
 
@@ -317,13 +320,256 @@ describe('preview safety', () => {
     await useImageMode();
 
     await userEvent.upload(
-      screen.getByLabelText('Screenshot image'),
+      screen.getByLabelText('Image de la capture'),
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Turn this image into code' }));
-    await screen.findByTitle('Generated version 1 preview');
-    await userEvent.click(screen.getByRole('button', { name: 'Import into Bolt' }));
-    expect(await screen.findByRole('status')).toHaveProperty('textContent', expect.stringContaining('Imported'));
-    expect(screen.getByTitle('Generated version 1 preview')).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
+    await screen.findByTitle('Aperçu de la version 1');
+    await userEvent.click(screen.getByRole('button', { name: 'Importer dans Bolt' }));
+    expect(await screen.findByRole('status')).toHaveProperty('textContent', expect.stringContaining('Importé'));
+    expect(screen.getByTitle('Aperçu de la version 1')).toBeTruthy();
+  });
+});
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (cause: Error) => void;
+
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+
+  return { promise, resolve, reject };
+}
+
+async function uploadScreenshot() {
+  await useImageMode();
+  await userEvent.upload(
+    screen.getByLabelText('Image de la capture'),
+    new File(['image bytes'], 'example.png', { type: 'image/png' }),
+  );
+  await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
+}
+
+describe('truthful operation states', () => {
+  it('validates an overlong prompt without generating, reporting progress or removing existing results', async () => {
+    const designFor = vi.fn().mockResolvedValue([{ image: 'data:image/png;base64,aGVsbG8=', direction: 'Minimal' }]);
+    const generate = vi.fn();
+    renderPanel({ designFor, generate });
+    fireEvent.change(screen.getByLabelText('Description de la maquette'), { target: { value: 'Une boulangerie' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Générer 3 maquettes' }));
+    await screen.findByRole('radio', { name: 'Maquette Minimal' });
+    designFor.mockClear();
+
+    fireEvent.change(screen.getByLabelText('Description de la maquette'), { target: { value: 'x'.repeat(1501) } });
+    await userEvent.click(screen.getByRole('button', { name: 'Générer 3 maquettes' }));
+
+    expect(screen.getByRole('alert').textContent).toContain('1 500 caractères');
+    expect(designFor).not.toHaveBeenCalled();
+    expect(generate).not.toHaveBeenCalled();
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByLabelText('Progression de la génération')).toBeNull();
+    expect(screen.getByRole('radio', { name: 'Maquette Minimal' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Générer 3 maquettes' })).toHaveProperty('disabled', false);
+  });
+
+  it.each(['Provider quota: account ABC', 'constructor', '__proto__'])(
+    'preserves the provider error "%s" and clears design progress on rejection',
+    async (message) => {
+      renderPanel({ designFor: vi.fn().mockRejectedValue(new Error(message)) });
+      fireEvent.change(screen.getByLabelText('Description de la maquette'), { target: { value: 'Une boulangerie' } });
+      await userEvent.click(screen.getByRole('button', { name: 'Générer 3 maquettes' }));
+      expect((await screen.findByRole('alert')).textContent).toBe(message);
+      expect(screen.queryByRole('status')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Annuler' })).toBeNull();
+    },
+  );
+
+  it('clears status and streamed progress after a screenshot provider rejection', async () => {
+    renderPanel({
+      generate: vi.fn(async (_image, options) => {
+        options?.onEvent?.({ kind: 'status', text: 'Backend content unchanged' });
+        throw new Error('Provider 429: try later');
+      }),
+    });
+    await uploadScreenshot();
+    expect((await screen.findByRole('alert')).textContent).toBe('Provider 429: try later');
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByLabelText('Progression de la génération')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Transformer cette image en code' })).toHaveProperty('disabled', false);
+  });
+
+  it('clears progress when the selected mockup cannot become code', async () => {
+    renderPanel({
+      designFor: vi.fn().mockResolvedValue([{ image: 'data:image/png;base64,aGVsbG8=', direction: 'Minimal' }]),
+      generate: vi.fn().mockRejectedValue(new Error('Provider error: model unavailable')),
+    });
+    fireEvent.change(screen.getByLabelText('Description de la maquette'), { target: { value: 'Une boulangerie' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Générer 3 maquettes' }));
+    await screen.findByRole('radio', { name: 'Maquette Minimal' });
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette maquette en code' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Provider error: model unavailable');
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByLabelText('Progression de la génération')).toBeNull();
+  });
+
+  it('cancels immediately, keeps a final French message and ignores an old run while a newer one is busy', async () => {
+    const first = deferred<Design[]>();
+    const second = deferred<Design[]>();
+    const designFor = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    renderPanel({ designFor });
+    fireEvent.change(screen.getByLabelText('Description de la maquette'), { target: { value: 'Une boulangerie' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Générer 3 maquettes' }));
+
+    const signal = designFor.mock.calls[0][0].signal;
+    await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    expect(signal.aborted).toBe(true);
+    expect(screen.getByRole('status').textContent).toBe('Génération annulée. Vous pouvez réessayer.');
+    expect(screen.getByRole('button', { name: 'Générer 3 maquettes' })).toHaveProperty('disabled', false);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Générer 3 maquettes' }));
+    await act(async () => first.reject(new Error('Old rejected run')));
+    expect(screen.getByRole('button', { name: 'Générer 3 maquettes' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('status').textContent).toBe('Génération des maquettes…');
+    expect(screen.queryByRole('alert')).toBeNull();
+    await act(async () => second.resolve([]));
+    expect(screen.getByRole('button', { name: 'Générer 3 maquettes' })).toHaveProperty('disabled', false);
+  });
+
+  it('does not let an old screenshot finally unlock a newer screenshot generation', async () => {
+    const first = deferred<Variant[]>();
+    const second = deferred<Variant[]>();
+    const generate = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    renderPanel({ generate });
+    await uploadScreenshot();
+    await waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
+    await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    expect(generate.mock.calls[0][1].signal.aborted).toBe(true);
+    expect(screen.getByRole('status').textContent).toContain('Génération annulée');
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
+    await waitFor(() => expect(generate).toHaveBeenCalledTimes(2));
+    await act(async () => first.resolve(oneVariant(generated)));
+    expect(screen.getByRole('button', { name: 'Transformer cette image en code' })).toHaveProperty('disabled', true);
+    expect(screen.queryByDisplayValue(generated)).toBeNull();
+    await act(async () => second.resolve(oneVariant(generated)));
+    expect(screen.getByRole('button', { name: 'Transformer cette image en code' })).toHaveProperty('disabled', false);
+    expect(screen.getByDisplayValue(generated)).toBeTruthy();
+  });
+
+  it('cancels mockup-to-code generation without allowing its old completion to unlock a newer run', async () => {
+    const first = deferred<Variant[]>();
+    const second = deferred<Variant[]>();
+    const generate = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    renderPanel({
+      generate,
+      designFor: vi.fn().mockResolvedValue([{ image: 'data:image/png;base64,aGVsbG8=', direction: 'Minimal' }]),
+    });
+    fireEvent.change(screen.getByLabelText('Description de la maquette'), { target: { value: 'Une boulangerie' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Générer 3 maquettes' }));
+    await screen.findByRole('radio', { name: 'Maquette Minimal' });
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette maquette en code' }));
+    await waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
+    await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    expect(generate.mock.calls[0][1].signal.aborted).toBe(true);
+    expect(screen.getByRole('status').textContent).toContain('Génération annulée');
+    await userEvent.click(screen.getByRole('button', { name: 'Transformer cette maquette en code' }));
+    await waitFor(() => expect(generate).toHaveBeenCalledTimes(2));
+    await act(async () => first.reject(new Error('Old provider failure')));
+    expect(screen.getByRole('button', { name: 'Transformer cette maquette en code' })).toHaveProperty('disabled', true);
+    expect(screen.queryByRole('alert')).toBeNull();
+    await act(async () => second.resolve(oneVariant(generated)));
+    expect(screen.getByDisplayValue(generated)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Transformer cette maquette en code' })).toHaveProperty(
+      'disabled',
+      false,
+    );
+  });
+
+  it('never offers a fake cancel during import and clears progress after import rejection', async () => {
+    const pending = deferred<string>();
+    const importCode = vi.fn().mockReturnValue(pending.promise);
+    renderPanel({ generate: vi.fn().mockResolvedValue(oneVariant(generated)), importCode });
+    await uploadScreenshot();
+    await screen.findByDisplayValue(generated);
+    await userEvent.click(screen.getByRole('button', { name: 'Importer dans Bolt' }));
+    expect(screen.getByRole('status').textContent).toBe('Import dans Bolt…');
+    expect(screen.queryByRole('button', { name: 'Annuler' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Importer dans Bolt' })).toHaveProperty('disabled', true);
+    await act(async () => pending.reject(new Error('Project write refused')));
+    expect(screen.getByRole('alert').textContent).toBe('Project write refused');
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Importer dans Bolt' })).toHaveProperty('disabled', false);
+  });
+});
+
+describe('explicit safe HTML download', () => {
+  it('rejects unsafe import without writes and downloads the exact selected, read-only source as plain text', async () => {
+    const unsafe = '<!doctype html>\n<html><body><script>alert("é")</script><h1>À vérifier</h1></body></html>\n';
+    const importCode = vi.fn();
+    const createObjectURL = vi.fn().mockReturnValue('blob:test-download');
+    const revokeObjectURL = vi.fn();
+    const originalCreate = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');
+    const originalRevoke = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL');
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL });
+
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+
+    try {
+      renderPanel({
+        generate: vi.fn().mockResolvedValue([
+          { index: 0, code: generated },
+          { index: 1, code: unsafe },
+        ]),
+        importCode,
+      });
+      await uploadScreenshot();
+      await screen.findByRole('button', { name: 'Version 2' });
+      await userEvent.click(screen.getByRole('button', { name: 'Version 2' }));
+
+      const source = screen.getByLabelText('Source HTML générée') as HTMLTextAreaElement;
+      expect(source.readOnly).toBe(true);
+      expect(source.value).toBe(unsafe);
+      await userEvent.click(screen.getByRole('button', { name: 'Importer dans Bolt' }));
+      expect(screen.getByRole('alert').textContent).toContain('contenu actif');
+      expect(importCode).not.toHaveBeenCalled();
+      expect(screen.queryByRole('status')).toBeNull();
+      expect(screen.getByText(/Ce téléchargement n’écrit rien dans votre projet/)).toBeTruthy();
+      expect(createObjectURL).not.toHaveBeenCalled();
+      await userEvent.click(screen.getByRole('button', { name: 'Télécharger le HTML' }));
+
+      const blob = createObjectURL.mock.calls[0][0] as Blob;
+      expect(blob.type).toBe('text/plain;charset=utf-8');
+
+      const text = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsText(blob);
+      });
+      expect(text).toBe(unsafe);
+
+      const anchor = click.mock.instances[0] as HTMLAnchorElement;
+      expect(anchor.download).toBe('screenshot-generated.html.txt');
+      expect(anchor.href).toBe('blob:test-download');
+      expect(anchor.isConnected).toBe(false);
+      await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:test-download'), { timeout: 2000 });
+      expect(importCode).not.toHaveBeenCalled();
+      expect(source.value).toBe(unsafe);
+    } finally {
+      click.mockRestore();
+
+      if (originalCreate) {
+        Object.defineProperty(URL, 'createObjectURL', originalCreate);
+      } else {
+        Reflect.deleteProperty(URL, 'createObjectURL');
+      }
+
+      if (originalRevoke) {
+        Object.defineProperty(URL, 'revokeObjectURL', originalRevoke);
+      } else {
+        Reflect.deleteProperty(URL, 'revokeObjectURL');
+      }
+    }
   });
 });

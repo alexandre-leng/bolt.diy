@@ -24,7 +24,7 @@ export function ConnectToolsPill() {
           </span>
         ))}
       </span>
-      Connect your tools
+      Connecter vos outils
       <span className="i-ph:arrow-right text-base" aria-hidden="true" />
     </button>
   );

@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import React, { useId } from 'react';
+import { SecretInput } from '~/components/ui/SecretInput';
 import { classNames } from '~/utils/classNames';
 
 interface TokenTypeOption {
@@ -121,9 +122,8 @@ export function ConnectionForm({
                 <label htmlFor={tokenId} className="block text-sm text-bolt-elements-textSecondary mb-2">
                   {tokenLabel}
                 </label>
-                <input
+                <SecretInput
                   id={tokenId}
-                  type="password"
                   aria-invalid={error ? true : undefined}
                   aria-describedby={describedBy || undefined}
                   value={token}

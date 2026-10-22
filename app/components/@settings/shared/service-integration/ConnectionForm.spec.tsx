@@ -66,6 +66,35 @@ describe('ConnectionForm accessibility', () => {
     expect(screen.getByLabelText('Access Token').getAttribute('aria-describedby')).toContain(link.closest('div')!.id);
   });
 
+  it('reveals and masks the token without submitting or breaking its error association', () => {
+    const onConnect = vi.fn((e: React.FormEvent) => e.preventDefault());
+    const onTokenChange = vi.fn();
+    render(<ConnectionForm {...baseProps} onConnect={onConnect} onTokenChange={onTokenChange} error="Invalid token" />);
+
+    const input = screen.getByLabelText('Access Token');
+    const originalDescription = input.getAttribute('aria-describedby');
+    expect(input).toHaveAttribute('type', 'password');
+
+    const toggle = screen.getByRole('button', { name: 'Afficher le jeton' });
+    fireEvent.click(toggle);
+    expect(input).toHaveAttribute('type', 'text');
+    expect(input).toHaveValue('abc');
+    expect(input).toHaveAttribute('aria-describedby', originalDescription);
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAccessibleDescription(expect.stringContaining('Invalid token'));
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Masquer le jeton' }));
+    expect(input).toHaveAttribute('type', 'password');
+    expect(onConnect).not.toHaveBeenCalled();
+    expect(onTokenChange).not.toHaveBeenCalled();
+  });
+
+  it('disables the reveal control while connecting', () => {
+    render(<ConnectionForm {...baseProps} isConnecting />);
+    expect(screen.getByLabelText('Access Token')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Afficher le jeton' })).toBeDisabled();
+  });
+
   it('keeps the submit control reachable by name', () => {
     const onConnect = vi.fn((e: React.FormEvent) => e.preventDefault());
     render(<ConnectionForm {...baseProps} onConnect={onConnect} />);

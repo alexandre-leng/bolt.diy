@@ -9,7 +9,7 @@ describe('ConnectToolsPill', () => {
     window.addEventListener(OPEN_SETTINGS_EVENT, listener);
     render(<ConnectToolsPill />);
 
-    fireEvent.click(screen.getByRole('button', { name: /connect your tools/i }));
+    fireEvent.click(screen.getByRole('button', { name: /connecter vos outils/i }));
 
     expect(listener).toHaveBeenCalledOnce();
     expect((listener.mock.calls[0][0] as CustomEvent).detail).toEqual({ tab: 'connectors' });

@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import React, { useId } from 'react';
 import { Button } from '~/components/ui/Button';
+import { SecretInput } from '~/components/ui/SecretInput';
 import { useGitHubConnection } from '~/lib/hooks';
 import { classNames } from '~/utils/classNames';
 
@@ -68,17 +69,17 @@ export function GitHubConnection({ connectionTest, onTestConnection }: GitHubCon
       <div className="p-6 space-y-6">
         {!isConnected && (
           <div className="text-xs text-bolt-elements-textSecondary bg-bolt-elements-background-depth-1 dark:bg-bolt-elements-background-depth-1 p-3 rounded-lg mb-4">
-            <p className="flex items-center gap-1 mb-1">
-              <span className="i-ph:lightbulb w-3.5 h-3.5 text-bolt-elements-icon-success dark:text-bolt-elements-icon-success" />
+            <p className="mb-1">
+              <span className="i-ph:lightbulb inline-block align-middle mr-1 w-3.5 h-3.5 text-bolt-elements-icon-success dark:text-bolt-elements-icon-success" />
               <span className="font-medium">Tip:</span> You can also set the{' '}
-              <code className="px-1 py-0.5 bg-bolt-elements-background-depth-2 dark:bg-bolt-elements-background-depth-2 rounded">
+              <code className="break-all px-1 py-0.5 bg-bolt-elements-background-depth-2 dark:bg-bolt-elements-background-depth-2 rounded">
                 VITE_GITHUB_ACCESS_TOKEN
               </code>{' '}
               environment variable to connect automatically.
             </p>
             <p>
               For fine-grained tokens, also set{' '}
-              <code className="px-1 py-0.5 bg-bolt-elements-background-depth-2 dark:bg-bolt-elements-background-depth-2 rounded">
+              <code className="break-all px-1 py-0.5 bg-bolt-elements-background-depth-2 dark:bg-bolt-elements-background-depth-2 rounded">
                 VITE_GITHUB_TOKEN_TYPE=fine-grained
               </code>
             </p>
@@ -120,9 +121,8 @@ export function GitHubConnection({ connectionTest, onTestConnection }: GitHubCon
               >
                 {tokenType === 'classic' ? 'Personal Access Token' : 'Fine-grained Token'}
               </label>
-              <input
+              <SecretInput
                 id={tokenId}
-                type="password"
                 aria-invalid={error ? true : undefined}
                 aria-describedby={[tokenHelpId, error ? errorId : undefined].filter(Boolean).join(' ')}
                 value={token}

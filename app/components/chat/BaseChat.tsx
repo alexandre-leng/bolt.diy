@@ -356,7 +356,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   <HeroTitle />
                 </h1>
                 <p className="text-base sm:text-lg mb-8 text-bolt-elements-textSecondary animate-fade-in animation-delay-200">
-                  Describe your app and Bolt builds it, live, in your browser.
+                  Décrivez votre application. Bolt la crée avec un aperçu en direct.
                 </p>
               </div>
             )}
@@ -485,10 +485,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 })}
                 <div
                   className="flex flex-wrap justify-center items-center gap-1 text-sm text-[#1c1c1c]/80 dark:text-white/80"
-                  aria-label="Import an existing project"
+                  aria-label="Importer un projet existant"
                   role="group"
                 >
-                  <span className="mr-1">or import</span>
+                  <span className="mr-1">ou importer</span>
                   <ImportFolderButton importChat={importChat} className={SECONDARY_ACTION} />
                   <ImportZipButton importChat={importChat} className={SECONDARY_ACTION} />
                   <GitCloneButton importChat={importChat} className={SECONDARY_ACTION} />
@@ -540,7 +540,7 @@ function HeroTitle() {
   const profile = useStore(profileStore);
   const name = profile?.username?.trim();
 
-  return <>{name ? `What will you build, ${name}?` : 'What will you build today?'}</>;
+  return <>{name ? `Que voulez-vous créer, ${name} ?` : 'Que voulez-vous créer aujourd’hui ?'}</>;
 }
 
 function ScrollToBottom() {
@@ -551,11 +551,12 @@ function ScrollToBottom() {
       <>
         <div className="sticky bottom-0 left-0 right-0 bg-gradient-to-t from-bolt-elements-background-depth-1 to-transparent h-20 z-10" />
         <button
-          className="sticky z-50 bottom-0 left-0 right-0 text-4xl rounded-lg px-1.5 py-0.5 flex items-center justify-center mx-auto gap-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor text-bolt-elements-textPrimary text-sm"
+          type="button"
+          className="sticky z-50 bottom-0 left-0 right-0 min-h-11 rounded-lg px-3 py-2 flex items-center justify-center mx-auto gap-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor text-bolt-elements-textPrimary text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-borderColorActive"
           onClick={() => scrollToBottom()}
         >
-          Go to last message
-          <span className="i-ph:arrow-down animate-bounce" />
+          Aller au dernier message
+          <span className="i-ph:arrow-down" aria-hidden="true" />
         </button>
       </>
     )

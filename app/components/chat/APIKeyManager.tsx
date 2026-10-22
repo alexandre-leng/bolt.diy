@@ -1,6 +1,7 @@
 import Cookies from 'js-cookie';
 import React, { useState, useEffect, useCallback } from 'react';
 import { IconButton } from '~/components/ui/IconButton';
+import { fetchSession } from '~/lib/auth/session';
 import type { ProviderInfo } from '~/types/model';
 
 interface APIKeyManagerProps {
@@ -55,11 +56,30 @@ export const APIKeyManager: React.FC<APIKeyManagerProps> = ({ provider, apiKey, 
    */
   const [keyStatus, setKeyStatus] = useState<KeyStatus | null>(() => providerEnvKeyStatusCache[provider.name] ?? null);
 
+  /*
+   * Only an administrator may touch a provider key. The key of this deployment is set by the
+   * operator for the whole instance (env or the admin panel), so offering every account a pencil
+   * and a "Get API Key" link invited people to paste a key the server ignores, or to create an
+   * account on a provider they will never pay for. `null` = not known yet: show nothing rather
+   * than flash a control that then disappears.
+   */
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetchSession(controller.signal)
+      .then((session) => setIsAdmin(Boolean(session.authenticated && session.user?.isAdmin)))
+      .catch(() => setIsAdmin(false));
+
+    return () => controller.abort();
+  }, []);
+
   const isEnvKeySet = keyStatus ? keyStatus.isSet : null;
   const managed = Boolean(keyStatus?.managed);
 
   // A managed key is displayed, not editable, unless the admin explicitly allowed a personal one.
-  const canEdit = !managed || Boolean(keyStatus?.userKeyAllowed);
+  const canEdit = isAdmin === true && (!managed || Boolean(keyStatus?.userKeyAllowed));
 
   // Reset states and load saved key when provider changes
   useEffect(() => {
@@ -207,7 +227,7 @@ export const APIKeyManager: React.FC<APIKeyManagerProps> = ({ provider, apiKey, 
                 <div className="i-ph:pencil-simple w-4 h-4" />
               </IconButton>
             )}
-            {provider?.getApiKeyLink && !apiKey && (
+            {isAdmin === true && provider?.getApiKeyLink && !apiKey && (
               <IconButton
                 onClick={() => window.open(provider?.getApiKeyLink)}
                 title="Get API Key"

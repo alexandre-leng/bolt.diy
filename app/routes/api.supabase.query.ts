@@ -75,11 +75,15 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   } catch (error) {
     logger.error('Query execution error:', error);
+
+    /*
+     * Do not return error.stack: it leaks server paths and line numbers to the caller.
+     * The full error is in the server log above.
+     */
     return new Response(
       JSON.stringify({
         error: {
           message: error instanceof Error ? error.message : 'Query execution failed',
-          stack: error instanceof Error ? error.stack : undefined,
         },
       }),
       {

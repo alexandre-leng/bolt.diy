@@ -341,7 +341,16 @@ export const ChatImpl = memo(
             const setupMessage = createCommandsMessage(commands);
 
             if (setupMessage) {
-              setMessages((current) => [...current, setupMessage]);
+              /*
+               * This append happens after an await, so the persistence sampler has already pushed
+               * the turn (and may not run again: it skips a save when the list is unchanged since
+               * load). Persist explicitly with the setup message included, otherwise a chat whose
+               * only install/start record was synthesised here reloads without it.
+               */
+              const nextMessages = [...messagesRef.current.filter((item) => item.id !== setupMessage.id), setupMessage];
+
+              setMessages(nextMessages);
+              await storeMessageHistory(nextMessages).catch((error) => toast.error(error.message));
             }
           })();
         }

@@ -41,6 +41,7 @@ export default [
   { file: 'routes/api.netlify-deploy.ts', path: '/api/netlify-deploy' },
   { file: 'routes/api.netlify-user.ts', path: '/api/netlify-user' },
   { file: 'routes/api.supabase.ts', path: '/api/supabase' },
+  { file: 'routes/api.supabase-user.ts', path: '/api/supabase-user' },
   { file: 'routes/api.supabase.query.ts', path: '/api/supabase/query' },
   { file: 'routes/api.supabase.variables.ts', path: '/api/supabase/variables' },
   { file: 'routes/api.system.diagnostics.ts', path: '/api/system/diagnostics' },

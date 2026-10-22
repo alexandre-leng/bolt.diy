@@ -103,9 +103,16 @@ export function VercelDeploymentLink() {
           }
         }
 
-        // Fallback to API call if not found in fetched projects
-        const fallbackResponse = await fetch(`/api/vercel-deploy?projectId=${projectId}&token=${connection.token}`, {
-          method: 'GET',
+        /*
+         * Fallback to API call if not found in fetched projects.
+         * POST, not GET: the token must not end up in the URL (and in the access log).
+         */
+        const fallbackResponse = await fetch('/api/vercel-deploy', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ projectId, token: connection.token, lookup: true }),
         });
 
         const data = await fallbackResponse.json();

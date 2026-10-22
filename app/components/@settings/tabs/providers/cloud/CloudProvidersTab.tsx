@@ -11,7 +11,7 @@ import { useSettings } from '~/lib/hooks/useSettings';
 import { logStore } from '~/lib/stores/logs';
 import { URL_CONFIGURABLE_PROVIDERS } from '~/lib/stores/settings';
 import { toast } from '~/lib/toastify';
-import type { IProviderConfig } from '~/types/model';
+import type { IProviderConfig, IProviderSetting } from '~/types/model';
 import { classNames } from '~/utils/classNames';
 import { providerBaseUrlEnvKeys } from '~/utils/constants';
 
@@ -58,6 +58,23 @@ const PROVIDER_DESCRIPTIONS: Partial<Record<ProviderName, string>> = {
   Github: 'Use OpenAI models hosted through GitHub infrastructure',
   OpenAI: 'Use GPT-4, GPT-3.5, and other OpenAI models',
 };
+
+/**
+ * Reasoning levels offered in the provider card.
+ *
+ * 'auto' is the default and keeps the agent-friendly behaviour; 'model' lets the model decide;
+ * 'disabled' turns reasoning off where the model allows it. The named levels are the ones
+ * models.dev publishes for the models of this deployment.
+ */
+const REASONING_CHOICES = [
+  { value: 'auto', label: 'Automatique (recommandé)' },
+  { value: 'disabled', label: 'Désactivée' },
+  { value: 'model', label: 'Décidée par le modèle' },
+  { value: 'low', label: 'Faible' },
+  { value: 'medium', label: 'Moyenne' },
+  { value: 'high', label: 'Élevée' },
+  { value: 'max', label: 'Maximale' },
+];
 
 const CloudProvidersTab = () => {
   const settings = useSettings();
@@ -112,6 +129,20 @@ const CloudProvidersTab = () => {
         logStore.logProvider(`Provider ${provider.name} disabled`, { provider: provider.name });
         toast.success(`${provider.name} disabled`);
       }
+    },
+    [settings],
+  );
+
+  /*
+   * Reasoning level for this provider. 'auto' keeps the model's default (reasoning off, which the
+   * agent loop needs to emit tool calls); a named level is passed to the model; 'model' lets the
+   * model decide. The levels offered depend on the model, so the field is only useful for
+   * providers whose catalog publishes them.
+   */
+  const handleUpdateEffort = useCallback(
+    (provider: IProviderConfig, effort: string) => {
+      const value = effort === 'auto' ? undefined : (effort as IProviderSetting['effort']);
+      settings.updateProviderSettings(provider.name, { ...provider.settings, effort: value });
     },
     [settings],
   );
@@ -283,6 +314,37 @@ const CloudProvidersTab = () => {
                         </div>
                       )}
                     </motion.div>
+                  )}
+
+                  {provider.settings.enabled && (
+                    <div className="mt-4">
+                      <label className="flex items-center gap-2 text-sm text-bolt-elements-textSecondary">
+                        <div className="i-ph:brain text-sm" />
+                        <span>Réflexion (raisonnement)</span>
+                      </label>
+                      <select
+                        aria-label={`Niveau de réflexion pour ${provider.name}`}
+                        value={provider.settings.effort ?? 'auto'}
+                        onChange={(event) => handleUpdateEffort(provider, event.target.value)}
+                        className={classNames(
+                          'mt-1.5 w-full px-3 py-1.5 rounded-lg text-sm',
+                          'bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor',
+                          'text-bolt-elements-textPrimary',
+                          'focus:outline-none focus:ring-2 focus:ring-purple-500/30',
+                          'transition-all duration-200',
+                        )}
+                      >
+                        {REASONING_CHOICES.map((choice) => (
+                          <option key={choice.value} value={choice.value}>
+                            {choice.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-1 text-xs text-bolt-elements-textTertiary">
+                        Automatique garde le réglage qui laisse l'agent écrire des fichiers ; un niveau plus élevé fait
+                        réfléchir le modèle davantage (plus lent, plus cher).
+                      </p>
+                    </div>
                   )}
                 </div>
               </div>

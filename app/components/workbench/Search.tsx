@@ -195,20 +195,21 @@ export function Search() {
                       : contextChars + (match.matchCharEnd - match.matchCharStart);
 
                     return (
-                      <div
+                      <button
                         key={idx}
-                        className="hover:bg-bolt-elements-background-depth-3 cursor-pointer transition-colors pl-6 py-1"
+                        type="button"
+                        className="block w-full text-start hover:bg-bolt-elements-background-depth-3 cursor-pointer transition-colors pl-6 py-1"
                         onClick={() => handleResultClick(match.path, match.lineNumber)}
                       >
-                        <pre className="font-mono text-xs text-bolt-elements-textTertiary truncate">
+                        <span className="block font-mono text-xs text-bolt-elements-textTertiary truncate whitespace-pre">
                           {!isStart && <span>...</span>}
                           {previewText.slice(0, matchStart)}
                           <span className="bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent rounded px-1">
                             {previewText.slice(matchStart, matchEnd)}
                           </span>
                           {previewText.slice(matchEnd)}
-                        </pre>
-                      </div>
+                        </span>
+                      </button>
                     );
                   })}
                 </div>

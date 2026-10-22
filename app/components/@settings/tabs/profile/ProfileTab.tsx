@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useId } from 'react';
 import { DEFAULT_AVATARS, profileStore, updateProfile } from '~/lib/stores/profile';
 import { toast } from '~/lib/toastify';
 import { classNames } from '~/utils/classNames';
@@ -7,6 +7,7 @@ import { debounce } from '~/utils/debounce';
 
 export default function ProfileTab() {
   const profile = useStore(profileStore);
+  const fieldId = useId();
   const [isUploading, setIsUploading] = useState(false);
   const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
 
@@ -164,13 +165,19 @@ export default function ProfileTab() {
 
           {/* Username Input */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Username</label>
+            <label
+              htmlFor={`${fieldId}-username`}
+              className="block text-sm font-medium text-gray-900 dark:text-gray-100 mb-2"
+            >
+              Nom d’utilisateur
+            </label>
             <div className="relative group">
               <div className="absolute left-3.5 top-1/2 -translate-y-1/2">
                 <div className="i-ph:user-circle-fill w-5 h-5 text-gray-400 dark:text-gray-500 transition-colors group-focus-within:text-purple-500" />
               </div>
               <input
                 type="text"
+                id={`${fieldId}-username`}
                 value={profile.username}
                 onChange={(e) => handleProfileUpdate('username', e.target.value)}
                 className={classNames(
@@ -182,19 +189,25 @@ export default function ProfileTab() {
                   'focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50',
                   'transition-all duration-300 ease-out',
                 )}
-                placeholder="Enter your username"
+                placeholder="Saisissez votre nom d’utilisateur"
               />
             </div>
           </div>
 
           {/* Bio Input */}
           <div className="mb-8">
-            <label className="block text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Bio</label>
+            <label
+              htmlFor={`${fieldId}-bio`}
+              className="block text-sm font-medium text-gray-900 dark:text-gray-100 mb-2"
+            >
+              Biographie
+            </label>
             <div className="relative group">
               <div className="absolute left-3.5 top-3">
                 <div className="i-ph:text-aa w-5 h-5 text-gray-400 dark:text-gray-500 transition-colors group-focus-within:text-purple-500" />
               </div>
               <textarea
+                id={`${fieldId}-bio`}
                 value={profile.bio}
                 onChange={(e) => handleProfileUpdate('bio', e.target.value)}
                 className={classNames(
@@ -208,7 +221,7 @@ export default function ProfileTab() {
                   'resize-none',
                   'h-32',
                 )}
-                placeholder="Tell us about yourself"
+                placeholder="Présentez-vous en quelques mots"
               />
             </div>
           </div>

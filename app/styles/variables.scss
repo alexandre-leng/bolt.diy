@@ -214,6 +214,14 @@
   --modern-scrollbar-thumb-backgroundHover: rgba(190, 190, 190, 0.7);
 }
 
+/* Settings-scoped accessible tokens. Brand GitLab orange #FC6D26 with white text is ~2.9:1, so the
+   button uses a darker orange (#B83F0B: 5.9:1 with #fff). Consumed only by components/@settings. */
+:root {
+  --bolt-elements-settings-gitlabButtonBg: #b83f0b;
+  --bolt-elements-settings-gitlabButtonBgHover: #8f3008;
+  --bolt-elements-settings-linkText: #1a6aa6;
+}
+
 /* User-selectable color palettes */
 :root[data-color-theme='light-solarized'] {
   --bolt-elements-bg-depth-1: #fdf6e3;
@@ -229,6 +237,9 @@
   --bolt-elements-loader-progress: #268bd2;
   --bolt-elements-messages-linkColor: #268bd2;
   --bolt-elements-sidebar-buttonText: #268bd2;
+  /* Interactive text tokens with >=4.5:1 contrast on bg-depth-1 (#fdf6e3); Solarized blue #268bd2 is ~3.6:1. */
+  --bolt-elements-settings-linkText: #1a6aa6;
+  --bolt-elements-settings-accentText: #1a6aa6;
   --bolt-elements-code-background: #eee8d5;
   --bolt-elements-messages-background: #eee8d5;
   --bolt-elements-artifacts-background: #fdf6e3;

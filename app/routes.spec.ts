@@ -12,11 +12,10 @@ describe('route declarations', () => {
   const declared = readFileSync(join(__dirname, 'routes.ts'), 'utf8');
 
   /*
-   * Known undeclared route, present before this guard existed. It is NOT served today.
-   * Do not add it to routes.ts blindly: it reads cookies/tokens and has no tests. Decide
-   * deliberately (declare + secure + test, or delete). Remove it from this list when done.
+   * Routes deliberately NOT declared in routes.ts. Keep this empty unless a route truly must stay
+   * unserved, and say why: a route file nobody declared is a silent 404 for its callers.
    */
-  const KNOWN_UNDECLARED = new Set(['api.supabase-user.ts']);
+  const KNOWN_UNDECLARED = new Set<string>();
 
   const apiFiles = readdirSync(routesDir).filter((name) => name.startsWith('api.') && name.endsWith('.ts'));
 
@@ -30,4 +29,16 @@ describe('route declarations', () => {
       expect(declared).toContain(`routes/${file}`);
     },
   );
+
+  it('keeps no stale exception in KNOWN_UNDECLARED', () => {
+    /*
+     * An exception that is now declared (or deleted) must be removed from the list, so the guard
+     * never silently covers a real missing route.
+     */
+    const stale = [...KNOWN_UNDECLARED].filter(
+      (name) => !apiFiles.includes(name) || declared.includes(`routes/${name}`),
+    );
+
+    expect(stale).toEqual([]);
+  });
 });

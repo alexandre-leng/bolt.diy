@@ -7,6 +7,7 @@ import { ScreenshotSelector } from './ScreenshotSelector';
 import { IconButton } from '~/components/ui/IconButton';
 import { ExpoQrModal } from '~/components/workbench/ExpoQrModal';
 import { parsePreviewId } from '~/lib/runtime/server/previewUrl';
+import { selectPreview } from '~/lib/stores/previewSelection';
 import { expoUrlAtom } from '~/lib/stores/qrCodeStore';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { toast } from '~/lib/toastify';
@@ -60,12 +61,11 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [activePreviewIndex, setActivePreviewIndex] = useState(0);
+  const [manualPort, setManualPort] = useState<number | null>(null);
   const [isPortDropdownOpen, setIsPortDropdownOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const hasSelectedPreview = useRef(false);
   const previews = useStore(workbenchStore.previews);
-  const activePreview = previews[activePreviewIndex];
+  const activePreview = selectPreview(previews, manualPort);
   const [displayPath, setDisplayPath] = useState('/');
   const [iframeUrl, setIframeUrl] = useState<string | undefined>();
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -112,19 +112,17 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
     setDisplayPath('/');
   }, [activePreview]);
 
-  const findMinPortIndex = useCallback(
-    (minIndex: number, preview: { port: number }, index: number, array: { port: number }[]) => {
-      return preview.port < array[minIndex].port ? index : minIndex;
-    },
-    [],
-  );
-
+  /*
+   * Automatic selection is the latest announced port (store insertion order), tracked by port
+   * identity, not array index or numeric value. A manual choice sticks until that port closes.
+   */
   useEffect(() => {
-    if (previews.length > 1 && !hasSelectedPreview.current) {
-      const minPortIndex = previews.reduce(findMinPortIndex, 0);
-      setActivePreviewIndex(minPortIndex);
+    if (manualPort !== null && !previews.some((preview) => preview.port === manualPort)) {
+      setManualPort(null);
     }
-  }, [previews, findMinPortIndex]);
+  }, [previews, manualPort]);
+
+  const selectPort = useCallback((port: number | null) => setManualPort(port), []);
 
   const reloadPreview = () => {
     if (iframeRef.current) {
@@ -850,10 +848,9 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
 
         <div className="flex-grow flex items-center gap-1 bg-bolt-elements-preview-addressBar-background border border-bolt-elements-borderColor text-bolt-elements-preview-addressBar-text rounded-full px-1 py-1 text-sm hover:bg-bolt-elements-preview-addressBar-backgroundHover hover:focus-within:bg-bolt-elements-preview-addressBar-backgroundActive focus-within:bg-bolt-elements-preview-addressBar-backgroundActive focus-within-border-bolt-elements-borderColorActive focus-within:text-bolt-elements-preview-addressBar-textActive">
           <PortDropdown
-            activePreviewIndex={activePreviewIndex}
-            setActivePreviewIndex={setActivePreviewIndex}
+            activePort={activePreview?.port ?? null}
+            onSelectPort={selectPort}
             isDropdownOpen={isPortDropdownOpen}
-            setHasSelectedPreview={(value) => (hasSelectedPreview.current = value)}
             setIsDropdownOpen={setIsPortDropdownOpen}
             previews={previews}
           />

@@ -1,4 +1,4 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
+import type { ActionFunctionArgs } from 'react-router';
 import type { VercelProjectInfo } from '~/types/vercel';
 
 // Function to detect framework from project files
@@ -172,16 +172,14 @@ const detectFramework = (files: Record<string, string>): string => {
   return 'other';
 };
 
-// Add loader function to handle GET requests
-export async function loader({ request }: LoaderFunctionArgs) {
-  const url = new URL(request.url);
-  const projectId = url.searchParams.get('projectId');
-  const token = url.searchParams.get('token');
-
-  if (!projectId || !token) {
-    return Response.json({ error: 'Missing projectId or token' }, { status: 400 });
-  }
-
+/*
+ * Read-only lookup of an existing Vercel project + its latest deployment.
+ *
+ * It used to be a GET loader taking `?token=` in the query string, so the user's Vercel token was
+ * written in clear to the nginx access log and to browser history on every call. The lookup is
+ * now routed through the POST action below (`lookup: true`), token in the body, never in a URL.
+ */
+async function lookupVercelProject(projectId: string, token: string): Promise<Response> {
   try {
     // Get project info
     const projectResponse = await fetch(`https://api.vercel.com/v9/projects/${projectId}`, {
@@ -242,12 +240,22 @@ interface DeployRequestBody {
 // Existing action function for POST requests
 export async function action({ request }: ActionFunctionArgs) {
   try {
-    const { projectId, files, sourceFiles, token, chatId, framework } = (await request.json()) as DeployRequestBody & {
-      token: string;
-    };
+    const { projectId, files, sourceFiles, token, chatId, framework, lookup } =
+      (await request.json()) as DeployRequestBody & {
+        token: string;
+        lookup?: boolean;
+      };
 
     if (!token) {
       return Response.json({ error: 'Not connected to Vercel' }, { status: 401 });
+    }
+
+    if (lookup) {
+      if (!projectId) {
+        return Response.json({ error: 'Missing projectId' }, { status: 400 });
+      }
+
+      return lookupVercelProject(projectId, token);
     }
 
     let targetProjectId = projectId;

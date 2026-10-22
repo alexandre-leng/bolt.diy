@@ -8,14 +8,11 @@ import { useSearchParams } from 'react-router';
 import { BaseChat } from './BaseChat';
 import type { ElementInfo } from '~/components/workbench/Inspector';
 import {
-  appendSteer,
-  applyRedirect,
-  createTurnControl,
-  drainRedirect,
+  createChatGuard,
   hasInterruptibleContent,
-  queueRedirect,
-  requestStop,
-  shouldAcceptStop,
+  isInterruptedFinish,
+  runFirstTurnSetup,
+  TurnController,
 } from '~/lib/agent/turn-control';
 import { API_KEYS_UPDATED_EVENT, type ApiKeysUpdatedDetail } from '~/lib/api/apiKeys';
 import { isNetworkStreamError, reportChatFailure, trackedChatFetch } from '~/lib/chatStreamDiagnostics';
@@ -234,12 +231,28 @@ export const ChatImpl = memo(
     const pendingTemplateContinuationRef = useRef<UIMessage | null>(null);
 
     /*
-     * Control of the RUNNING turn (stop / steer / redirect), ported from Hermes Agent.
-     * `generationRef` is the `require_generation` guard: a stop aimed at turn N must not cancel
-     * turn N+1 that already started.
+     * Control of the RUNNING turn (stop / redirect), ported from Hermes Agent. The controller owns
+     * the generation counter (a stop aimed at turn N must not cancel turn N+1), the in-flight turn
+     * (a new turn waits for the cancelled one to settle) and the send lock. Its hooks read refs
+     * because `useChat().stop` is only available after this point.
      */
-    const turnControlRef = useRef(createTurnControl());
-    const generationRef = useRef(0);
+    const stopModelRef = useRef<() => unknown>(() => undefined);
+    const turnsRef = useRef<TurnController | null>(null);
+
+    if (!turnsRef.current) {
+      turnsRef.current = new TurnController({
+        stopModel: () => stopModelRef.current(),
+        abortActions: () => workbenchStore.abortAllActions(),
+      });
+    }
+
+    const turns = turnsRef.current;
+
+    /*
+     * Bumped on a genuine chat switch. Work that awaits after a turn (the first-turn setup) checks
+     * it so it never writes into the chat the user moved to.
+     */
+    const chatEpochRef = useRef(0);
 
     /*
      * The assistant text as it ARRIVES, not as it renders. `messages` is one render behind during
@@ -384,11 +397,29 @@ export const ChatImpl = memo(
         setFakeLoading(false);
         handleError(e, 'chat');
       },
-      onFinish: ({ message }) => {
+      onFinish: ({ message, isAbort, isError, isDisconnect }) => {
         setProgressAnnotations([]);
 
         /* The turn is over: nothing left to preserve, and nothing may leak into the next one. */
         streamedTextRef.current = '';
+
+        if (isInterruptedFinish({ isAbort, isError, isDisconnect })) {
+          /*
+           * Stop, correction, error or lost connection: the response is partial, so no setup
+           * (install + dev server) may be synthesised from it.
+           */
+          logStore.logProvider('Chat response interrupted', {
+            component: 'Chat',
+            action: 'response',
+            model,
+            provider: provider.name,
+            isAbort,
+            isError,
+            isDisconnect,
+          });
+
+          return;
+        }
 
         const userMessages = messagesRef.current.filter((item) => item.role === 'user');
 
@@ -410,26 +441,25 @@ export const ChatImpl = memo(
           !hasNativeProjectTools &&
           !/<boltAction\s+type=["'](?:shell|start)["']/.test(getMessageText(message))
         ) {
-          void (async () => {
-            const completedMessages = messagesRef.current.some((item) => item.id === message.id)
-              ? messagesRef.current
-              : [...messagesRef.current, message];
-            pendingTemplateParserRef.current(completedMessages, false);
-            await workbenchStore.waitForExecutionQueue();
+          const completedMessages = messagesRef.current.some((item) => item.id === message.id)
+            ? messagesRef.current
+            : [...messagesRef.current, message];
 
-            const projectFiles = Object.entries(workbenchStore.files.get()).flatMap(([path, file]) =>
-              file?.type === 'file' ? [{ path, content: file.content }] : [],
-            );
-
-            // A research-only conversation has no project to install or start.
-            if (projectFiles.length === 0) {
-              return;
-            }
-
-            const commands = await detectProjectCommands(projectFiles);
-            const setupMessage = createCommandsMessage(commands);
-
-            if (setupMessage) {
+          void runFirstTurnSetup({
+            finish: { isAbort, isError, isDisconnect },
+            isSameChat: createChatGuard(
+              () => chatId.get(),
+              () => chatEpochRef.current,
+            ),
+            prepare: () => pendingTemplateParserRef.current(completedMessages, false),
+            waitForExecutionQueue: () => workbenchStore.waitForExecutionQueue(),
+            readProjectFiles: () =>
+              Object.entries(workbenchStore.files.get()).flatMap(([path, file]) =>
+                file?.type === 'file' ? [{ path, content: file.content }] : [],
+              ),
+            detectCommands: detectProjectCommands,
+            createSetupMessage: createCommandsMessage,
+            commit: async (setupMessage) => {
               /*
                * This append happens after an await, so the persistence sampler has already pushed
                * the turn (and may not run again: it skips a save when the list is unchanged since
@@ -440,8 +470,8 @@ export const ChatImpl = memo(
 
               setMessages(nextMessages);
               await storeMessageHistory(nextMessages).catch((error) => toast.error(error.message));
-            }
-          })();
+            },
+          }).catch((error) => logger.error('First-turn setup failed', error));
         }
 
         console.log('Chat response completed');
@@ -464,6 +494,13 @@ export const ChatImpl = memo(
     });
 
     const isLoading = status === 'submitted' || status === 'streaming';
+    stopModelRef.current = stop;
+
+    /*
+     * Every turn the UI starts goes through the controller, so it is tracked (the next turn waits
+     * for it to settle) and claims a new generation.
+     */
+    const startTurn = (message: UIMessage) => turns.start(() => sendChatMessage(message));
     const messagesRef = useRef(messages);
     messagesRef.current = messages;
 
@@ -709,7 +746,7 @@ export const ChatImpl = memo(
         try {
           parseMessages(messages, false);
           await workbenchStore.waitForFileActions();
-          await sendChatMessage(pendingMessage);
+          await startTurn(pendingMessage);
         } catch (error) {
           handleError(error, 'chat');
         } finally {
@@ -726,7 +763,7 @@ export const ChatImpl = memo(
       if (prompt) {
         setSearchParams({});
         runAnimation();
-        void sendChatMessage(
+        void startTurn(
           createMessage({
             role: 'user',
             text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${prompt}`,
@@ -759,6 +796,9 @@ export const ChatImpl = memo(
 
         return;
       }
+
+      /* A genuine switch: post-turn work started for the previous chat must not land here. */
+      chatEpochRef.current += 1;
 
       if (isLoading) {
         stop();
@@ -900,13 +940,14 @@ export const ChatImpl = memo(
       return '';
     };
 
-    /** The square button: an explicit stop. The partial text is preserved for the record. */
+    /**
+     * The square button: an explicit stop. Cancels the model request AND the workbench actions
+     * (install, dev server). A correction typed during generation goes through
+     * `turns.interrupt()` instead, which cancels only the model request.
+     */
     const abort = () => {
-      turnControlRef.current = requestStop(turnControlRef.current, currentPartialText());
-
-      stop();
+      turns.abort(currentPartialText());
       chatStore.setKey('aborted', true);
-      workbenchStore.abortAllActions();
 
       logStore.logProvider('Chat response aborted', {
         component: 'Chat',
@@ -914,64 +955,6 @@ export const ChatImpl = memo(
         model,
         provider: provider.name,
       });
-    };
-
-    /**
-     * Send while a generation runs: STEER or REDIRECT, never "ignore".
-     *
-     * With nothing streamed yet there is nothing to preserve, so the message simply starts the next
-     * turn once the running one is aborted. With text on screen, the partial becomes a checkpoint,
-     * the correction becomes a real user message, and the turn RESUMES from it: the behaviour the
-     * user asked for, taken from Hermes' `_apply_active_turn_redirect`.
-     */
-    const interruptWith = async (text: string, actingGeneration: number) => {
-      const partial = currentPartialText();
-      const generation = generationRef.current;
-
-      /*
-       * Debug the two inputs that decide between steer and redirect. An empty `partial` silently
-       * degrades the correction to a plain new turn, which is correct but looks like a lost
-       * checkpoint; this line is what tells them apart.
-       */
-      console.debug('[turn-control] partial length', partial.length, 'generation', generation);
-
-      if (!shouldAcceptStop(actingGeneration, generation)) {
-        /* The turn this message was aimed at already ended: let it be a normal new turn. */
-        return false;
-      }
-
-      if (!hasInterruptibleContent(partial)) {
-        turnControlRef.current = appendSteer(turnControlRef.current, text);
-        abort();
-
-        return false;
-      }
-
-      turnControlRef.current = queueRedirect(turnControlRef.current, text);
-      abort();
-
-      const drained = drainRedirect(turnControlRef.current);
-      turnControlRef.current = drained.next;
-
-      if (!drained.text) {
-        return false;
-      }
-
-      const resumed = applyRedirect(
-        [{ role: 'user', content: text }],
-        partial,
-        `[Correction demandée par l'utilisateur pendant la génération]\n${drained.text}`,
-      );
-
-      const correctionRow = resumed[resumed.length - 1];
-      const checkpoint = correctionRow.apiContent ?? correctionRow.content;
-      const messageText = `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${checkpoint}`;
-
-      /* The resumed turn is a NEW generation: the aborted one must not accept any further stop. */
-      generationRef.current = generation + 1;
-      void sendChatMessage((await buildUserMessage(messageText)) as any);
-
-      return true;
     };
 
     const handleError = useCallback(
@@ -1224,43 +1207,62 @@ export const ChatImpl = memo(
       }
 
       /*
-       * A send while a generation runs is a CORRECTION, not a dropped message and not a plain stop:
-       * the partial answer is kept as context and the turn resumes from the user's words. With no
-       * text produced yet there is nothing to keep, so it becomes the next turn. The square button
-       * stays the explicit stop.
+       * Captured at the click, before any await: the turn this message is aimed at. If another
+       * turn has started by the time the interruption runs, it must not be cancelled.
        */
-      if (isLoading) {
+      const actingGeneration = turns.generation;
+
+      /* One send at a time: a second press while this one is being prepared is ignored. */
+      await turns.exclusive(() => sendMessageNow(messageContent, actingGeneration));
+    };
+
+    const sendMessageNow = async (messageContent: string, actingGeneration: number) => {
+      /*
+       * A send while a generation runs is a CORRECTION, not a dropped message and not a plain stop:
+       * only the model request is cancelled (the dev server and installs keep running), the partial
+       * answer stays in the transcript as context and the turn resumes from the user's words. With
+       * no text produced yet there is nothing to keep, so it becomes the next turn. The square
+       * button stays the explicit stop.
+       */
+      if (isLoading || turns.inFlight) {
+        const partial = currentPartialText();
+
         /*
          * Observability for the interruption path: without it a silent no-op is indistinguishable
          * from a dropped message (this cost a whole debug cycle). Console only, no payload.
          */
         console.debug('[turn-control] send during generation', {
-          generation: generationRef.current,
-          hasPartial: hasInterruptibleContent(currentPartialText()),
+          generation: actingGeneration,
+          hasPartial: hasInterruptibleContent(partial),
         });
 
-        /*
-         * `generationRef` already identifies the RUNNING turn here; it is bumped below only when
-         * this really becomes a new turn. Passing it through is what makes the stale-stop guard
-         * meaningful: a correction aimed at a finished turn falls through instead of aborting.
-         */
-        const handled = await interruptWith(messageContent, generationRef.current);
+        const outcome = await turns.interrupt({ text: messageContent, partial, actingGeneration });
 
         setInput('');
         Cookies.remove(PROMPT_COOKIE_KEY);
 
-        if (handled) {
+        if (outcome.kind === 'redirect') {
+          /*
+           * Only the user's own words are shown and persisted. The checkpoint scaffold
+           * (`outcome.apiContent`) is never put in a visible part: the partial assistant row is
+           * already in the transcript and is what the model resumes from.
+           */
+          const messageText = `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${outcome.visibleText}`;
+          void startTurn(await buildUserMessage(messageText));
+
+          setUploadedFiles([]);
+          setImageDataList([]);
+
           return;
         }
 
-        /* Nothing was on screen: fall through so the message starts the next turn once aborted. */
+        /* Nothing to keep (or a stale target): fall through so the message starts the next turn. */
       }
 
       /*
-       * A genuine new turn starts here: bump the generation so a stop aimed at the previous turn is
-       * stale, and clear the streamed accumulator so it cannot seed the next checkpoint.
+       * A genuine new turn starts here (the controller bumps the generation when it is dispatched);
+       * clear the streamed accumulator so it cannot seed the next checkpoint.
        */
-      generationRef.current += 1;
       streamedTextRef.current = '';
 
       let finalMessageContent = messageContent;
@@ -1304,7 +1306,6 @@ export const ChatImpl = memo(
               const { assistantMessage, userMessage } = temResp;
               const userMessageText = `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${finalMessageContent}`;
 
-              generationRef.current += 1;
               pendingTemplateContinuationRef.current = createMessage({
                 role: 'user',
                 text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${userMessage}\n\nOriginal request:\n${finalMessageContent}`,
@@ -1344,7 +1345,7 @@ export const ChatImpl = memo(
         const userMessageText = `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${finalMessageContent}`;
         const fileParts = await filesToFileParts(uploadedFiles);
 
-        void sendChatMessage({
+        void startTurn({
           id: `${new Date().getTime()}`,
           role: 'user',
           content: userMessageText,
@@ -1376,13 +1377,13 @@ export const ChatImpl = memo(
         const userUpdateArtifact = filesToArtifacts(modifiedFiles, `${Date.now()}`);
         const messageText = `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${userUpdateArtifact}${finalMessageContent}`;
 
-        void sendChatMessage((await buildUserMessage(messageText)) as any);
+        void startTurn(await buildUserMessage(messageText));
 
         workbenchStore.resetAllFileModifications();
       } else {
         const messageText = `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${finalMessageContent}`;
 
-        void sendChatMessage((await buildUserMessage(messageText)) as any);
+        void startTurn(await buildUserMessage(messageText));
       }
 
       setInput('');
@@ -1500,7 +1501,7 @@ export const ChatImpl = memo(
          * Markdown's quick-action buttons (__boltQuickAction__) call append to
          * re-send a message. Without this they rendered but did nothing.
          */
-        append={(message) => sendChatMessage(message as UIMessage)}
+        append={(message) => startTurn(message as UIMessage)}
         enhancePrompt={() => {
           enhancePrompt(
             input,

@@ -55,6 +55,27 @@ async function mcpUpdateConfigAction({ request }: ActionFunctionArgs) {
       return Response.json({ error: rejection }, { status: 400 });
     }
 
+    /*
+     * The MCP config is one process-wide object shared by every caller and every conversation
+     * (MCPService is a singleton read by api.chat). A request that replaces it replaces it for
+     * everyone, so an empty body used to wipe every server for all users without warning.
+     * Require an explicit acknowledgement to clear the whole config; a normal client never sends
+     * an empty map by accident (it sends the servers it wants).
+     */
+    if (Object.keys(mcpConfig.mcpServers ?? {}).length === 0) {
+      const acknowledgement = (mcpConfig as { clearAll?: boolean }).clearAll === true;
+
+      if (!acknowledgement) {
+        return Response.json(
+          {
+            error:
+              'Refusing to clear all MCP servers: this changes the configuration for every conversation. Send "clearAll": true to confirm.',
+          },
+          { status: 400 },
+        );
+      }
+    }
+
     const mcpService = MCPService.getInstance();
     const serverTools = await mcpService.updateConfig(mcpConfig);
 

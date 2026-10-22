@@ -53,3 +53,46 @@ describe('APIKeyManager environment key status', () => {
     expect(await screen.findByText(/Not Set/)).toBeTruthy();
   });
 });
+
+/*
+ * Only the administrator owns the provider keys: a normal account must not be offered a pencil
+ * or a "Get API Key" link, because the server would ignore whatever it pasted. The gate reads
+ * /api/auth/me, so the stub answers that route and the env-key route separately.
+ */
+describe('APIKeyManager admin gate', () => {
+  const stubRoutes = (isAdmin: boolean) =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+
+        if (url.includes('/api/auth/me')) {
+          return Response.json({ ok: true, user: { id: '1', email: 'a@b.co', isAdmin } });
+        }
+
+        return Response.json({ isSet: true, managed: false, userKeyAllowed: false });
+      }),
+    );
+
+  const withLink = (name: string) =>
+    ({ name, staticModels: [], getApiKeyLink: 'https://example.test/keys' }) as unknown as ProviderInfo;
+
+  it('hides the edit and get-key controls from a normal account', async () => {
+    stubRoutes(false);
+
+    render(<APIKeyManager provider={withLink('GateUser')} apiKey="" setApiKey={vi.fn()} />);
+
+    expect(await screen.findByText('Set via environment variable')).toBeTruthy();
+    await waitFor(() => expect(screen.queryByTitle('Edit API Key')).toBeNull());
+    expect(screen.queryByTitle('Get API Key')).toBeNull();
+  });
+
+  it('shows them to an administrator', async () => {
+    stubRoutes(true);
+
+    render(<APIKeyManager provider={withLink('GateAdmin')} apiKey="" setApiKey={vi.fn()} />);
+
+    expect(await screen.findByTitle('Edit API Key')).toBeTruthy();
+    expect(screen.getByTitle('Get API Key')).toBeTruthy();
+  });
+});

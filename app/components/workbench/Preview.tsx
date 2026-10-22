@@ -5,6 +5,7 @@ import { InspectorPanel } from './InspectorPanel';
 import { PortDropdown } from './PortDropdown';
 import { ScreenshotSelector } from './ScreenshotSelector';
 import { IconButton } from '~/components/ui/IconButton';
+import { Switch } from '~/components/ui/Switch';
 import { ExpoQrModal } from '~/components/workbench/ExpoQrModal';
 import { parsePreviewId } from '~/lib/runtime/server/previewUrl';
 import { selectPreview } from '~/lib/stores/previewSelection';
@@ -152,7 +153,9 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
 
         await Promise.race([
           restartProjectPreview(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('La relance du serveur d’aperçu a expiré.')), 25000)),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('La relance du serveur d’aperçu a expiré.')), 25000),
+          ),
         ]);
 
         // The restarted server may re-emit its port; remount once more so the new build is shown.
@@ -1030,41 +1033,24 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
                       </button>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-bolt-elements-textTertiary">Afficher le cadre de l’appareil</span>
-                        <button
+                        {/*
+                         * A real switch, not a 44px button with a 16px dot floating in its middle:
+                         * the box was wide enough to read as a grey pill with an off-centre marble.
+                         * The shared Switch keeps the track 36x20 and the thumb flush inside it.
+                         */}
+                        <Switch
                           aria-label="Afficher le cadre de l’appareil"
-                          className={`min-w-11 min-h-11 rounded-full transition-colors duration-200 ${
-                            showDeviceFrame ? 'bg-[#6D28D9]' : 'bg-gray-300 dark:bg-gray-700'
-                          } relative`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowDeviceFrame(!showDeviceFrame);
-                          }}
-                        >
-                          <span
-                            className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
-                              showDeviceFrame ? 'transform translate-x-5' : ''
-                            }`}
-                          />
-                        </button>
+                          checked={showDeviceFrame}
+                          onCheckedChange={setShowDeviceFrame}
+                        />
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-bolt-elements-textTertiary">Mode paysage</span>
-                        <button
+                        <Switch
                           aria-label="Activer le mode paysage"
-                          className={`min-w-11 min-h-11 rounded-full transition-colors duration-200 ${
-                            isLandscape ? 'bg-[#6D28D9]' : 'bg-gray-300 dark:bg-gray-700'
-                          } relative`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setIsLandscape(!isLandscape);
-                          }}
-                        >
-                          <span
-                            className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
-                              isLandscape ? 'transform translate-x-5' : ''
-                            }`}
-                          />
-                        </button>
+                          checked={isLandscape}
+                          onCheckedChange={setIsLandscape}
+                        />
                       </div>
                     </div>
                   </div>

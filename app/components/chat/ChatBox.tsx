@@ -331,6 +331,9 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
         <ClientOnly>
           {/* `contents` keeps this wrapper from being a box: as a box it took a 0-height line and every control inside collapsed to 0x0 (measured live, the row stayed 494x0). */}
           {() => (
+            // `contents` is required: this wrapper must not be a box. As a box it got a 0-height
+            // line in the composer and every control inside (model picker, reasoning selector)
+            // collapsed to 0x0 — measured on the live host, the row stayed 494x0.
             <div className={props.isModelSettingsCollapsed ? 'hidden' : 'contents'}>
               <ModelSelector
                 key={props.provider?.name}

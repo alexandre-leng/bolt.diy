@@ -104,6 +104,31 @@ describe('resolveProviderKeys', () => {
      * unreachable policy must fail closed, not open every provider.
      */
     expect(resolved.apiKeys).toEqual({});
+    expect(resolved.policyUnavailable).toBe(true);
+  });
+
+  it('retains last-known-good instance keys and policy through an accounts outage', async () => {
+    fetchMock.mockResolvedValueOnce(
+      ACCOUNTS_ANSWER({
+        policy: {
+          defaultModel: { provider: 'OpenAI', model: 'gpt-4o' },
+          allowedProviders: ['OpenAI'],
+          allowedModels: { OpenAI: ['gpt-4o'] },
+          effortPolicy: 'auto-only',
+        },
+      }),
+    );
+
+    const first = await resolveProviderKeys({ userId: 'user-stale' });
+    expect(first.policyUnavailable).toBe(false);
+
+    fetchMock.mockRejectedValueOnce(new Error('request timed out'));
+
+    const stale = await resolveProviderKeys({ userId: 'user-stale' });
+
+    expect(stale.apiKeys.OpenAI).toBe('sk-instance');
+    expect(stale.policy.allowedProviders).toEqual(['OpenAI']);
+    expect(stale.policyUnavailable).toBe(false);
   });
 
   it('fails closed and keeps the last valid keys and policy on a service outage', async () => {

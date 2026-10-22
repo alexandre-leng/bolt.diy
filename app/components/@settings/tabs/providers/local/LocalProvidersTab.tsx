@@ -12,6 +12,7 @@ import { Button } from '~/components/ui/Button';
 import { Card, CardContent, CardHeader } from '~/components/ui/Card';
 import { Switch } from '~/components/ui/Switch';
 import { useToast } from '~/components/ui/use-toast';
+import { useConfirmDialog } from '~/components/ui/useConfirmDialog';
 import { useLocalModelHealth } from '~/lib/hooks/useLocalModelHealth';
 import { useSettings } from '~/lib/hooks/useSettings';
 import { logStore } from '~/lib/stores/logs';
@@ -23,6 +24,7 @@ import { providerBaseUrlEnvKeys } from '~/utils/constants';
 type ViewMode = 'dashboard' | 'guide' | 'status';
 
 export default function LocalProvidersTab() {
+  const { askConfirmation, confirmDialog } = useConfirmDialog();
   const { providers, updateProviderSettings } = useSettings();
   const [viewMode, setViewMode] = useState<ViewMode>('dashboard');
   const [editingProvider, setEditingProvider] = useState<string | null>(null);
@@ -260,7 +262,15 @@ export default function LocalProvidersTab() {
   };
 
   const handleDeleteOllamaModel = async (modelName: string) => {
-    if (!window.confirm(`Voulez-vous vraiment supprimer ${modelName} ?`)) {
+    const confirmed = await askConfirmation({
+      title: `Supprimer le modèle ${modelName} ?`,
+      description:
+        'Le modèle sera supprimé de votre serveur Ollama. Vous devrez le télécharger de nouveau pour l’utiliser.',
+      confirmLabel: 'Supprimer le modèle',
+      destructive: true,
+    });
+
+    if (!confirmed) {
       return;
     }
 
@@ -302,6 +312,7 @@ export default function LocalProvidersTab() {
   return (
     <ErrorBoundary>
       <div className="space-y-6">
+        {confirmDialog}
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div className="flex items-center gap-4">

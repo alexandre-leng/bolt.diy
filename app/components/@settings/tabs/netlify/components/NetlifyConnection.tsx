@@ -19,6 +19,7 @@ import React, { useState, useEffect } from 'react';
 import { Badge } from '~/components/ui/Badge';
 import { Button } from '~/components/ui/Button';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '~/components/ui/Collapsible';
+import { useConfirmDialog, actionConfirmOptions, type ConfirmOptions } from '~/components/ui/useConfirmDialog';
 import { netlifyConnection, updateNetlifyConnection, initializeNetlifyConnection } from '~/lib/stores/netlify';
 import { toast } from '~/lib/toastify';
 import type { NetlifySite, NetlifyDeploy, NetlifyBuild, NetlifyUser } from '~/types/netlify';
@@ -41,9 +42,11 @@ interface SiteAction {
   action: (siteId: string) => Promise<void>;
   requiresConfirmation?: boolean;
   variant?: 'default' | 'destructive' | 'outline';
+  confirmation?: Partial<ConfirmOptions>;
 }
 
 export default function NetlifyConnection() {
+  const { askConfirmation, confirmDialog } = useConfirmDialog();
   console.log('NetlifyConnection component mounted');
 
   const connection = useStore(netlifyConnection);
@@ -345,6 +348,12 @@ export default function NetlifyConnection() {
       },
       requiresConfirmation: true,
       variant: 'destructive',
+      confirmation: {
+        title: 'Supprimer ce site Netlify ?',
+        description:
+          'Le site et ses déploiements seront définitivement supprimés de Netlify. Cette action est irréversible.',
+        confirmLabel: 'Supprimer le site',
+      },
     },
   ];
 
@@ -673,9 +682,7 @@ export default function NetlifyConnection() {
                                         e.stopPropagation();
 
                                         if (action.requiresConfirmation) {
-                                          if (
-                                            !window.confirm(`Êtes-vous sûr de vouloir ${action.name.toLowerCase()} ?`)
-                                          ) {
+                                          if (!(await askConfirmation(actionConfirmOptions(action)))) {
                                             return;
                                           }
                                         }
@@ -881,6 +888,7 @@ export default function NetlifyConnection() {
 
   return (
     <div className="space-y-6 bg-bolt-elements-background dark:bg-bolt-elements-background border border-bolt-elements-borderColor dark:border-bolt-elements-borderColor rounded-lg">
+      {confirmDialog}
       <div className="p-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">

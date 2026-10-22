@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Select } from '~/components/ui/Select';
+import { useConfirmDialog } from '~/components/ui/useConfirmDialog';
 import { getPluginToolName } from '~/lib/plugins/adapters';
 import type { MarketplaceSnapshot, MarketplacePlugin } from '~/lib/plugins/marketplace';
 import { pluginCategorySchema, pluginManifestSchema, type PluginManifest } from '~/lib/plugins/schema';
@@ -115,6 +116,7 @@ function PluginCard({
 }
 
 export default function PluginTab() {
+  const { askConfirmation, confirmDialog } = useConfirmDialog();
   const plugins = usePluginStore((state) => state.plugins);
   const storeBusy = usePluginStore((state) => state.busy);
   const storeError = usePluginStore((state) => state.error);
@@ -291,6 +293,7 @@ export default function PluginTab() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 pb-8">
+      {confirmDialog}
       <input
         ref={importInput}
         type="file"
@@ -314,12 +317,24 @@ export default function PluginTab() {
           busy={storeBusy}
           onEnabled={(enabled) => runOperation(() => setEnabled(selectedId, enabled))}
           onUninstall={() => {
-            if (window.confirm(`Désinstaller ${selectedManifest.name} ? Ses paramètres seront supprimés.`)) {
+            const name = selectedManifest.name;
+            const id = selectedId;
+
+            void askConfirmation({
+              title: `Désinstaller ${name} ?`,
+              description: 'Le plugin et ses paramètres seront supprimés de votre espace.',
+              confirmLabel: 'Désinstaller',
+              destructive: true,
+            }).then((confirmed) => {
+              if (!confirmed) {
+                return;
+              }
+
               void runOperation(async () => {
-                await uninstall(selectedId);
+                await uninstall(id);
                 goBack();
               });
-            }
+            });
           }}
           onRollback={() => runOperation(() => rollback(selectedId))}
           onConfiguration={(configuration) => runOperation(() => setConfiguration(selectedId, configuration))}

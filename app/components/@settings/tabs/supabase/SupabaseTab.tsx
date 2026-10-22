@@ -7,6 +7,7 @@ import {
 } from '~/components/@settings/shared/ConnectorActionPermissions';
 import { Button } from '~/components/ui/Button';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '~/components/ui/Collapsible';
+import { useConfirmDialog, actionConfirmOptions, type ConfirmOptions } from '~/components/ui/useConfirmDialog';
 import { useMCPStore } from '~/lib/stores/mcp';
 import {
   supabaseConnection,
@@ -35,6 +36,7 @@ interface ProjectAction {
   action: (projectId: string) => Promise<void>;
   requiresConfirmation?: boolean;
   variant?: 'default' | 'destructive' | 'outline';
+  confirmation?: Partial<ConfirmOptions>;
 }
 
 // Supabase logo SVG component
@@ -57,6 +59,7 @@ const SupabaseLogo = () => (
 );
 
 export default function SupabaseTab() {
+  const { askConfirmation, confirmDialog } = useConfirmDialog();
   const toolEnabled = useMCPStore((state) => state.settings.toolEnabled);
   const permissionsInitialized = useMCPStore((state) => state.isInitialized);
   const connection = useStore(supabaseConnection);
@@ -278,7 +281,7 @@ export default function SupabaseTab() {
 
   const handleProjectAction = async (projectId: string, action: ProjectAction) => {
     if (action.requiresConfirmation) {
-      if (!window.confirm(`Êtes-vous sûr de vouloir ${action.name.toLowerCase()} ?`)) {
+      if (!(await askConfirmation(actionConfirmOptions(action)))) {
         return;
       }
     }
@@ -633,6 +636,7 @@ export default function SupabaseTab() {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       {/* Header */}
       <motion.div
         className="flex items-center justify-between gap-2"

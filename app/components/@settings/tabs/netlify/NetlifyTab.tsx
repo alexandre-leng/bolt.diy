@@ -9,6 +9,7 @@ import {
 import { Badge } from '~/components/ui/Badge';
 import { Button } from '~/components/ui/Button';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '~/components/ui/Collapsible';
+import { useConfirmDialog, actionConfirmOptions, type ConfirmOptions } from '~/components/ui/useConfirmDialog';
 import { useMCPStore } from '~/lib/stores/mcp';
 import { netlifyConnection, updateNetlifyConnection, initializeNetlifyConnection } from '~/lib/stores/netlify';
 import { toast } from '~/lib/toastify';
@@ -28,6 +29,7 @@ interface SiteAction {
   action: (siteId: string) => Promise<void>;
   requiresConfirmation?: boolean;
   variant?: 'default' | 'destructive' | 'outline';
+  confirmation?: Partial<ConfirmOptions>;
 }
 
 // Netlify logo SVG component
@@ -41,6 +43,7 @@ const NetlifyLogo = () => (
 );
 
 export default function NetlifyTab() {
+  const { askConfirmation, confirmDialog } = useConfirmDialog();
   const toolEnabled = useMCPStore((state) => state.settings.toolEnabled);
   const permissionsInitialized = useMCPStore((state) => state.isInitialized);
   const connection = useStore(netlifyConnection);
@@ -407,6 +410,12 @@ export default function NetlifyTab() {
       },
       requiresConfirmation: true,
       variant: 'destructive',
+      confirmation: {
+        title: 'Supprimer ce site Netlify ?',
+        description:
+          'Le site et ses déploiements seront définitivement supprimés de Netlify. Cette action est irréversible.',
+        confirmLabel: 'Supprimer le site',
+      },
     },
   ];
 
@@ -1002,9 +1011,7 @@ export default function NetlifyTab() {
                                           e.stopPropagation();
 
                                           if (action.requiresConfirmation) {
-                                            if (
-                                              !window.confirm(`Êtes-vous sûr de vouloir ${action.name.toLowerCase()} ?`)
-                                            ) {
+                                            if (!(await askConfirmation(actionConfirmOptions(action)))) {
                                               return;
                                             }
                                           }
@@ -1249,6 +1256,7 @@ export default function NetlifyTab() {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       {/* Header */}
       <motion.div
         className="flex items-center justify-between gap-2"

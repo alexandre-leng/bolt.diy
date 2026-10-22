@@ -298,7 +298,9 @@ describe('streamed progress', () => {
   });
 
   it('retains an actionable error when the backend is unavailable', async () => {
-    renderPanel({ generate: vi.fn().mockRejectedValue(new Error('Screenshot service connection failed.')) });
+    renderPanel({
+      generate: vi.fn().mockRejectedValue(new Error('Connexion au service de génération impossible. Réessayez.')),
+    });
     await useImageMode();
 
     await userEvent.upload(
@@ -307,7 +309,10 @@ describe('streamed progress', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
 
-    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Screenshot service connection failed.');
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      'Connexion au service de génération impossible. Réessayez.',
+    );
     expect(screen.queryByRole('button', { name: 'Importer dans Bolt' })).toBeNull();
   });
 });
@@ -341,9 +346,13 @@ describe('preview safety', () => {
       new File(['image bytes'], 'example.png', { type: 'image/png' }),
     );
     await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
+    /* The source stays readable, and the import is REFUSED with a reason rather than silently done. */
     expect(await screen.findByDisplayValue(active)).toBeTruthy();
     await userEvent.click(screen.getByRole('button', { name: 'Importer dans Bolt' }));
-    expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('active content'));
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      expect.stringContaining('Autorisez l’import du code interactif'),
+    );
     expect(importCode).not.toHaveBeenCalled();
   });
 
@@ -361,7 +370,7 @@ describe('preview safety', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Transformer cette image en code' }));
     await screen.findByTitle('Aperçu de la version 1');
     await userEvent.click(screen.getByRole('button', { name: 'Importer dans Bolt' }));
-    expect(await screen.findByRole('status')).toHaveProperty('textContent', expect.stringContaining('Imported'));
+    expect(await screen.findByRole('status')).toHaveProperty('textContent', expect.stringContaining('Fichier importé'));
     expect(screen.getByTitle('Aperçu de la version 1')).toBeTruthy();
   });
 });

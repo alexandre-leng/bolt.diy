@@ -60,6 +60,7 @@ import { resolveProjectCallContext } from '~/utils/projectCallContext';
 import { createCommandsMessage, detectProjectCommands } from '~/utils/projectCommands';
 import { createSampler } from '~/utils/sampler';
 import { getTemplates, selectStarterTemplate } from '~/utils/selectStarterTemplate';
+import { shouldSelectStarterTemplate } from '~/utils/starterTemplatePolicy';
 
 const logger = createScopedLogger('Chat');
 
@@ -985,7 +986,7 @@ export const ChatImpl = memo(
       if (!chatStarted) {
         setFakeLoading(true);
 
-        if (autoSelectTemplate) {
+        if (shouldSelectStarterTemplate(autoSelectTemplate, workbenchStore.files.get())) {
           const { template, title } = await selectStarterTemplate({
             message: finalMessageContent,
             model,

@@ -44,11 +44,11 @@ export interface Variant {
 export type StreamEvent =
   | { kind: 'status'; text: string }
   | { kind: 'variantCount'; count: number }
-  | { kind: 'thinking'; text: string }
+  | { kind: 'thinking'; text: string; variantIndex?: number }
   | { kind: 'toolStart'; name: string }
   | { kind: 'toolResult'; text: string }
   | { kind: 'setCode'; variantIndex: number; length: number }
-  | { kind: 'assistant'; text: string }
+  | { kind: 'assistant'; text: string; variantIndex?: number }
   | { kind: 'variantComplete'; variantIndex: number }
   | { kind: 'variantError'; variantIndex: number; message: string };
 
@@ -119,14 +119,27 @@ function toEvent(frame: { type: string; variantIndex?: unknown; value?: unknown 
     case 'status':
       return typeof frame.value === 'string' ? { kind: 'status', text: frame.value } : undefined;
 
-    case 'variantCount':
-      return typeof frame.value === 'number' ? { kind: 'variantCount', count: frame.value } : undefined;
+    case 'variantCount': {
+      // The upstream WebSocket serializes this value as a string, unlike numeric clients.
+      const count =
+        typeof frame.value === 'number' || (typeof frame.value === 'string' && /^\d+$/.test(frame.value))
+          ? Number(frame.value)
+          : NaN;
+
+      return Number.isSafeInteger(count) && count >= 1 && count <= MAX_VARIANTS
+        ? { kind: 'variantCount', count }
+        : undefined;
+    }
 
     case 'thinking':
-      return typeof frame.value === 'string' ? { kind: 'thinking', text: frame.value } : undefined;
+      return typeof frame.value === 'string'
+        ? { kind: 'thinking', text: frame.value, ...(index !== undefined ? { variantIndex: index } : {}) }
+        : undefined;
 
     case 'assistant':
-      return typeof frame.value === 'string' ? { kind: 'assistant', text: frame.value } : undefined;
+      return typeof frame.value === 'string'
+        ? { kind: 'assistant', text: frame.value, ...(index !== undefined ? { variantIndex: index } : {}) }
+        : undefined;
 
     case 'toolStart':
       return typeof frame.value === 'string' ? { kind: 'toolStart', name: frame.value } : undefined;

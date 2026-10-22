@@ -67,9 +67,12 @@ function clientIdFrom(idToken?: string): string | null {
 
   try {
     const part = idToken.split('.')[1];
-    /* `(-part.length % 4)` is negative for some lengths (JS keeps the dividend's sign), and
+
+    /*
+     * `(-part.length % 4)` is negative for some lengths (JS keeps the dividend's sign), and
      * String.repeat throws on a negative count: the catch below then reported "no session"
-     * for a perfectly valid token. Pad with a non-negative count instead. */
+     * for a perfectly valid token. Pad with a non-negative count instead.
+     */
     const padded = part + '='.repeat((4 - (part.length % 4)) % 4);
     const claims = JSON.parse(Buffer.from(padded, 'base64url').toString('utf8'));
     const aud = claims?.aud;
@@ -87,6 +90,7 @@ function expiresAt(token?: string): number | null {
 
   try {
     const part = token.split('.')[1];
+
     /* Same padding trap as clientIdFrom: a negative repeat count throws. */
     const padded = part + '='.repeat((4 - (part.length % 4)) % 4);
     const claims = JSON.parse(Buffer.from(padded, 'base64url').toString('utf8'));

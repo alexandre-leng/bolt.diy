@@ -113,6 +113,45 @@ describe('agent provider recovery', () => {
     expect(chunks.some((chunk) => chunk.type === 'error')).toBe(true);
   });
 
+  it('retries an unavailable native call before allowing any project effect', async () => {
+    const execute = vi.fn(async () => ({ plan: 'recorded' }));
+
+    let attempt = 0;
+
+    const model = new MockLanguageModelV4({
+      doStream: async () => ({
+        stream: new ReadableStream({
+          start(controller) {
+            controller.enqueue({ type: 'stream-start', warnings: [] });
+            controller.enqueue({
+              type: 'tool-call',
+              toolCallId: `call-${attempt}`,
+              toolName: attempt++ === 0 ? 'project_read_file' : 'agent_plan',
+              input: '{}',
+            });
+            finish(controller, true);
+          },
+        }),
+      }),
+    });
+
+    const onRetry = vi.fn();
+
+    const result = await streamText({
+      model: withAgentToolCallRecovery(model, onRetry),
+      prompt: 'Edit the imported page after recording the plan.',
+      toolChoice: 'required',
+      tools: { agent_plan: tool({ inputSchema: jsonSchema({ type: 'object', properties: {} }), execute }) },
+      streamRetries: 0,
+    });
+
+    const chunks = await collect(result);
+    expect(onRetry).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledOnce();
+    expect(model.doStreamCalls).toHaveLength(2);
+    expect(chunks.some((chunk) => chunk.type === 'error')).toBe(false);
+  });
+
   it('retries a text-only required-tool response and accepts the recovered real tool call once', async () => {
     const execute = vi.fn(async () => ({ plan: 'recorded' }));
 

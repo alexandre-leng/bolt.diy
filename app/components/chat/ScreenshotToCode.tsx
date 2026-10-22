@@ -19,7 +19,10 @@ import { classNames } from '~/utils/classNames';
 
 type Props = {
   generate?: typeof generateScreenshotCode;
-  importCode?: (code: string) => Promise<string>;
+
+  /** Offered after a successful import, so the mockup can go straight to the chat. */
+  onContinue?: (code: string, path: string) => void;
+  importCode?: (code: string, options?: { allowScripts?: boolean }) => Promise<string>;
 
   /** Text-to-image step: a prompt becomes page mockups to choose from. */
   designFor?: typeof generateDesigns;
@@ -85,18 +88,18 @@ async function dataUrlToFile(dataUrl: string, name: string): Promise<File> {
 function describeEvent(event: StreamEvent): string | undefined {
   switch (event.kind) {
     case 'status':
-      return event.text;
+      return localizeMessage(event.text);
 
     case 'variantCount':
-      return `Generating ${event.count} version${event.count === 1 ? '' : 's'}...`;
+      return `Génération de ${event.count} version${event.count === 1 ? '' : 's'}…`;
 
     case 'toolStart':
-      return `Running ${event.name}...`;
+      return `Exécution de ${event.name}…`;
 
     case 'thinking': {
       const text = event.text.trim();
 
-      return text ? `Thinking: ${text.slice(0, 120)}` : undefined;
+      return text ? `Réflexion : ${text.slice(0, 120)}` : undefined;
     }
 
     case 'assistant': {
@@ -375,6 +378,39 @@ function MockupViewer({
   );
 }
 
+/** Translate service messages owned by this workflow; retain unknown diagnostics verbatim. */
+function localizeMessage(text: string): string {
+  const messages: Record<string, string> = {
+    'Screenshot service connection failed.': 'Connexion au service de génération impossible. Réessayez.',
+    'Screenshot service connection closed unexpectedly.': 'La connexion au service de génération a été interrompue.',
+    'Screenshot service failed.': 'Le service de génération a échoué.',
+    'Screenshot generation cancelled.': 'Génération annulée.',
+    'Invalid screenshot service response. Nothing was imported.': 'Réponse du service invalide. Aucun fichier importé.',
+    'Screenshot generation incomplete or unsafe. Nothing was imported.':
+      'Génération incomplète ou non valide. Aucun fichier importé.',
+    'Generated code is not a complete HTML page. Nothing was imported.':
+      'Le code n’est pas une page HTML complète. Aucun fichier importé.',
+    'Choose a PNG, JPEG, or WebP screenshot under 10 MB.':
+      'Choisissez une capture PNG, JPEG ou WebP de moins de 10 Mo.',
+    'Describe the page you want (at least a few words).': 'Décrivez la page souhaitée en quelques mots.',
+    'Keep the description under 1500 characters.': 'Limitez la description à 1 500 caractères.',
+    'Design generation returned no image.': 'La génération n’a renvoyé aucune maquette.',
+    'Design generation returned no usable image.': 'La génération n’a renvoyé aucune maquette exploitable.',
+    'Could not create the generated HTML file. Impossible d’enregistrer le fichier dans le projet.':
+      'Impossible d’enregistrer le fichier HTML dans le projet.',
+  };
+
+  return (
+    messages[text] ??
+    text
+      .replace(/^Design generation failed: /, 'La génération des maquettes a échoué : ')
+      .replace(/^Generating code(?:\.\.\.|…)?$/i, 'Génération du code…')
+      .replace(/^Generating (?:your )?(?:design|page)(?:\.\.\.|…)?$/i, 'Génération de la page…')
+      .replace(/^Connecting(?:\.\.\.|…)?$/i, 'Connexion…')
+      .replace(/^Analyzing (?:the )?image(?:\.\.\.|…)?$/i, 'Analyse de l’image…')
+  );
+}
+
 export function ScreenshotToCode({
   generate = generateScreenshotCode,
   importCode = (code) => importScreenshotHtml(code, workbenchStore),
@@ -523,7 +559,7 @@ export function ScreenshotToCode({
       }
     } catch (cause) {
       if (mounted.current && !abort.signal.aborted) {
-        setError(cause instanceof Error ? cause.message : 'La génération du design a échoué.');
+        setError(cause instanceof Error ? localizeMessage(cause.message) : 'La génération du design a échoué.');
       }
     } finally {
       if (mounted.current) {
@@ -568,13 +604,13 @@ export function ScreenshotToCode({
         setVariants(result);
         setStatus(
           result.length === 1
-            ? 'Code ready. Review it before importing.'
-            : `${result.length} versions generated. Pick the one to import.`,
+            ? 'Code prêt. Vérifiez-le avant de l’importer.'
+            : `${result.length} versions générées. Choisissez celle à importer.`,
         );
       }
     } catch (cause) {
       if (mounted.current && !abort.signal.aborted) {
-        setError(cause instanceof Error ? cause.message : 'La génération a échoué.');
+        setError(cause instanceof Error ? localizeMessage(cause.message) : 'La génération a échoué.');
       }
     } finally {
       if (mounted.current) {
@@ -611,13 +647,13 @@ export function ScreenshotToCode({
         setVariants(result);
         setStatus(
           result.length === 1
-            ? 'Code ready. Review it before importing.'
-            : `${result.length} versions generated. Pick the one to import.`,
+            ? 'Code prêt. Vérifiez-le avant de l’importer.'
+            : `${result.length} versions générées. Choisissez celle à importer.`,
         );
       }
     } catch (cause) {
       if (mounted.current && !abort.signal.aborted) {
-        setError(cause instanceof Error ? cause.message : 'La génération a échoué.');
+        setError(cause instanceof Error ? localizeMessage(cause.message) : 'La génération a échoué.');
       }
     } finally {
       if (mounted.current) {
@@ -642,11 +678,11 @@ export function ScreenshotToCode({
       const path = await importCode(chosen.code);
 
       if (mounted.current) {
-        setStatus(`Imported ${path}. Ask Bolt to refine it in the chat.`);
+        setStatus(`Fichier importé : ${path}. Demandez à Bolt de l’améliorer dans le chat.`);
       }
     } catch (cause) {
       if (mounted.current) {
-        setError(cause instanceof Error ? cause.message : 'L’import a échoué.');
+        setError(cause instanceof Error ? localizeMessage(cause.message) : 'L’import a échoué.');
       }
     } finally {
       if (mounted.current) {
@@ -920,7 +956,8 @@ export function ScreenshotToCode({
         <>
           <p className="text-xs text-bolt-elements-textSecondary">
             L’aperçu est un rendu statique, sans script, dans une frame isolée. Le code n’est enregistré dans Bolt
-            qu’après l’import.
+            qu’après l’import. L’import sauvegarde un fichier HTML sans exécuter les scripts et ne crée pas une
+            application React multi-fichiers.
           </p>
 
           {variants.length > 1 && (

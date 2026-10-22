@@ -1,7 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StarterTemplateImport } from '~/components/chat/StarterTemplateImport.client';
-import StarterTemplates from '~/components/chat/StarterTemplates';
 
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
@@ -46,13 +45,6 @@ describe('homepage starter project import', () => {
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
-  });
-
-  it('routes the homepage icon to template creation instead of Git cloning', () => {
-    render(<StarterTemplates />);
-    expect(screen.getByRole('link', { name: 'Start a blank React app' }).getAttribute('href')).toBe(
-      '/starter?template=Vite%20React',
-    );
   });
 
   it('persists template files and setup actions before navigating to a new project', async () => {

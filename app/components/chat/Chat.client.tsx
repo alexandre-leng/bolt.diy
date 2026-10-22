@@ -198,6 +198,13 @@ export const ChatImpl = memo(
      */
     const turnControlRef = useRef(createTurnControl());
     const generationRef = useRef(0);
+
+    /*
+     * The assistant text as it ARRIVES, not as it renders. `messages` is one render behind during
+     * streaming, and a redirect that reads it can see an empty turn and silently downgrade to a
+     * plain new turn. This accumulator is what the checkpoint is built from.
+     */
+    const streamedTextRef = useRef('');
     const parsedStarterSetupMessagesRef = useRef(new Set<string>());
 
     const pendingTemplateParserRef = useRef<(messages: { id: string; role?: string }[], isLoading: boolean) => void>(
@@ -296,6 +303,25 @@ export const ChatImpl = memo(
        * instead, and ProgressCompilation renders whatever this holds.
        */
       onData: (part) => {
+        /*
+         * Every streamed text delta lands here before React re-renders. Accumulating it is the only
+         * reliable way to know what the assistant had produced when an interruption arrives.
+         */
+        /*
+         * `onData` receives data-* parts only; text arrives through the message stream. Read the
+         * newest assistant text on every part instead of relying on the render closure.
+         */
+        const liveMessages = messagesRef.current;
+        const lastAssistant = [...liveMessages].reverse().find((candidate) => candidate.role === 'assistant');
+
+        if (lastAssistant) {
+          const text = (getMessageText(lastAssistant) ?? '').trim();
+
+          if (text.length > streamedTextRef.current.trim().length) {
+            streamedTextRef.current = text;
+          }
+        }
+
         const data = part.data as Partial<ProgressAnnotation> | undefined;
 
         if (data?.type === 'progress' && typeof data.label === 'string') {
@@ -318,6 +344,9 @@ export const ChatImpl = memo(
       },
       onFinish: ({ message }) => {
         setProgressAnnotations([]);
+
+        /* The turn is over: nothing left to preserve, and nothing may leak into the next one. */
+        streamedTextRef.current = '';
 
         const userMessages = messagesRef.current.filter((item) => item.role === 'user');
 
@@ -792,6 +821,16 @@ export const ChatImpl = memo(
      */
     const currentPartialText = () => {
       /*
+       * Source of truth: what actually streamed in this turn. The messages scan below is the
+       * fallback for a turn that produced text in an earlier round (a resumed turn).
+       */
+      const streamed = streamedTextRef.current.trim();
+
+      if (streamed) {
+        return streamed;
+      }
+
+      /*
        * Read the LIVE list, not the render closure: during streaming the newest assistant row can be
        * one render behind, and an empty read here silently downgrades the redirect to a plain turn.
        */
@@ -1174,6 +1213,13 @@ export const ChatImpl = memo(
 
         /* Nothing was on screen: fall through so the message starts the next turn once aborted. */
       }
+
+      /*
+       * A genuine new turn starts here: bump the generation so a stop aimed at the previous turn is
+       * stale, and clear the streamed accumulator so it cannot seed the next checkpoint.
+       */
+      generationRef.current += 1;
+      streamedTextRef.current = '';
 
       let finalMessageContent = messageContent;
 

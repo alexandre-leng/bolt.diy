@@ -226,6 +226,16 @@ export const writeProvidersCookie = (settings: ProviderSetting) => {
 
 export const providersStore = map<ProviderSetting>(getInitialProviderSettings());
 
+/**
+ * The providers the INSTANCE serves, as reported by the server (`/api/configured-providers`).
+ *
+ * Empty means "no rule known" (no policy written, or the accounts service did not answer) and
+ * the local preference decides, which is the behaviour that predates the admin switchboard.
+ * It is an atom and not a cookie because it is a fact about the deployment, not a choice made
+ * in this browser: nothing here is ever written back to the server.
+ */
+export const serverEnabledProvidersStore = atom<string[]>([]);
+
 // Export the auto-enable function for use in components
 export const initializeProviders = autoEnableConfiguredProviders;
 

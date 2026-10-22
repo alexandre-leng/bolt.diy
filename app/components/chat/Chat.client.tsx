@@ -158,9 +158,11 @@ export const ChatImpl = memo(
       const savedModel = Cookies.get('selectedModel');
       return savedModel || DEFAULT_MODEL;
     });
+
+    const savedProviderCookie = Cookies.get('selectedProvider');
+
     const [provider, setProvider] = useState(() => {
-      const savedProvider = Cookies.get('selectedProvider');
-      return (PROVIDER_LIST.find((p) => p.name === savedProvider) || DEFAULT_PROVIDER) as ProviderInfo;
+      return (PROVIDER_LIST.find((p) => p.name === savedProviderCookie) || DEFAULT_PROVIDER) as ProviderInfo;
     });
 
     const { showChat } = useStore(chatStore);
@@ -176,6 +178,45 @@ export const ChatImpl = memo(
     useEffect(() => {
       void initializePlugins();
     }, [initializePlugins]);
+
+    /*
+     * The default provider is the INSTANCE's, not this browser's.
+     *
+     * The cookie is a per-browser memory and can outlive an administrator's decision, so a
+     * provider the instance no longer serves must not stay selected: every message would be
+     * refused and the composer would look broken. Only a browser with NO saved choice is moved
+     * to the instance default; one that picked a provider still served keeps it.
+     */
+    useEffect(() => {
+      if (savedProviderCookie || activeProviders.length === 0) {
+        return;
+      }
+
+      const preferred = activeProviders.find((candidate) => candidate.name === DEFAULT_PROVIDER.name);
+
+      if (preferred && preferred.name !== provider.name) {
+        setProvider(preferred);
+      }
+    }, [savedProviderCookie, activeProviders, provider.name]);
+
+    /*
+     * And a saved choice the instance does not serve falls back to one it does, rather than
+     * failing on the next message.
+     */
+    useEffect(() => {
+      if (activeProviders.length === 0 || activeProviders.some((candidate) => candidate.name === provider.name)) {
+        return;
+      }
+
+      const fallback =
+        activeProviders.find((candidate) => candidate.name === DEFAULT_PROVIDER.name) ?? activeProviders[0];
+
+      setProvider(fallback);
+      Cookies.set('selectedProvider', fallback.name, { expires: 30 });
+      logStore.logProvider(`Provider ${provider.name} is not served by this instance, switched to ${fallback.name}`, {
+        provider: fallback.name,
+      });
+    }, [activeProviders, provider.name]);
 
     /*
      * v5 removed the managed input state: `input`, `setInput` and

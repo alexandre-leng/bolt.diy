@@ -69,7 +69,24 @@ export async function loader({
     providerSettings[provider] = { ...providerSettings[provider], baseUrl };
   }
 
-  const enabledProviderNames = new URL(request.url).searchParams.get('providers')?.split(',').filter(Boolean);
+  /*
+   * The provider list is decided by the INSTANCE, not by this browser's cookie.
+   *
+   * It used to come only from `?providers=`, which the composer built from the enabled
+   * providers in localStorage: switching a provider off in Settings therefore applied to one
+   * browser, and a colleague (or the same admin on their phone) kept seeing every provider.
+   * The admin's `allowedProviders` is now the ceiling; the query parameter can only narrow it
+   * further, never widen it.
+   */
+  const requestedProviders = new URL(request.url).searchParams.get('providers')?.split(',').filter(Boolean);
+  const allowedProviders = resolvedKeys.policy.allowedProviders;
+
+  const enabledProviderNames =
+    allowedProviders.length > 0
+      ? requestedProviders
+        ? requestedProviders.filter((name) => allowedProviders.includes(name))
+        : allowedProviders
+      : requestedProviders;
 
   const { providers, defaultProvider } = getProviderInfo(llmManager);
 

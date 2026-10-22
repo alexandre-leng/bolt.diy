@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { __resetKeyCacheForTests, modelPolicyViolation, NO_POLICY, resolveProviderKeys } from './instance-keys';
+import {
+  __resetKeyCacheForTests,
+  isProviderEnabled,
+  modelPolicyViolation,
+  NO_POLICY,
+  resolveDefaultProvider,
+  resolveProviderKeys,
+} from './instance-keys';
 
 /*
  * The key ORDER is the whole feature: an administrator configures providers for everybody, so a
@@ -121,8 +128,7 @@ describe('model policy', () => {
     __resetKeyCacheForTests();
   });
 
-  const MANAGED = {
-    managedMode: true,
+  const INSTANCE_RULE = {
     allowedProviders: ['OpenCodeGo'],
     allowedModels: { OpenCodeGo: ['deepseek-v4.1-flash'] },
     effortPolicy: 'auto-only' as const,
@@ -139,32 +145,31 @@ describe('model policy', () => {
   });
 
   it('refuses a provider the administrator closed', () => {
-    const policy = { ...NO_POLICY, managedMode: true, allowedProviders: ['OpenCodeGo'] };
+    const policy = { ...NO_POLICY, allowedProviders: ['OpenCodeGo'] };
 
     expect(modelPolicyViolation(policy, 'OpenAI', 'gpt-4o')).toContain("n'est pas autorisé");
     expect(modelPolicyViolation(policy, 'OpenCodeGo', 'deepseek-v4.1-flash')).toBe('');
   });
 
   it('refuses a model outside the allowed list for an open provider', () => {
-    const policy = { ...NO_POLICY, ...MANAGED };
+    const policy = { ...NO_POLICY, ...INSTANCE_RULE };
 
     expect(modelPolicyViolation(policy, 'OpenCodeGo', 'glm-4.6')).toContain("n'est pas autorisé");
     expect(modelPolicyViolation(policy, 'OpenCodeGo', 'deepseek-v4.1-flash')).toBe('');
   });
 
   it('lets every model through on an open provider with no model list', () => {
-    const policy = { ...NO_POLICY, managedMode: true, allowedProviders: ['OpenCodeGo'] };
+    const policy = { ...NO_POLICY, allowedProviders: ['OpenCodeGo'] };
 
     expect(modelPolicyViolation(policy, 'OpenCodeGo', 'any-model')).toBe('');
   });
 
   it('carries the policy through the resolution, and keeps the cache honest', async () => {
-    const fetchMock = vi.fn(async () => ACCOUNTS_ANSWER({ policy: MANAGED }));
+    const fetchMock = vi.fn(async () => ACCOUNTS_ANSWER({ policy: INSTANCE_RULE }));
     vi.stubGlobal('fetch', fetchMock);
 
     const resolved = await resolveProviderKeys({ userId: 'user-policy' });
 
-    expect(resolved.policy.managedMode).toBe(true);
     expect(resolved.policy.allowedProviders).toEqual(['OpenCodeGo']);
     expect(resolved.policy.effortPolicy).toBe('auto-only');
 
@@ -182,9 +187,36 @@ describe('model policy', () => {
      * policy decides PERMISSIONS, and denying every model to everybody because one field was
      * unreadable would take the whole product down. Keys still fail closed above.
      */
-    expect(resolved.policy.managedMode).toBe(false);
     expect(resolved.policy.allowedProviders).toEqual([]);
 
     vi.unstubAllGlobals();
+  });
+
+  it('serves every provider while no rule is written, and only the enabled ones after', () => {
+    /* The switchboard: an empty list is "no policy", never "nothing allowed". */
+    expect(isProviderEnabled(NO_POLICY, 'OpenAI')).toBe(true);
+    expect(isProviderEnabled(NO_POLICY, 'OpenCodeGo')).toBe(true);
+
+    const rule = { ...NO_POLICY, allowedProviders: ['OpenCodeGo'] };
+
+    expect(isProviderEnabled(rule, 'OpenAI')).toBe(false);
+    expect(isProviderEnabled(rule, 'OpenCodeGo')).toBe(true);
+  });
+
+  it('falls back to a served provider when the default one is switched off', () => {
+    /* A composer that opens on a refused provider fails on the very first message. */
+    expect(resolveDefaultProvider(NO_POLICY, 'OpenCodeGo')).toBe('OpenCodeGo');
+
+    const pinned = {
+      ...NO_POLICY,
+      allowedProviders: ['OpenCodeGo', 'Anthropic'],
+      defaultModel: { provider: 'Anthropic', model: 'claude-sonnet' },
+    };
+
+    expect(resolveDefaultProvider(pinned, 'OpenCodeGo')).toBe('Anthropic');
+
+    const withoutDefault = { ...NO_POLICY, allowedProviders: ['Anthropic'] };
+
+    expect(resolveDefaultProvider(withoutDefault, 'OpenCodeGo')).toBe('Anthropic');
   });
 });

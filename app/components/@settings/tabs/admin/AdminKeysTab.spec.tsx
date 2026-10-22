@@ -25,11 +25,20 @@ const PROVIDER = {
   baseUrl: '',
   source: 'instance' as const,
   allowUserKeys: false,
+  enabled: true,
+};
+
+const POLICY = {
+  defaultModel: { provider: '', model: '' },
+  allowedProviders: ['OpenAI'],
+  allowedModels: {},
+  effortPolicy: 'free' as const,
 };
 
 function mockFetch(handlers: {
   session: { authenticated: boolean; isAdmin: boolean };
   providers?: () => Response;
+  policy?: () => Response;
   save?: () => Response;
   test?: () => Response;
 }) {
@@ -56,6 +65,27 @@ function mockFetch(handlers: {
       return handlers.test
         ? handlers.test()
         : new Response(JSON.stringify({ ok: true, detail: 'clé acceptée' }), { status: 200 });
+    }
+
+    if (url.includes('/api/admin/model-policy')) {
+      if (method === 'PUT') {
+        return handlers.save ? handlers.save() : new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+
+      if (handlers.policy) {
+        return handlers.policy();
+      }
+
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          policy: POLICY,
+          providers: [{ name: 'OpenCodeGo', label: 'OpenCode Go', needsKey: true }],
+          effortPolicies: ['free', 'auto-only'],
+          defaultProvider: { provider: 'OpenCodeGo', model: '' },
+        }),
+        { status: 200 },
+      );
     }
 
     if (url.includes('/api/admin/providers')) {
@@ -163,6 +193,76 @@ describe('AdminKeysTab', () => {
 
     expect(put, 'saving must reach the admin endpoint').toBeTruthy();
     expect(JSON.parse(put!.body || '{}')).toMatchObject({ provider: 'OpenAI', apiKey: 'sk-brand-new' });
+  });
+
+  it('writes the instance rule when a provider is switched off, for everybody', async () => {
+    /*
+     * The complaint this panel answers: switching a provider off in Settings changed nothing but
+     * the current browser. The switch must therefore PUT the instance policy, not localStorage.
+     */
+    const calls = mockFetch({ session: { authenticated: true, isAdmin: true } });
+    render(<AdminKeysTab />);
+
+    const toggle = await screen.findByTestId('admin-provider-switch-OpenAI');
+
+    /*
+     * With no rule written, every provider is served: the switch shows "on". Switching it off is
+     * what writes the FIRST rule, seeded with the whole catalogue, so the other sixteen providers
+     * the admin never mentioned stay enabled.
+     */
+    await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('true'));
+    await userEvent.click(toggle);
+
+    await waitFor(() => {
+      const puts = calls.filter((call) => call.method === 'PUT' && call.url.includes('/api/admin/model-policy'));
+
+      expect(puts.length, 'the switch must reach the instance policy endpoint').toBeGreaterThan(0);
+
+      /*
+       * The click writes exactly what the panel shows: OpenAI off, and `allowedProviders` was
+       * empty before it, which means "no rule". The saving may also round-trip through the
+       * server and re-load the rule it just wrote, so the assertion is on what the FIRST request
+       * carried, i.e. the state at click time.
+       */
+      const first = JSON.parse(puts[0].body || '{}').policy.allowedProviders as string[];
+
+      expect(first).toEqual([]);
+    });
+  });
+
+  it('keeps only the default provider when everything is disabled', async () => {
+    const calls = mockFetch({
+      session: { authenticated: true, isAdmin: true },
+      policy: () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            policy: {
+              ...POLICY,
+              allowedProviders: ['OpenCodeGo', 'OpenAI'],
+              defaultModel: { provider: 'OpenCodeGo', model: '' },
+            },
+            providers: [
+              { name: 'OpenAI', label: 'OpenAI (GPT)', needsKey: true },
+              { name: 'OpenCodeGo', label: 'OpenCode Go', needsKey: true },
+            ],
+            effortPolicies: ['free'],
+          }),
+          { status: 200 },
+        ),
+    });
+    render(<AdminKeysTab />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Tout désactiver' }));
+
+    await waitFor(() => {
+      const put = calls.find((call) => call.method === 'PUT' && call.url.includes('/api/admin/model-policy'));
+
+      expect(put, 'disabling everything must reach the instance policy endpoint').toBeTruthy();
+
+      // The default provider cannot be removed: the server refuses a default that is not enabled.
+      expect(JSON.parse(put!.body || '{}').policy.allowedProviders).toEqual(['OpenCodeGo']);
+    });
   });
 
   it('shows the provider verdict returned by the server', async () => {

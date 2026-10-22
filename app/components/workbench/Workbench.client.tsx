@@ -450,18 +450,26 @@ export const Workbench = memo(
             <div className="absolute inset-0 lg:px-4">
               <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border-t lg:border border-bolt-elements-borderColor shadow-sm lg:rounded-lg overflow-hidden">
                 <div className="flex items-center px-3 py-2 border-b border-bolt-elements-borderColor gap-1.5">
-                  <button
-                    type="button"
-                    aria-label={showChat ? 'Masquer la conversation' : 'Afficher la conversation'}
-                    title={showChat ? 'Masquer la conversation' : 'Afficher la conversation'}
-                    className={`${showChat ? 'i-ph:sidebar-simple-fill' : 'i-ph:sidebar-simple'} min-h-11 min-w-11 text-lg text-bolt-elements-textSecondary mr-1`}
-                    disabled={!canHideChat || isSmallViewport}
-                    onClick={() => {
-                      if (canHideChat) {
-                        chatStore.setKey('showChat', !showChat);
-                      }
-                    }}
-                  />
+                  {/*
+                   * Hiding the chat is a two-column action: below 1024px the workbench takes the
+                   * whole width and the chat is already gone, so the control has nothing to act on.
+                   * A disabled icon there read as a stray, unlabelled button sitting in front of the
+                   * view switcher; it is simply not rendered.
+                   */}
+                  {!isSmallViewport && (
+                    <button
+                      type="button"
+                      aria-label={showChat ? 'Masquer la conversation' : 'Afficher la conversation'}
+                      title={showChat ? 'Masquer la conversation' : 'Afficher la conversation'}
+                      className={`${showChat ? 'i-ph:sidebar-simple-fill' : 'i-ph:sidebar-simple'} min-h-11 min-w-11 text-lg text-bolt-elements-textSecondary mr-1 disabled:opacity-40`}
+                      disabled={!canHideChat}
+                      onClick={() => {
+                        if (canHideChat) {
+                          chatStore.setKey('showChat', !showChat);
+                        }
+                      }}
+                    />
+                  )}
                   <Slider selected={selectedView} options={sliderOptions} setSelected={setSelectedView} />
                   <div className="ml-auto" />
                   {selectedView === 'code' && (

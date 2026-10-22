@@ -127,6 +127,14 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
 
   const selectPort = useCallback((port: number | null) => setManualPort(port), []);
 
+  /**
+   * Single preview control: reload the iframe first, then relaunch the preview server.
+   *
+   * The old pair (reload in the preview header + restart in the terminal header) is one button.
+   * The ordered steps keep the reload instant and never lost: the iframe is remounted first, so
+   * even a failed or slow server restart still leaves a refreshed preview. The restart is bounded
+   * so a hung process cannot leave the button stuck.
+   */
   const reloadPreview = () => {
     /*
      * Remount the iframe through state instead of assigning `iframeRef.current.src`.
@@ -137,6 +145,23 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
      * current `iframeUrl` without touching the DOM out of band.
      */
     setReloadToken((token) => token + 1);
+
+    void (async () => {
+      try {
+        const { restartProjectPreview } = await import('~/lib/runtime/projectMcp');
+
+        await Promise.race([
+          restartProjectPreview(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('La relance du serveur d’aperçu a expiré.')), 25000)),
+        ]);
+
+        // The restarted server may re-emit its port; remount once more so the new build is shown.
+        setReloadToken((token) => token + 1);
+      } catch (error) {
+        // A dead or slow preview server must not cost the user the plain reload.
+        toast.error(error instanceof Error ? error.message : 'La relance du serveur d’aperçu a échoué.');
+      }
+    })();
   };
 
   const toggleFullscreen = async () => {
@@ -845,7 +870,7 @@ export const Preview = memo(({ selectedElement, setSelectedElement }: PreviewPro
             icon="i-ph:arrow-clockwise"
             onClick={reloadPreview}
             className="min-h-11 min-w-11"
-            title="Recharger l’aperçu"
+            title="Recharger l’aperçu et relancer le serveur"
           />
           <IconButton
             icon={isPreviewPaused ? 'i-ph:play' : 'i-ph:pause'}

@@ -18,7 +18,6 @@ vi.mock('~/lib/toastify', () => ({
 }));
 vi.mock('./Terminal', () => ({ Terminal: () => <div /> }));
 vi.mock('./TerminalManager', () => ({ TerminalManager: () => null }));
-vi.mock('./RestartPreviewButton', () => ({ RestartPreviewButton: () => <button /> }));
 vi.mock('react-resizable-panels', () => ({
   Panel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));

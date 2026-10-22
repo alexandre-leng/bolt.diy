@@ -102,7 +102,7 @@ describe('Preview active port clamp', () => {
      * the controlled `src` stays correct.
      */
     act(() => {
-      fireEvent.click(screen.getByLabelText('Recharger l’aperçu'));
+      fireEvent.click(screen.getByLabelText('Recharger l’aperçu et relancer le serveur'));
     });
 
     const after = screen.getAllByTitle('Aperçu du projet')[0] as HTMLIFrameElement;

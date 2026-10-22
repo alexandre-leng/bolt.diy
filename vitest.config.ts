@@ -79,6 +79,11 @@ const DOM_TESTS = [
 
   // UX/a11y regression specs (render React)
   'app/components/@settings/core/ControlPanel.spec.tsx',
+  'app/components/@settings/core/SettingsHeader.spec.tsx',
+  'app/components/@settings/tabs/connectors/ConnectorsTab.spec.tsx',
+  'app/components/ui/Select.spec.tsx',
+  'app/components/ui/ActionButton.spec.tsx',
+  'app/components/@settings/tabs/voice/VoiceTab.spec.tsx',
   'app/components/@settings/shared/service-integration/ConnectionForm.spec.tsx',
   'app/components/@settings/tabs/profile/ProfileTab.spec.tsx',
   'app/components/@settings/tabs/profile/ProfileTab.persistence.spec.tsx',

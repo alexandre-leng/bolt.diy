@@ -383,7 +383,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const baseChat = (
       <div
         ref={ref}
-        className={classNames(styles.BaseChat, 'relative flex h-full w-full overflow-hidden')}
+        className={classNames(styles.BaseChat, 'relative flex h-full min-h-0 w-full overflow-hidden')}
         data-chat-visible={showChat}
       >
         <ClientOnly>{() => <Menu />}</ClientOnly>
@@ -424,7 +424,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             )}
             <StickToBottom
               className={classNames('pt-6 px-2 sm:px-6 relative', {
-                'h-full flex flex-col modern-scrollbar': chatStarted,
+                'flex-1 min-h-0 flex flex-col modern-scrollbar': chatStarted,
               })}
               resize="smooth"
               initial="smooth"

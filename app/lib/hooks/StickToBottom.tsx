@@ -128,7 +128,15 @@ function Content({ children, ...props }: StickToBottomContentProps) {
   const context = useStickToBottomContext();
 
   return (
-    <div ref={context.scrollRef} className="w-full h-auto">
+    /*
+     * `h-auto` is the trap: this element is the SCROLLER (scrollRef), and every measurement the
+     * stick logic makes comes from its own scrollHeight/clientHeight. With `h-auto` inside a
+     * `h-full flex flex-col` parent it grows to its content, clientHeight equals scrollHeight,
+     * `scrollHeight - clientHeight` is 0, the target is always 0, and a conversation opens on its
+     * OLDEST message with an inert ScrollToBottom button (measured: scrollTop 0, 14 692 px from the
+     * bottom). `min-h-0` lets the flex parent bound it so it can actually scroll.
+     */
+    <div ref={context.scrollRef} className="w-full h-full min-h-0">
       <div {...props} ref={context.contentRef}>
         {typeof children === 'function' ? children(context) : children}
       </div>

@@ -40,6 +40,13 @@ export interface StickToBottomState {
   resizeObserver?: ResizeObserver;
 }
 
+/**
+ * How long after mount the transcript keeps an unconditional lock to the bottom while its
+ * content settles. Long enough to cover a long conversation's hydration and tool cards, short
+ * enough that a reader who lands on the page and immediately scrolls up is not fought for long.
+ */
+const INITIAL_SETTLE_MS = 4000;
+
 const DEFAULT_SPRING_ANIMATION = {
   /**
    * A value from 0 to 1, on how much to damp the animation.
@@ -494,6 +501,23 @@ export const useStickToBottom = (options: StickToBottomOptions = {}) => {
 
     let previousHeight: number | undefined;
 
+    /*
+     * The transcript grows in bursts while a conversation loads (hydration, then the parsed
+     * messages, then each tool card). The `initial` scroll used to fire once, on the very first
+     * ResizeObserver callback, i.e. on the first growth measured — and every later growth then
+     * followed the `resize: smooth` animation, which only sticks while `isAtBottom` is still true.
+     * Any scroll event in between (an anchor jump, a focus, a layout shift) sets it false, and
+     * the transcript stayed pinned near the TOP: opening a chat landed on its oldest message
+     * instead of on the newest one above the composer. Measured: scrollTop 0, 14 692 px from the
+     * bottom, first bubble painted at the top of the pane.
+     *
+     * So keep the initial lock alive while the content is still growing after mount, up to a
+     * budget: every growth jump lands instantly at the target until the playback stops changing
+     * size, or 4 s elapse. After that the normal rules apply again (a reader who scrolls up
+     * escapes the lock for good, and streaming follows the `resize` animation as before).
+     */
+    const settleUntil = Date.now() + INITIAL_SETTLE_MS;
+
     state.resizeObserver = new ResizeObserver(([entry]) => {
       const { height } = entry.contentRect;
       const difference = height - (previousHeight ?? height);
@@ -514,11 +538,20 @@ export const useStickToBottom = (options: StickToBottomOptions = {}) => {
         /**
          * If it's a positive resize, scroll to the bottom when
          * we're already at the bottom.
+         *
+         * While the initial playback is still settling, jump instantly instead of following the
+         * smooth `resize` animation: the animation aborts as soon as `isAtBottom` flips, which the
+         * burst of growth during load makes likely (see the comment above `settleUntil`).
          */
-        const animation = mergeAnimations(
-          optionsRef.current,
-          previousHeight ? optionsRef.current.resize : optionsRef.current.initial,
-        );
+        const settling = previousHeight !== undefined && Date.now() < settleUntil;
+
+        const animation = settling
+          ? 'instant'
+          : mergeAnimations(optionsRef.current, previousHeight ? optionsRef.current.resize : optionsRef.current.initial);
+
+        if (settling) {
+          setIsAtBottom(true);
+        }
 
         scrollToBottom({
           animation,

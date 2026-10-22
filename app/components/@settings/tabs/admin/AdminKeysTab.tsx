@@ -1,5 +1,6 @@
 import { AlertTriangle, CheckCircle2, Eye, EyeOff, KeyRound, Loader2, ShieldCheck, Trash2 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Select } from '~/components/ui/Select';
 import { fetchSession, type Session } from '~/lib/auth/session';
 import { classNames } from '~/utils/classNames';
 
@@ -421,7 +422,7 @@ export function AdminKeysTab() {
             >
               Modèle par défaut
             </label>
-            <select
+            <Select
               id="policy-default-provider"
               value={policyDraft.defaultModel.provider}
               onChange={(event) =>
@@ -440,7 +441,7 @@ export function AdminKeysTab() {
                     {provider.label}
                   </option>
                 ))}
-            </select>
+            </Select>
           </div>
 
           <div>

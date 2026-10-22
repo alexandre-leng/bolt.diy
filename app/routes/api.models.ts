@@ -1,4 +1,4 @@
-import { resolveProviderKeys } from '~/lib/.server/api/instance-keys';
+import { policyUnavailableResponse, resolveProviderKeys } from '~/lib/.server/api/instance-keys';
 import { getApiKeysFromCookie, getProviderSettingsFromCookie } from '~/lib/api/cookies';
 import { LLMManager } from '~/lib/modules/llm/manager';
 import type { ModelInfo } from '~/lib/modules/llm/types';
@@ -63,7 +63,13 @@ export async function loader({
     cookieKeys: cookieApiKeys,
   });
 
-  const apiKeys = { ...cookieApiKeys, ...resolvedKeys.apiKeys };
+  const unavailable = policyUnavailableResponse(resolvedKeys);
+
+  if (unavailable) {
+    return unavailable;
+  }
+
+  const apiKeys = resolvedKeys.apiKeys;
 
   for (const [provider, baseUrl] of Object.entries(resolvedKeys.baseUrls)) {
     providerSettings[provider] = { ...providerSettings[provider], baseUrl };

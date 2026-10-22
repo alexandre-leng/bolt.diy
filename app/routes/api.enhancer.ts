@@ -1,6 +1,7 @@
 import type { UIMessage } from 'ai';
 import type { ActionFunctionArgs } from 'react-router';
 import { toApiErrorResponse, toCheckedTextStream, toMissingCredentialError } from '~/lib/.server/api/errors';
+import { modelPolicyViolation, policyUnavailableResponse, resolveProviderKeys } from '~/lib/.server/api/instance-keys';
 import { readJsonBody } from '~/lib/.server/api/read-body';
 import { REQUEST_LIMITS, enhancerRequestSchema, parseBody } from '~/lib/.server/api/schemas';
 import { streamText } from '~/lib/.server/llm/stream-text';
@@ -34,8 +35,32 @@ async function enhancerAction({ context, request }: ActionFunctionArgs) {
   const providerName = body.provider.name;
 
   const cookieHeader = request.headers.get('Cookie');
-  const apiKeys = getApiKeysFromCookie(cookieHeader);
+  const cookieApiKeys = getApiKeysFromCookie(cookieHeader);
+
+  const resolvedKeys = await resolveProviderKeys({
+    env: context.cloudflare?.env as unknown as Record<string, unknown>,
+    userId: request.headers.get('X-Bolt-User-Id'),
+    cookieKeys: cookieApiKeys,
+  });
+
+  const unavailable = policyUnavailableResponse(resolvedKeys);
+
+  if (unavailable) {
+    return unavailable;
+  }
+
+  const violation = modelPolicyViolation(resolvedKeys.policy, providerName, model);
+
+  if (violation) {
+    return Response.json({ error: true, message: violation, code: 'policy_denied' }, { status: 400 });
+  }
+
+  const apiKeys = resolvedKeys.apiKeys;
   const providerSettings = getProviderSettingsFromCookie(cookieHeader);
+
+  for (const [provider, baseUrl] of Object.entries(resolvedKeys.baseUrls)) {
+    providerSettings[provider] = { ...providerSettings[provider], baseUrl };
+  }
 
   try {
     const result = await streamText({

@@ -44,7 +44,7 @@ export function AttachmentMenu({
       <DropdownMenu.Trigger asChild>
         <button
           type="button"
-          title="Add attachment or connector"
+          aria-label="Ajouter une pièce jointe ou un connecteur"
           className={classNames(
             'flex items-center text-bolt-elements-item-contentDefault bg-transparent',
             'hover:text-bolt-elements-item-contentActive rounded-md p-1',
@@ -53,7 +53,7 @@ export function AttachmentMenu({
             'transition-all',
           )}
         >
-          <div className="i-ph:plus text-xl"></div>
+          <span className="i-ph:plus text-xl" aria-hidden="true" />
         </button>
       </DropdownMenu.Trigger>
 
@@ -85,14 +85,14 @@ export function AttachmentMenu({
             onSelect={onAttachFile}
           >
             <div className="i-ph:paperclip text-lg"></div>
-            <span>Attach File</span>
+            <span>Joindre un fichier</span>
           </DropdownMenu.Item>
           <DropdownMenu.Item
             className="flex items-center gap-2 px-3 py-2 rounded-md text-sm cursor-pointer text-bolt-elements-textPrimary data-[highlighted]:bg-bolt-elements-background-depth-3 outline-none"
             onSelect={onScreenshot}
           >
             <div className="i-ph:image text-lg" />
-            <span>From a screenshot</span>
+            <span>Depuis une capture d’écran</span>
           </DropdownMenu.Item>
 
           <DropdownMenu.Item
@@ -106,7 +106,7 @@ export function AttachmentMenu({
             onSelect={onOpenDesignDialog}
           >
             <div className="i-ph:palette text-lg"></div>
-            <span>Design Palette</span>
+            <span>Palette de design</span>
           </DropdownMenu.Item>
 
           <DropdownMenu.Item
@@ -126,7 +126,7 @@ export function AttachmentMenu({
             ) : (
               <div className="i-bolt:stars text-lg"></div>
             )}
-            <span>Enhance Prompt</span>
+            <span>Améliorer le prompt</span>
           </DropdownMenu.Item>
 
           <DropdownMenu.Item
@@ -142,7 +142,7 @@ export function AttachmentMenu({
             disabled={!mcpToolsInitialized}
           >
             <div className="i-bolt:mcp text-lg"></div>
-            <span>MCP Tools Available</span>
+            <span>Outils MCP disponibles</span>
           </DropdownMenu.Item>
 
           <DropdownMenu.Separator className="h-px bg-bolt-elements-borderColor my-1" />
@@ -158,7 +158,7 @@ export function AttachmentMenu({
             >
               <div className="flex items-center gap-2">
                 <div className="i-ph:plug text-lg"></div>
-                <span>Connectors</span>
+                <span>Connecteurs</span>
               </div>
               <div className="i-ph:caret-right text-sm"></div>
             </DropdownMenu.SubTrigger>
@@ -188,9 +188,9 @@ export function AttachmentMenu({
                   )}
                 >
                   <div className="i-ph:magnifying-glass text-lg" />
-                  <span>Web Search</span>
+                  <span>Recherche web</span>
                   <span
-                    aria-label={webSearchEnabled ? 'Enabled' : 'Disabled'}
+                    aria-label={webSearchEnabled ? 'Recherche web activée' : 'Recherche web désactivée'}
                     className={classNames(
                       'ml-auto h-2 w-2 rounded-full',
                       webSearchEnabled ? 'bg-green-500' : 'bg-red-500',
@@ -213,7 +213,7 @@ export function AttachmentMenu({
                     {connector.icon}
                     <span>{connector.name}</span>
                     <span
-                      aria-label={connector.enabled ? 'Enabled' : 'Disabled'}
+                      aria-label={connector.enabled ? 'Activé' : 'Désactivé'}
                       className={classNames(
                         'ml-auto h-2 w-2 rounded-full',
                         connector.enabled ? 'bg-green-500' : 'bg-red-500',

@@ -54,9 +54,9 @@ function renderChatBox(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 
-  render(<ChatBox {...(props as any)} />);
+  const result = render(<ChatBox {...(props as any)} />);
 
-  return { props, textarea: screen.getByRole('textbox') as HTMLTextAreaElement };
+  return { ...result, props, textarea: screen.getByRole('textbox') as HTMLTextAreaElement };
 }
 
 describe('ChatBox: Enter during a generation (U1)', () => {
@@ -104,6 +104,23 @@ describe('ChatBox: Enter during a generation (U1)', () => {
   });
 });
 
+describe('ChatBox: model settings accessibility (B-12)', () => {
+  it('exposes expanded state and controls the model settings panel', () => {
+    const { props, container } = renderChatBox({
+      isModelSettingsCollapsed: true,
+      providerList: [{ name: 'openai' }],
+    });
+
+    const toggle = screen.getByTitle('Réglages du modèle');
+    const panelId = toggle.getAttribute('aria-controls');
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(panelId).toBeTruthy();
+    expect(container.querySelector(`#${CSS.escape(panelId as string)}`)).not.toBeNull();
+    fireEvent.click(toggle);
+    expect(props.setIsModelSettingsCollapsed).toHaveBeenCalledWith(false);
+  });
+});
 describe('ChatBox: dropping several images (U8)', () => {
   it('attaches every dropped image, not only the last one read', async () => {
     const { props, textarea } = renderChatBox();

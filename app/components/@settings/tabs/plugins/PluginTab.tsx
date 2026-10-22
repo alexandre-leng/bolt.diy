@@ -14,6 +14,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Select } from '~/components/ui/Select';
 import { getPluginToolName } from '~/lib/plugins/adapters';
 import type { MarketplaceSnapshot, MarketplacePlugin } from '~/lib/plugins/marketplace';
 import { pluginCategorySchema, pluginManifestSchema, type PluginManifest } from '~/lib/plugins/schema';
@@ -295,7 +296,7 @@ export default function PluginTab() {
         type="file"
         accept=".zip,application/zip,application/x-zip-compressed"
         className="sr-only"
-        aria-label="Select a plugin ZIP package"
+        aria-label="Sélectionner une archive ZIP d’extension"
         onChange={(event) => {
           void handleImport(event.target.files?.[0]);
           event.currentTarget.value = '';
@@ -313,7 +314,7 @@ export default function PluginTab() {
           busy={storeBusy}
           onEnabled={(enabled) => runOperation(() => setEnabled(selectedId, enabled))}
           onUninstall={() => {
-            if (window.confirm(`Uninstall ${selectedManifest.name}? Its plugin settings will be removed.`)) {
+            if (window.confirm(`Désinstaller ${selectedManifest.name} ? Ses paramètres seront supprimés.`)) {
               void runOperation(async () => {
                 await uninstall(selectedId);
                 goBack();
@@ -402,7 +403,10 @@ export default function PluginTab() {
             </div>
           </header>
 
-          <nav aria-label="Plugin views" className="flex flex-wrap gap-1 border-b border-bolt-elements-borderColor">
+          <nav
+            aria-label="Vues des extensions"
+            className="flex flex-wrap gap-1 border-b border-bolt-elements-borderColor"
+          >
             {(
               [
                 ['marketplace', 'Marketplace'],
@@ -444,14 +448,14 @@ export default function PluginTab() {
                 className={`${inputClass} pl-9`}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search plugins..."
-                aria-label="Search plugins"
+                placeholder="Rechercher une extension…"
+                aria-label="Rechercher une extension"
               />
             </label>
             <label className="sr-only" htmlFor="plugin-category">
               Filter by category
             </label>
-            <select
+            <Select
               id="plugin-category"
               className={`${inputClass} w-auto min-w-44`}
               value={category}
@@ -461,7 +465,7 @@ export default function PluginTab() {
               {CATEGORIES.map((item) => (
                 <option key={item}>{item}</option>
               ))}
-            </select>
+            </Select>
           </div>
 
           {(operationError || storeError) && <ErrorMessage message={operationError ?? storeError ?? ''} />}
@@ -733,7 +737,7 @@ function PluginDetails({
                 type="checkbox"
                 checked={installed.enabled}
                 disabled={busy}
-                aria-label={`${installed.enabled ? 'Disable' : 'Enable'} ${manifest.name}`}
+                aria-label={`${installed.enabled ? 'Désactiver' : 'Activer'} ${manifest.name}`}
                 onChange={(event) => onEnabled(event.target.checked)}
                 className="h-4 w-4 accent-purple-500"
               />
@@ -745,7 +749,7 @@ function PluginDetails({
         )}
       </header>
       <nav
-        aria-label="Plugin details"
+        aria-label="Détails de l’extension"
         className="flex gap-2 overflow-x-auto border-b border-bolt-elements-borderColor pb-2"
       >
         {(['overview', 'settings', 'permissions', 'logs'] as const).map((tab) => (
@@ -873,7 +877,7 @@ function PluginDetails({
                     type="checkbox"
                     checked={toolEnabled}
                     disabled={busy}
-                    aria-label={`Enable ${tool} tool`}
+                    aria-label={`Activer l’outil ${tool}`}
                     onChange={(event) => onToolEnabled(tool, event.target.checked)}
                     className="h-4 w-4 accent-purple-500"
                   />
@@ -961,7 +965,7 @@ function DeveloperWizard({
           Cancel
         </button>
       </header>
-      <ol aria-label="Plugin draft steps" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <ol aria-label="Étapes de création d’une extension" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {steps.map((label, index) => (
           <li
             key={label}
@@ -1028,7 +1032,7 @@ function DeveloperWizard({
               </label>
               <label className="space-y-1 text-sm text-bolt-elements-textSecondary">
                 Category
-                <select
+                <Select
                   className={inputClass}
                   value={draft.category}
                   onChange={(event) => setDraft({ ...draft, category: event.target.value as Draft['category'] })}
@@ -1036,7 +1040,7 @@ function DeveloperWizard({
                   {CATEGORIES.map((item) => (
                     <option key={item}>{item}</option>
                   ))}
-                </select>
+                </Select>
               </label>
               <label className="space-y-1 text-sm text-bolt-elements-textSecondary md:col-span-2">
                 Description

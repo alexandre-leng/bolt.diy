@@ -59,6 +59,14 @@ export function markDeleted(id: string, urlId?: string): void {
   }
 }
 
+export function clearDeleted(id: string, urlId?: string): void {
+  deletedIds.delete(id);
+
+  if (urlId) {
+    deletedIds.delete(urlId);
+  }
+}
+
 /** Test seam: forget every recorded deletion. */
 export function clearDeletedIds(): void {
   deletedIds.clear();
@@ -186,21 +194,32 @@ export async function reconcileChat(database: IDBDatabase, id: string): Promise<
     return local;
   }
 
-  const winner = pickNewest(local, remote);
-
-  if (winner === 'remote') {
+  if (!local) {
     try {
-      return await cacheServerCopy(database, remote, id, local?.urlId);
+      return await cacheServerCopy(database, remote, id);
     } catch (error) {
       logger.debug('could not cache the server copy', error);
-
       return remote;
     }
   }
 
-  // Local is strictly newer: the server is the one that is behind. A tie needs no upload.
-  if (local && !sameVersion(local, remote)) {
-    void pushChat(local, database);
+  // A newer remote version always wins at open. Never issue a PUT from this read path.
+  const localTime = Date.parse(local.timestamp);
+  const remoteTime = Date.parse(remote.timestamp);
+  const localHasContent = Array.isArray(local.messages) && local.messages.length > 0;
+  const remoteHasContent = Array.isArray(remote.messages) && remote.messages.length > 0;
+
+  const remoteIsNewer =
+    (!localHasContent && remoteHasContent) ||
+    (localHasContent === remoteHasContent && !isNaN(remoteTime) && !isNaN(localTime) && remoteTime > localTime);
+
+  if (remoteIsNewer) {
+    try {
+      return await cacheServerCopy(database, remote, id, local.urlId);
+    } catch (error) {
+      logger.debug('could not cache the newer server copy', error);
+      return remote;
+    }
   }
 
   return local;
@@ -415,6 +434,14 @@ export function pushChat(chat: ChatHistoryItem, database?: IDBDatabase): Promise
     }
 
     pendingPush.delete(key);
+
+    /*
+     * A queued save may have been superseded by deletion while its predecessor was in flight.
+     * Re-check immediately before the network write, not only when pushChat is called.
+     */
+    if (isDeleted(latest.id, latest.urlId)) {
+      return false;
+    }
 
     const fingerprint = chatFingerprint(latest);
 

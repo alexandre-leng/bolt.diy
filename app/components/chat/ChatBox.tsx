@@ -188,6 +188,7 @@ interface ChatBoxProps {
 export const ChatBox: React.FC<ChatBoxProps> = (props) => {
   const [isMcpToolsOpen, setIsMcpToolsOpen] = React.useState(false);
   const [isScreenshotOpen, setIsScreenshotOpen] = React.useState(false);
+  const modelSettingsPanelId = React.useId();
   const screenshotOpenerRef = React.useRef<HTMLElement | null>(null);
   const mcpToolsInitialized = useMCPStore((state) => state.isInitialized);
   const mcpSettings = useMCPStore((state) => state.settings);
@@ -324,7 +325,7 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
         <ClientOnly>
           {/* `contents` keeps this wrapper from being a box: as a box it took a 0-height line and every control inside collapsed to 0x0 (measured live, the row stayed 494x0). */}
           {() => (
-            <div className={props.isModelSettingsCollapsed ? 'hidden' : 'contents'}>
+            <div id={modelSettingsPanelId} className={props.isModelSettingsCollapsed ? 'hidden' : 'contents'}>
               <ModelSelector
                 key={props.provider?.name}
                 model={props.model}
@@ -375,13 +376,13 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
             <code className="bg-accent-500 rounded-4px px-1.5 py-1 mr-0.5 text-white">
               {props?.selectedElement?.tagName}
             </code>
-            selected for inspection
+            Élément sélectionné pour inspection
           </div>
           <button
             className="bg-transparent text-accent-500 pointer-auto"
             onClick={() => props.setSelectedElement?.(null)}
           >
-            Clear
+            Réinitialiser
           </button>
         </div>
       )}
@@ -463,7 +464,7 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
           placeholder={
             props.chatMode === 'build' ? 'Décrivez l’application à créer…' : 'De quoi voulez-vous discuter ?'
           }
-          aria-label={props.chatMode === 'build' ? 'Décrivez l’application à créer' : 'Message'}
+          aria-label={props.chatMode === 'build' ? 'Décrivez l’application à créer' : 'Écrivez votre message'}
           translate="no"
         />
         {(props.speechError || props.isListening || props.speechTranscribing) && (
@@ -497,7 +498,7 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
                      * dialog returns focus there on close (see onCloseAutoFocus in ScreenshotDialog).
                      */
                     screenshotOpenerRef.current = document.querySelector<HTMLElement>(
-                      '[title="Add attachment or connector"]',
+                      '[aria-label="Ajouter une pièce jointe ou un connecteur"]',
                     );
                     setIsScreenshotOpen(true);
                   }}
@@ -506,7 +507,7 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
                      * Trigger the design dialog by programmatically clicking the hidden button
                      * This is a workaround since ColorSchemeDialog manages its own state
                      */
-                    const designButton = document.querySelector('[title="Design Palette"]') as HTMLButtonElement;
+                    const designButton = document.querySelector('[title="Palette de design"]') as HTMLButtonElement;
                     designButton?.click();
                   }}
                   onEnhancePrompt={() => {
@@ -540,7 +541,7 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
               <DropdownMenu.Trigger asChild>
                 <button
                   type="button"
-                  title={props.chatMode === 'discuss' ? 'Mode Discussion' : 'Mode Agent'}
+                  title={props.chatMode === 'discuss' ? 'Discussion' : 'Agent'}
                   aria-label={props.chatMode === 'discuss' ? 'Mode : Discussion' : 'Mode : Agent'}
                   className={classNames(
                     'transition-all flex items-center gap-1 rounded-md px-1.5 py-1 text-xs',
@@ -629,6 +630,8 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
             />
             <IconButton
               title="Réglages du modèle"
+              aria-expanded={!props.isModelSettingsCollapsed}
+              aria-controls={modelSettingsPanelId}
               className={classNames('transition-all flex items-center gap-1 min-w-0', {
                 'bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent':
                   props.isModelSettingsCollapsed,

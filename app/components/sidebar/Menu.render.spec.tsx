@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   deleteById: vi.fn(async () => undefined),
   deleteHistory: vi.fn(),
   markDeleted: vi.fn(),
+  clearDeleted: vi.fn(),
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
 
@@ -43,6 +44,7 @@ vi.mock('~/lib/persistence', async () => {
 vi.mock('~/lib/persistence/historySync', () => ({
   migrateLocalHistoryToServer: vi.fn(async () => ({ offline: false, pulled: 0, pushed: 0 })),
   markDeleted: mocks.markDeleted,
+  clearDeleted: mocks.clearDeleted,
   renameChat: vi.fn(),
 }));
 
@@ -70,7 +72,7 @@ async function renderMenu() {
 
 async function openDeleteDialog(container: HTMLElement) {
   act(() => {
-    fireEvent.click(container.querySelector('button.i-ph\\:trash') as HTMLButtonElement);
+    fireEvent.click(container.querySelector('button[aria-label="Supprimer"]') as HTMLButtonElement);
   });
 
   return screen.findByRole('dialog');
@@ -97,7 +99,7 @@ describe('Menu: failed server delete (U17)', () => {
 
     // Before: deleted locally anyway, with a success toast, and it came back from the server.
     expect(mocks.deleteById).not.toHaveBeenCalled();
-    expect(mocks.markDeleted).not.toHaveBeenCalled();
+    expect(mocks.markDeleted).toHaveBeenCalledWith('7', 'site-cafe');
     expect(mocks.toast.success).not.toHaveBeenCalled();
     expect(String(mocks.toast.error.mock.calls[0][0])).toMatch(/suppression/i);
   });

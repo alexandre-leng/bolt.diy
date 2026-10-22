@@ -99,6 +99,37 @@ describe('resolveProviderKeys', () => {
     expect(resolved.apiKeys).toEqual({});
   });
 
+  it('fails closed and keeps the last valid keys and policy on a service outage', async () => {
+    fetchMock.mockResolvedValueOnce(
+      ACCOUNTS_ANSWER({
+        allowUserKeys: ['Anthropic'],
+        policy: {
+          managedMode: true,
+          allowedProviders: ['OpenAI'],
+          allowedModels: {},
+          defaultModel: { provider: 'OpenAI', model: 'x' },
+          effortPolicy: 'auto-only',
+        },
+      }),
+    );
+
+    const good = await resolveProviderKeys({ userId: 'stale-policy', cookieKeys: { Anthropic: 'personal' } });
+    expect(good.apiKeys.Anthropic).toBe('personal');
+    fetchMock.mockRejectedValueOnce(new Error('offline'));
+
+    const stale = await resolveProviderKeys({ userId: 'stale-policy', cookieKeys: { Anthropic: 'personal' } });
+    expect(stale.policy.managedMode).toBe(true);
+    expect(stale.apiKeys.Anthropic).toBe('personal');
+  });
+
+  it('marks policy unavailable when no valid answer exists', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('offline'));
+
+    const resolved = await resolveProviderKeys({ userId: 'unknown-policy', cookieKeys: { Anthropic: 'personal' } });
+    expect(resolved.policyUnavailable).toBe(true);
+    expect(resolved.apiKeys).toEqual({});
+  });
+
   it('never throws when the service answers garbage', async () => {
     fetchMock.mockResolvedValueOnce(new Response('not json', { status: 200 }));
 

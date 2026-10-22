@@ -178,6 +178,8 @@ export function applyPreferences(preferences: Preferences): boolean {
  */
 export async function syncPreferences(): Promise<'synced' | 'seeded' | 'offline' | 'nothing'> {
   const local = readLocalPreferences();
+  const localTheme = localStorage.getItem('bolt_theme');
+  const localThemeChoice = localTheme !== null;
   const remote = await fetchPreferences();
 
   if (!remote.ok) {
@@ -188,6 +190,10 @@ export async function syncPreferences(): Promise<'synced' | 'seeded' | 'offline'
   const missingOnServer: Preferences = {};
 
   for (const [key, value] of Object.entries(local)) {
+    if (key === 'theme' && remoteValues.theme !== undefined && localThemeChoice) {
+      continue;
+    }
+
     if (remoteValues[key] === undefined) {
       missingOnServer[key] = value;
     }
@@ -196,17 +202,20 @@ export async function syncPreferences(): Promise<'synced' | 'seeded' | 'offline'
   const seeded = Object.keys(missingOnServer).length > 0;
 
   if (seeded) {
-    // First run on this account: the browser's choices become the account's choices.
     await pushPreferences(missingOnServer);
   }
 
-  const changed = applyPreferences(remoteValues);
+  if (localThemeChoice && local.theme !== remoteValues.theme) {
+    await pushPreferences({ theme: local.theme });
+  }
 
   /*
-   * Report what actually happened, seeding included. Returning 'nothing' after successfully
-   * uploading the account's first preferences hid the one case the caller most wants to know
-   * about; a later push that changes values still reports 'synced'.
+   * A theme explicitly selected on this device is the newest known choice. Preserve it and
+   * seed/update the account; otherwise adopt the account theme before hydration settles.
    */
+  const preferencesToApply = localThemeChoice ? { ...remoteValues, theme: local.theme } : remoteValues;
+  const changed = applyPreferences(preferencesToApply);
+
   if (seeded) {
     return 'seeded';
   }

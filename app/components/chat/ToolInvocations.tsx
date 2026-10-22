@@ -139,7 +139,7 @@ export const ToolInvocations = memo(
           <button
             className="flex items-stretch bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-artifacts-backgroundHover w-full overflow-hidden"
             onClick={toggleDetails}
-            aria-label={showDetails ? 'Collapse details' : 'Expand details'}
+            aria-label={showDetails ? 'Réduire les détails' : 'Développer les détails'}
           >
             <div className="p-2.5">
               <div className="i-ph:wrench text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"></div>
@@ -149,7 +149,7 @@ export const ToolInvocations = memo(
                 {activitySummary(toolInvocations)}{' '}
                 {hasToolResults && (
                   <span className="w-full w-full text-bolt-elements-textSecondary text-xs mt-0.5">
-                    ({toolResults.length} tool{hasToolResults ? 's' : ''} used)
+                    {`${toolResults.length} outil${toolResults.length > 1 ? 's' : ''} utilisé${toolResults.length > 1 ? 's' : ''}`}
                   </span>
                 )}
               </div>
@@ -226,14 +226,21 @@ function activitySummary(parts: AnyPart[]): string {
   const reads = names.filter((name) => name === 'project_read_file').length;
   const lists = names.filter((name) => name === 'project_list_paths').length;
 
+  const searches = names.filter(
+    (name) => name === 'project_search_content' || name === 'project_find_related_files',
+  ).length;
+
   const exploration = [
-    reads ? `${reads} read${reads === 1 ? '' : 's'}` : '',
-    lists ? `${lists} list${lists === 1 ? '' : 's'}` : '',
+    reads ? `${reads} lecture${reads === 1 ? '' : 's'}` : '',
+    lists ? `${lists} liste${lists === 1 ? '' : 's'}` : '',
+    searches ? `${searches} recherche${searches === 1 ? '' : 's'}` : '',
   ]
     .filter(Boolean)
     .join(', ');
 
-  return exploration ? `Explored ${exploration}` : `${names.length} activity ${names.length === 1 ? 'item' : 'items'}`;
+  return exploration
+    ? `Exploration terminée : ${exploration}`
+    : `${names.length} activité${names.length === 1 ? '' : 's'}`;
 }
 
 const toolVariants = {
@@ -258,6 +265,7 @@ const ToolResultsList = memo(({ toolInvocations, toolCallAnnotations, theme }: T
 
           const toolCallId = getToolCallId(tool) as string;
           const toolName = getToolName(tool) ?? '';
+          const error = getToolDisplayError(tool);
 
           const annotation = toolCallAnnotations.find((annotation) => {
             return annotation.toolCallId === toolCallId;
@@ -291,23 +299,28 @@ const ToolResultsList = memo(({ toolInvocations, toolCallAnnotations, theme }: T
                     <div className="i-ph:check"></div>
                   </div>
                 )}
-                <div className="text-bolt-elements-textSecondary text-xs">Server:</div>
+                <div className="text-bolt-elements-textSecondary text-xs">Serveur :</div>
                 <div className="text-bolt-elements-textPrimary font-semibold">{annotation?.serverName}</div>
               </div>
 
               <div className="ml-6 mb-2">
+                {error && (
+                  <p className="mb-2 break-words text-xs text-red-500">
+                    {toolName === 'web_search' || toolName === 'web_fetch' ? 'Recherche web indisponible' : error}
+                  </p>
+                )}
                 <div className="text-bolt-elements-textSecondary text-xs mb-1">
-                  Tool: <span className="text-bolt-elements-textPrimary font-semibold">{toolName}</span>
+                  Outil : <span className="text-bolt-elements-textPrimary font-semibold">{toolName}</span>
                 </div>
                 <div className="text-bolt-elements-textSecondary text-xs mb-1">
-                  Description:{' '}
+                  Description :{' '}
                   <span className="text-bolt-elements-textPrimary font-semibold">{annotation?.toolDescription}</span>
                 </div>
-                <div className="text-bolt-elements-textSecondary text-xs mb-1">Parameters:</div>
+                <div className="text-bolt-elements-textSecondary text-xs mb-1">Paramètres :</div>
                 <div className="bg-[#FAFAFA] dark:bg-[#0A0A0A] p-3 rounded-md">
                   <JsonCodeBlock className="mb-0" code={JSON.stringify(getToolInput(tool))} theme={theme} />
                 </div>
-                <div className="text-bolt-elements-textSecondary text-xs mt-3 mb-1">Result:</div>
+                <div className="text-bolt-elements-textSecondary text-xs mt-3 mb-1">Résultat :</div>
                 <div className="bg-[#FAFAFA] dark:bg-[#0A0A0A] p-3 rounded-md">
                   <JsonCodeBlock className="mb-0" code={JSON.stringify(getToolOutput(tool))} theme={theme} />
                 </div>
@@ -479,13 +492,23 @@ const ToolCallsList = memo(
                       className="min-w-0 flex-1 truncate text-bolt-elements-textPrimary"
                       title={annotation?.toolDescription}
                     >
-                      {activityLabel(toolName, getToolInput(tool), getToolOutput(tool), displayState)}
+                      {activityLabel(
+                        toolName,
+                        getToolInput(tool),
+                        getToolOutput(tool),
+                        displayState,
+                        'errorText' in tool ? String(tool.errorText ?? '') : '',
+                      )}
                     </span>
                     {state === 'input-available' && !fullAccess && !isServerAgentTool(toolName) && (
-                      <span className="shrink-0 text-xs text-bolt-elements-textTertiary">Awaiting approval</span>
+                      <span className="shrink-0 text-xs text-bolt-elements-textTertiary">Autorisation requise</span>
                     )}
                   </div>
-                  {error && <p className="ml-7 mt-1 break-words text-xs text-red-500">{error}</p>}
+                  {error && (
+                    <p className="ml-7 mt-1 break-words text-xs text-red-500">
+                      {toolName === 'web_search' || toolName === 'web_fetch' ? 'Recherche web indisponible' : error}
+                    </p>
+                  )}
                   <AgentPlanDetails tool={tool} />
                 </div>
               </motion.li>
@@ -497,18 +520,31 @@ const ToolCallsList = memo(
   },
 );
 
-function activityLabel(toolName: string, rawInput: unknown, rawOutput?: unknown, state?: string): string {
+function activityLabel(
+  toolName: string,
+  rawInput: unknown,
+  rawOutput?: unknown,
+  state?: string,
+  errorText?: string,
+): string {
   const input = rawInput && typeof rawInput === 'object' ? (rawInput as Record<string, unknown>) : {};
   const output = rawOutput && typeof rawOutput === 'object' ? (rawOutput as Record<string, unknown>) : {};
   const path = typeof input.path === 'string' ? input.path : '';
   const shortPath = path.replace(/^\/home\/project\/?/, '');
 
-  if (state === 'output-error') {
-    if (toolName === 'agent_complete') {
-      return output.blocked === true ? 'Task blocked' : 'Completion criteria not met';
-    }
+  const errorLabel =
+    state === 'output-error' || output.isError === true || Boolean(errorText)
+      ? toolName === 'web_search' || toolName === 'web_fetch'
+        ? 'Recherche web indisponible'
+        : toolName === 'agent_complete'
+          ? output.blocked === true
+            ? 'Tâche bloquée'
+            : 'Critères d’achèvement non remplis'
+          : `Échec : ${typeof input.command === 'string' ? input.command : shortPath || toolName}`
+      : undefined;
 
-    return `Failed: ${typeof input.command === 'string' ? input.command : shortPath || toolName}`;
+  if (errorLabel) {
+    return errorLabel;
   }
 
   if (
@@ -516,50 +552,52 @@ function activityLabel(toolName: string, rawInput: unknown, rawOutput?: unknown,
     output.changed === false &&
     ['project_write_file', 'project_patch_file'].includes(toolName)
   ) {
-    return `Unchanged ${shortPath || 'project file'}`;
+    return `Aucun changement dans ${shortPath || 'le fichier du projet'}`;
   }
 
   switch (toolName) {
     case 'agent_plan':
-      return 'Plan and completion criteria recorded';
+      return 'Plan et critères d’achèvement enregistrés';
     case 'agent_complete':
       return output.blocked === true
-        ? 'Task blocked'
+        ? 'Tâche bloquée'
         : output.completed === true
-          ? 'Completion criteria checked'
-          : 'Checking completion criteria';
+          ? 'Critères d’achèvement vérifiés'
+          : 'Vérification des critères d’achèvement';
     case 'project_read_file':
-      return `Read ${shortPath || 'project file'}`;
+      return `Lecture de ${shortPath || 'fichier du projet'}`;
     case 'project_list_paths':
-      return 'Listed project files';
+      return 'Fichiers du projet listés';
     case 'project_search_content':
-      return 'Searched project files';
+      return 'Recherche dans les fichiers du projet terminée';
     case 'project_find_related_files':
-      return `Found related files${shortPath ? ` for ${shortPath}` : ''}`;
+      return `Fichiers associés trouvés${shortPath ? ` pour ${shortPath}` : ''}`;
     case 'project_write_file':
-      return `${output.created === true ? 'Created' : output.created === false ? 'Edited' : state === 'output-available' ? 'Wrote' : 'Writing'} ${shortPath || 'project file'}`;
+      return state === 'output-available' && output.changed === false
+        ? `Aucun changement dans ${shortPath || 'le fichier du projet'}`
+        : `${output.created === true ? 'Création' : output.created === false ? 'Modification' : state === 'output-available' ? 'Écriture' : 'Écriture en cours'} : ${shortPath || 'fichier du projet'}`;
     case 'project_patch_file':
-      return `${state === 'output-available' ? 'Edited' : 'Editing'} ${shortPath || 'project file'}`;
+      return `${state === 'output-available' ? 'Modification' : 'Modification en cours'} : ${shortPath || 'fichier du projet'}`;
     case 'project_create_directory':
-      return `${state === 'output-available' ? 'Created' : 'Creating'} ${shortPath || 'project directory'}`;
+      return `${state === 'output-available' ? 'Création' : 'Création en cours'} : ${shortPath || 'dossier du projet'}`;
     case 'project_delete_path':
-      return `${state === 'output-available' ? 'Deleted' : 'Deleting'} ${shortPath || 'project path'}`;
+      return `${state === 'output-available' ? 'Suppression' : 'Suppression en cours'} : ${shortPath || 'chemin du projet'}`;
     case 'project_run_command':
-      return `${state === 'process-running' ? 'Started' : state === 'output-available' ? 'Finished' : 'Running'} ${typeof input.command === 'string' ? input.command : 'project command'}`;
+      return `${state === 'process-running' ? 'Démarrée' : state === 'output-available' ? 'Terminée' : 'En cours'} : ${typeof input.command === 'string' ? input.command : 'commande du projet'}`;
     case 'project_get_process_output':
       return state === 'process-running'
-        ? 'Command is still running'
+        ? 'Commande toujours en cours'
         : state === 'output-available'
-          ? 'Command finished'
-          : 'Checking command output';
+          ? 'Commande terminée'
+          : 'Vérification de la sortie de commande';
     case 'project_stop_process':
-      return 'Stopping command';
+      return 'Arrêt de la commande';
     case 'web_search':
-      return 'Searching the web';
+      return state === 'output-available' ? 'Recherche sur le web terminée' : 'Recherche sur le web…';
     case 'web_fetch':
-      return 'Opening a web page';
+      return state === 'output-available' ? 'Ouverture de la page terminée' : 'Ouverture d’une page web…';
     default:
-      return `Using ${toolName}`;
+      return `Utilisation de ${toolName}`;
   }
 }
 
@@ -584,14 +622,14 @@ function AgentPlanDetails({ tool }: { tool: AnyPart }) {
 
   return (
     <details className="ml-7 mt-1 text-xs text-bolt-elements-textSecondary">
-      <summary className="cursor-pointer">View plan and completion criteria</summary>
+      <summary className="cursor-pointer">Voir le plan et les critères de fin</summary>
       <p className="mt-2">{plan.goal}</p>
       <ol className="mt-2 list-decimal space-y-1 pl-4">
         {plan.steps.map((step, index) => (
           <li key={index}>{step}</li>
         ))}
       </ol>
-      <p className="mt-2 font-medium">Completion criteria</p>
+      <p className="mt-2 font-medium">Critères de fin</p>
       <ul className="mt-1 list-disc space-y-1 pl-4">
         {plan.criteria.map((criterion) => (
           <li key={criterion.id}>{criterion.description}</li>
@@ -611,12 +649,12 @@ function summarizeExploration(parts: AnyPart[]): string {
   ).length;
 
   const counts = [
-    reads ? `${reads} read${reads === 1 ? '' : 's'}` : '',
-    lists ? `${lists} list${lists === 1 ? '' : 's'}` : '',
-    searches ? `${searches} search${searches === 1 ? '' : 'es'}` : '',
+    reads ? `${reads} lecture${reads === 1 ? '' : 's'}` : '',
+    lists ? `${lists} liste${lists === 1 ? '' : 's'}` : '',
+    searches ? `${searches} recherche${searches === 1 ? '' : 's'}` : '',
   ].filter(Boolean);
 
-  return `Explored ${counts.join(', ')}`;
+  return `Exploration terminée : ${counts.join(', ')}`;
 }
 
 function cleanTimelineText(text: string): string {
@@ -640,6 +678,9 @@ function ToolActivityRow({
   const name = getToolName(tool) ?? '';
   const state = getToolState(tool);
   const displayState = getToolDisplayState(tool);
+  const error = getToolDisplayError(tool);
+
+  const visibleError = error && (name === 'web_search' || name === 'web_fetch') ? 'Recherche web indisponible' : error;
 
   const icon =
     name === 'project_read_file'
@@ -669,15 +710,19 @@ function ToolActivityRow({
           )}
         </span>
         <span className="min-w-0 flex-1 truncate text-bolt-elements-textPrimary" title={annotation?.toolDescription}>
-          {activityLabel(name, getToolInput(tool), getToolOutput(tool), displayState)}
+          {activityLabel(
+            name,
+            getToolInput(tool),
+            getToolOutput(tool),
+            displayState,
+            'errorText' in tool ? String(tool.errorText ?? '') : '',
+          )}
         </span>
         {state === 'input-available' && !fullAccess && !isServerAgentTool(name) && (
-          <span className="shrink-0 text-xs text-bolt-elements-textTertiary">Approval needed</span>
+          <span className="shrink-0 text-xs text-bolt-elements-textTertiary">Autorisation nécessaire</span>
         )}
       </div>
-      {getToolDisplayError(tool) && (
-        <p className="ml-7 mt-1 break-words text-xs text-red-500">{getToolDisplayError(tool)}</p>
-      )}
+      {visibleError && <p className="ml-7 mt-1 break-words text-xs text-red-500">{visibleError}</p>}
       <AgentPlanDetails tool={tool} />
     </div>
   );

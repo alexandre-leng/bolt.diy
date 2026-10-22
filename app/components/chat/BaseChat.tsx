@@ -219,41 +219,66 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     });
 
     useEffect(() => {
-      if (typeof window !== 'undefined') {
-        let parsedApiKeys: Record<string, string> | undefined = {};
+      if (typeof window === 'undefined') {
+        return undefined;
+      }
 
-        try {
-          parsedApiKeys = getApiKeysFromCookies();
-          setApiKeys(parsedApiKeys);
-        } catch (error) {
-          console.error('Error loading API keys from cookies:', error);
-          Cookies.remove('apiKeys');
-        }
+      let parsedApiKeys: Record<string, string> | undefined = {};
 
-        setIsModelLoading('all');
+      try {
+        parsedApiKeys = getApiKeysFromCookies();
+        setApiKeys(parsedApiKeys);
+      } catch (error) {
+        console.error('Error loading API keys from cookies:', error);
+        Cookies.remove('apiKeys');
+      }
 
-        if (!providerList?.length) {
-          setModelList([]);
-          setIsModelLoading(undefined);
+      const controller = new AbortController();
 
-          return;
-        }
+      let cancelled = false;
+      setIsModelLoading('all');
 
-        const activeProviderNames = providerList.map((activeProvider) => activeProvider.name).join(',');
+      if (!providerList?.length) {
+        setModelList([]);
+        setIsModelLoading(undefined);
 
-        fetch(`/api/models?providers=${encodeURIComponent(activeProviderNames)}`)
-          .then((response) => response.json())
-          .then((data) => {
+        return () => {
+          cancelled = true;
+          controller.abort();
+        };
+      }
+
+      const activeProviderNames = providerList.map((activeProvider) => activeProvider.name).join(',');
+
+      fetch(`/api/models?providers=${encodeURIComponent(activeProviderNames)}`, { signal: controller.signal })
+        .then(async (response) => {
+          if (!response.ok) {
+            throw new Error(`Failed to fetch model list: ${response.status}`);
+          }
+
+          return response.json();
+        })
+        .then((data) => {
+          if (!cancelled) {
             const typedData = data as { modelList: ModelInfo[] };
             setModelList(typedData.modelList);
-          })
-          .catch((error) => {
+          }
+        })
+        .catch((error) => {
+          if (!cancelled && error instanceof Error && error.name !== 'AbortError') {
             console.error('Error fetching model list:', error);
-          })
-          .finally(() => {
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
             setIsModelLoading(undefined);
-          });
-      }
+          }
+        });
+
+      return () => {
+        cancelled = true;
+        controller.abort();
+      };
     }, [providerList, provider]);
 
     const onApiKeysChange = async (providerName: string, apiKey: string) => {
@@ -418,7 +443,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   <HeroTitle />
                 </h1>
                 <p className="text-base sm:text-lg mb-8 text-bolt-elements-textSecondary animate-fade-in animation-delay-200">
-                  Describe your app and Bolt builds it, live, in your browser.
+                  Bolt crée votre application en direct, dans votre navigateur.
                 </p>
               </div>
             )}
@@ -562,10 +587,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               <div className="flex flex-col items-center gap-8 px-4 pb-[var(--mobile-nav-space)] md:pb-12 w-full">
                 <div
                   className="flex flex-wrap justify-center items-center gap-1 text-sm text-[#1c1c1c]/80 dark:text-white/80"
-                  aria-label="Import an existing project"
+                  aria-label="Importer un projet existant"
                   role="group"
                 >
-                  <span className="mr-1">or import</span>
+                  <span className="mr-1">ou importer</span>
                   <ImportFolderButton importChat={importChat} className={SECONDARY_ACTION} />
                   <ImportZipButton importChat={importChat} className={SECONDARY_ACTION} />
                   <GitCloneButton importChat={importChat} className={SECONDARY_ACTION} />
@@ -616,7 +641,7 @@ function HeroTitle() {
   const profile = useStore(profileStore);
   const name = profile?.username?.trim();
 
-  return <>{name ? `What will you build, ${name}?` : 'What will you build today?'}</>;
+  return <>{name ? `Que voulez-vous créer, ${name} ?` : "Que voulez-vous créer aujourd'hui ?"}</>;
 }
 
 function ScrollToBottom() {

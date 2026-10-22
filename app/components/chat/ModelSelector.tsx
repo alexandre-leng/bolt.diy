@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback, useId } from 'react';
 import type { KeyboardEvent } from 'react';
 import { useSettings } from '~/lib/hooks/useSettings';
 import type { ModelEffort } from '~/lib/modules/llm/providers/opencode-go';
@@ -152,7 +152,7 @@ export const ModelSelector = ({
       return;
     }
 
-    let cancelled = false;
+    const cancelled = { current: false };
 
     const parameters = new URLSearchParams({ model, provider: provider.name });
 
@@ -165,7 +165,7 @@ export const ModelSelector = ({
       .then((payload: unknown) => {
         const data = (payload ?? null) as { efforts?: string[]; canDisable?: boolean } | null;
 
-        if (cancelled || !data) {
+        if (cancelled.current || !data) {
           return;
         }
 
@@ -180,8 +180,9 @@ export const ModelSelector = ({
         // The row stays as the local catalog describes it.
       });
 
+    /* eslint-disable consistent-return -- async effect cleanup below returns a function. */
     return () => {
-      cancelled = true;
+      cancelled.current = true;
     };
   }, [provider?.name, model, apiKeys, publishedEfforts]);
 
@@ -254,15 +255,17 @@ export const ModelSelector = ({
   const [debouncedModelSearchQuery, setDebouncedModelSearchQuery] = useState('');
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [focusedModelIndex, setFocusedModelIndex] = useState(-1);
+  const modelDropdownRef = useRef<HTMLDivElement>(null);
   const modelSearchInputRef = useRef<HTMLInputElement>(null);
   const modelOptionsRef = useRef<(HTMLDivElement | null)[]>([]);
-  const modelDropdownRef = useRef<HTMLDivElement>(null);
 
   /*
    * Needed to hand keyboard focus back to the trigger when a listbox closes. Without these the focus
    * falls to `document.body` and a keyboard user loses their place.
    */
   const modelTriggerRef = useRef<HTMLDivElement>(null);
+  const modelListboxId = useId();
+  const [modelDropdownPlacement, setModelDropdownPlacement] = useState<'top' | 'bottom'>('bottom');
   const [providerSearchQuery, setProviderSearchQuery] = useState('');
   const [debouncedProviderSearchQuery, setDebouncedProviderSearchQuery] = useState('');
   const [isProviderDropdownOpen, setIsProviderDropdownOpen] = useState(false);
@@ -441,6 +444,36 @@ export const ModelSelector = ({
   }, []);
 
   useEffect(() => {
+    if (!isModelDropdownOpen) {
+      return;
+    }
+
+    const updateModelDropdownPlacement = () => {
+      const trigger = modelTriggerRef.current;
+
+      if (trigger) {
+        const triggerRect = trigger.getBoundingClientRect();
+        const availableBelow = window.innerHeight - triggerRect.bottom;
+        const availableAbove = triggerRect.top;
+        const dropdownHeight = Math.min(Math.max(modelDropdownRef.current?.scrollHeight ?? 0, 240), 320);
+
+        setModelDropdownPlacement(
+          availableBelow < dropdownHeight && availableAbove > availableBelow ? 'top' : 'bottom',
+        );
+      }
+    };
+
+    updateModelDropdownPlacement();
+    window.addEventListener('resize', updateModelDropdownPlacement);
+
+    /* eslint-disable consistent-return -- React effect cleanup returns void, early branch has none. */
+
+    return () => {
+      window.removeEventListener('resize', updateModelDropdownPlacement);
+    };
+  }, [isModelDropdownOpen, filteredModels.length, modelLoading, showFreeModelsOnly, modelListboxId]);
+
+  useEffect(() => {
     if (isModelDropdownOpen && modelSearchInputRef.current) {
       modelSearchInputRef.current.focus();
     }
@@ -602,8 +635,7 @@ export const ModelSelector = ({
     return (
       <div className="mb-2 p-4 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-prompt-background text-bolt-elements-textPrimary">
         <p className="text-center">
-          No providers are currently enabled. Please enable at least one provider in the settings to start using the
-          chat.
+          Aucun fournisseur n’est activé. Activez au moins un fournisseur dans les paramètres pour commencer à discuter.
         </p>
       </div>
     );
@@ -665,10 +697,10 @@ export const ModelSelector = ({
                   )}
                   title={
                     localProviderStatus[provider.name] === 'connected'
-                      ? `${provider.name} is running`
+                      ? `${provider.name} fonctionne`
                       : localProviderStatus[provider.name] === 'disconnected'
-                        ? `${provider.name} is not reachable`
-                        : 'Checking...'
+                        ? `${provider.name} est inaccessible`
+                        : 'Vérification en cours...'
                   }
                 />
               )}
@@ -696,7 +728,7 @@ export const ModelSelector = ({
                   type="text"
                   value={providerSearchQuery}
                   onChange={(e) => setProviderSearchQuery(e.target.value)}
-                  placeholder="Search providers... (⌘K to clear)"
+                  placeholder="Rechercher des fournisseurs... (⌘K pour effacer)"
                   className={classNames(
                     'w-full pl-8 pr-8 py-1.5 rounded-md text-sm',
                     'bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor',
@@ -706,7 +738,7 @@ export const ModelSelector = ({
                   )}
                   onClick={(e) => e.stopPropagation()}
                   role="searchbox"
-                  aria-label="Search providers"
+                  aria-label="Rechercher des fournisseurs"
                 />
                 <div className="absolute left-2.5 top-1/2 -translate-y-1/2">
                   <span className="i-ph:magnifying-glass text-bolt-elements-textTertiary" />
@@ -719,7 +751,7 @@ export const ModelSelector = ({
                       clearProviderSearch();
                     }}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-bolt-elements-background-depth-3 transition-colors"
-                    aria-label="Clear search"
+                    aria-label="Effacer la recherche"
                   >
                     <span className="i-ph:x text-bolt-elements-textTertiary text-xs" />
                   </button>
@@ -747,12 +779,12 @@ export const ModelSelector = ({
                 <div className="px-3 py-3 text-sm">
                   <div className="text-bolt-elements-textTertiary mb-1">
                     {debouncedProviderSearchQuery
-                      ? `No providers match "${debouncedProviderSearchQuery}"`
-                      : 'No providers found'}
+                      ? `Aucun fournisseur ne correspond à « ${debouncedProviderSearchQuery} »`
+                      : 'Aucun fournisseur trouvé'}
                   </div>
                   {debouncedProviderSearchQuery && (
                     <div className="text-xs text-bolt-elements-textTertiary">
-                      Try searching for provider names like "OpenAI", "Anthropic", or "Google"
+                      Recherchez un fournisseur par son nom, par exemple OpenAI, Anthropic ou Google
                     </div>
                   )}
                 </div>
@@ -859,17 +891,17 @@ export const ModelSelector = ({
           role="combobox"
           aria-label="Modèle"
           aria-expanded={isModelDropdownOpen}
-          aria-controls={isModelDropdownOpen ? 'model-listbox' : undefined}
+          aria-controls={isModelDropdownOpen ? modelListboxId : undefined}
           aria-activedescendant={
             isModelDropdownOpen && focusedModelIndex >= 0 && filteredModels[focusedModelIndex]
-              ? `model-option-${focusedModelIndex}`
+              ? `${modelListboxId}-option-${focusedModelIndex}`
               : undefined
           }
           aria-haspopup="listbox"
           tabIndex={0}
         >
           <div className="flex items-center justify-between">
-            <div className="truncate">{modelList.find((m) => m.name === model)?.label || 'Select model'}</div>
+            <div className="truncate">{modelList.find((m) => m.name === model)?.label || 'Sélectionner un modèle'}</div>
             <div
               className={classNames(
                 'i-ph:caret-down w-4 h-4 text-bolt-elements-textSecondary opacity-75',
@@ -881,9 +913,14 @@ export const ModelSelector = ({
 
         {isModelDropdownOpen && (
           <div
-            className="absolute z-10 w-full mt-1 py-1 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 shadow-lg"
+            ref={modelDropdownRef}
+            className={classNames(
+              'absolute z-10 w-full py-1 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 shadow-lg',
+              modelDropdownPlacement === 'top' ? 'bottom-full mb-1' : 'top-full mt-1',
+            )}
+            data-placement={modelDropdownPlacement}
             role="listbox"
-            id="model-listbox"
+            id={modelListboxId}
           >
             <div className="px-2 pb-2 space-y-2">
               {/* Free Models Filter Toggle - Only show for OpenRouter */}
@@ -905,11 +942,12 @@ export const ModelSelector = ({
                     )}
                   >
                     <span className="i-ph:gift text-xs" />
-                    Free models only
+                    Modèles gratuits uniquement
                   </button>
                   {showFreeModelsOnly && (
                     <span className="text-xs text-bolt-elements-textTertiary">
-                      {filteredModels.length} free model{filteredModels.length !== 1 ? 's' : ''}
+                      {filteredModels.length} modèle{filteredModels.length !== 1 ? 's' : ''} gratuit
+                      {filteredModels.length !== 1 ? 's' : ''}
                     </span>
                   )}
                 </div>
@@ -918,8 +956,9 @@ export const ModelSelector = ({
               {/* Search Result Count */}
               {debouncedModelSearchQuery && filteredModels.length > 0 && (
                 <div className="text-xs text-bolt-elements-textTertiary px-1">
-                  {filteredModels.length} model{filteredModels.length !== 1 ? 's' : ''} found
-                  {filteredModels.length > 5 && ' (showing best matches)'}
+                  {filteredModels.length} modèle{filteredModels.length !== 1 ? 's' : ''} trouvé
+                  {filteredModels.length !== 1 ? 's' : ''}
+                  {filteredModels.length > 5 && ' (meilleures correspondances)'}
                 </div>
               )}
 
@@ -930,7 +969,7 @@ export const ModelSelector = ({
                   type="text"
                   value={modelSearchQuery}
                   onChange={(e) => setModelSearchQuery(e.target.value)}
-                  placeholder="Search models... (⌘K to clear)"
+                  placeholder="Rechercher des modèles... (⌘K pour effacer)"
                   className={classNames(
                     'w-full pl-8 pr-8 py-1.5 rounded-md text-sm',
                     'bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor',
@@ -940,7 +979,7 @@ export const ModelSelector = ({
                   )}
                   onClick={(e) => e.stopPropagation()}
                   role="searchbox"
-                  aria-label="Search models"
+                  aria-label="Rechercher des modèles"
                 />
                 <div className="absolute left-2.5 top-1/2 -translate-y-1/2">
                   <span className="i-ph:magnifying-glass text-bolt-elements-textTertiary" />
@@ -953,7 +992,7 @@ export const ModelSelector = ({
                       clearModelSearch();
                     }}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-bolt-elements-background-depth-3 transition-colors"
-                    aria-label="Clear search"
+                    aria-label="Effacer la recherche"
                   >
                     <span className="i-ph:x text-bolt-elements-textTertiary text-xs" />
                   </button>
@@ -981,35 +1020,35 @@ export const ModelSelector = ({
                 <div className="px-3 py-3 text-sm">
                   <div className="flex items-center gap-2 text-bolt-elements-textTertiary">
                     <span className="i-ph:spinner animate-spin" />
-                    Loading models...
+                    Chargement des modèles...
                   </div>
                 </div>
               ) : filteredModels.length === 0 ? (
                 <div className="px-3 py-3 text-sm">
                   <div className="text-bolt-elements-textTertiary mb-1">
                     {debouncedModelSearchQuery
-                      ? `No models match "${debouncedModelSearchQuery}"${showFreeModelsOnly ? ' (free only)' : ''}`
+                      ? `Aucun modèle ne correspond à « ${debouncedModelSearchQuery} »${showFreeModelsOnly ? ' (modèles gratuits uniquement)' : ''}`
                       : showFreeModelsOnly
-                        ? 'No free models available'
+                        ? 'Aucun modèle gratuit disponible'
                         : provider?.name && LOCAL_PROVIDERS.includes(provider.name)
-                          ? `No models found — is ${provider.name} running?`
-                          : 'No models available'}
+                          ? `Aucun modèle trouvé. ${provider.name} est-il en cours d’exécution ?`
+                          : 'Aucun modèle disponible'}
                   </div>
                   {!debouncedModelSearchQuery && provider?.name && LOCAL_PROVIDERS.includes(provider.name) && (
                     <div className="text-xs text-bolt-elements-textTertiary mt-1">
-                      Make sure {provider.name} is running and has at least one model loaded.
-                      {provider.name === 'Ollama' && ' Try: ollama pull llama3.2'}
-                      {provider.name === 'LMStudio' && ' Load a model in LM Studio first.'}
+                      Assurez-vous que {provider.name} fonctionne et qu’au moins un modèle y est chargé.
+                      {provider.name === 'Ollama' && ' Essayez : ollama pull llama3.2'}
+                      {provider.name === 'LMStudio' && ' Chargez d’abord un modèle dans LM Studio.'}
                     </div>
                   )}
                   {debouncedModelSearchQuery && (
                     <div className="text-xs text-bolt-elements-textTertiary">
-                      Try searching for model names, context sizes (e.g., "128k", "1M"), or capabilities
+                      Recherchez un nom de modèle, une taille de contexte (ex. « 128k », « 1M ») ou une capacité
                     </div>
                   )}
                   {showFreeModelsOnly && !debouncedModelSearchQuery && (
                     <div className="text-xs text-bolt-elements-textTertiary">
-                      Try disabling the "Free models only" filter to see all available models
+                      Désactivez le filtre « Modèles gratuits uniquement » pour afficher tous les modèles disponibles
                     </div>
                   )}
                 </div>
@@ -1028,7 +1067,7 @@ export const ModelSelector = ({
                      * reference resolves to nothing and a screen reader announces no active option
                      * while the user arrows through the list.
                      */
-                    id={`model-option-${index}`}
+                    id={`${modelListboxId}-option-${index}`}
                     aria-selected={model === modelOption.name}
                     className={classNames(
                       'px-3 py-2 text-sm cursor-pointer',
@@ -1061,21 +1100,21 @@ export const ModelSelector = ({
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-xs text-bolt-elements-textTertiary">
-                            {formatContextSize(modelOption.maxTokenAllowed)} tokens
+                            {formatContextSize(modelOption.maxTokenAllowed)} jetons
                           </span>
                           {debouncedModelSearchQuery && (modelOption as any).searchScore > 70 && (
                             <span className="text-xs text-green-500 font-medium">
-                              {(modelOption as any).searchScore.toFixed(0)}% match
+                              {(modelOption as any).searchScore.toFixed(0)} % de correspondance
                             </span>
                           )}
                         </div>
                       </div>
                       <div className="flex items-center gap-1 ml-2">
                         {isModelLikelyFree(modelOption, provider?.name) && (
-                          <span className="i-ph:gift text-xs text-purple-400" title="Free model" />
+                          <span className="i-ph:gift text-xs text-purple-400" title="Modèle gratuit" />
                         )}
                         {model === modelOption.name && (
-                          <span className="i-ph:check text-xs text-green-500" title="Selected" />
+                          <span className="i-ph:check text-xs text-green-500" title="Sélectionné" />
                         )}
                       </div>
                     </div>

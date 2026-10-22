@@ -2,7 +2,7 @@ import { useStore } from '@nanostores/react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { formatDistanceToNow } from 'date-fns';
 import { motion } from 'framer-motion';
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { logStore } from '~/lib/stores/logs';
 import { classNames } from '~/utils/classNames';
 
@@ -20,15 +20,6 @@ type FilterType = 'all' | 'system' | 'error' | 'warning' | 'update' | 'info' | '
 const NotificationsTab = () => {
   const [filter, setFilter] = useState<FilterType>('all');
   const logs = useStore(logStore.logs);
-
-  useEffect(() => {
-    const startTime = performance.now();
-
-    return () => {
-      const duration = performance.now() - startTime;
-      logStore.logPerformanceMetric('NotificationsTab', 'mount-duration', duration);
-    };
-  }, []);
 
   const handleClearNotifications = () => {
     const count = Object.keys(logs).length;

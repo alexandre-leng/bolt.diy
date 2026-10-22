@@ -1,6 +1,7 @@
 // Remove unused imports
 import { motion } from 'framer-motion';
 import React, { memo, useCallback } from 'react';
+import { Select } from '~/components/ui/Select';
 import { Switch } from '~/components/ui/Switch';
 import { PromptLibrary } from '~/lib/common/prompt-library';
 import { useSettings } from '~/lib/hooks/useSettings';
@@ -267,7 +268,7 @@ export default function FeaturesTab() {
               Choose a prompt from the library to use as the system prompt
             </p>
           </div>
-          <select
+          <Select
             value={promptId}
             onChange={(e) => {
               setPromptId(e.target.value);
@@ -287,7 +288,7 @@ export default function FeaturesTab() {
                 {x.label}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       </motion.div>
     </div>

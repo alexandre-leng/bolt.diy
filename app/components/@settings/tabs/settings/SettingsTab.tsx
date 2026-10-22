@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import React, { useState, useEffect, useId } from 'react';
 import type { UserProfile } from '~/components/@settings/core/types';
 import { Card, CardContent } from '~/components/ui/Card';
+import { Select } from '~/components/ui/Select';
 import { Switch } from '~/components/ui/Switch';
 import { getAllChats } from '~/lib/persistence/chats';
 import { openDatabase } from '~/lib/persistence/db';
@@ -49,7 +50,7 @@ export default function SettingsTab() {
       ? JSON.parse(saved)
       : {
           notifications: true,
-          language: 'en',
+          language: 'fr',
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         };
   });
@@ -122,10 +123,10 @@ export default function SettingsTab() {
       };
 
       localStorage.setItem('bolt_user_profile', JSON.stringify(updatedProfile));
-      toast.success('Settings updated');
+      toast.success('Paramètres mis à jour');
     } catch (error) {
       console.error('Error saving settings:', error);
-      toast.error('Failed to update settings');
+      toast.error('Impossible de mettre à jour les paramètres');
     }
   }, [settings]);
 
@@ -134,7 +135,7 @@ export default function SettingsTab() {
       {/* Chat usage summary */}
       <section aria-labelledby="chat-usage-heading">
         <h2 id="chat-usage-heading" className="mb-3 text-sm font-medium text-bolt-elements-textPrimary">
-          Chat Usage
+          Utilisation des conversations
         </h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Card className="bg-bolt-elements-background-depth-2">
@@ -178,7 +179,7 @@ export default function SettingsTab() {
       >
         <div className="flex items-center gap-2 mb-4">
           <div className="i-ph:palette-fill w-4 h-4 text-purple-500" />
-          <span className="text-sm font-medium text-bolt-elements-textPrimary">Preferences</span>
+          <span className="text-sm font-medium text-bolt-elements-textPrimary">Préférences</span>
         </div>
 
         <div>
@@ -188,7 +189,7 @@ export default function SettingsTab() {
               Langue
             </label>
           </div>
-          <select
+          <Select
             id={`${fieldId}-language`}
             value={settings.language}
             onChange={(e) => setSettings((prev) => ({ ...prev, language: e.target.value }))}
@@ -201,7 +202,7 @@ export default function SettingsTab() {
               'transition-all duration-200',
             )}
           >
-            <option value="en">English</option>
+            <option value="en">Anglais</option>
             <option value="es">Español</option>
             <option value="fr">Français</option>
             <option value="de">Deutsch</option>
@@ -211,7 +212,7 @@ export default function SettingsTab() {
             <option value="zh">中文</option>
             <option value="ja">日本語</option>
             <option value="ko">한국어</option>
-          </select>
+          </Select>
         </div>
 
         <div>
@@ -263,7 +264,7 @@ export default function SettingsTab() {
       >
         <div className="flex items-center gap-2 mb-4">
           <div className="i-ph:clock-fill w-4 h-4 text-purple-500" />
-          <span className="text-sm font-medium text-bolt-elements-textPrimary">Time Settings</span>
+          <span className="text-sm font-medium text-bolt-elements-textPrimary">Paramètres horaires</span>
         </div>
 
         <div>
@@ -273,7 +274,7 @@ export default function SettingsTab() {
               Fuseau horaire
             </label>
           </div>
-          <select
+          <Select
             id={`${fieldId}-timezone`}
             value={settings.timezone}
             onChange={(e) => setSettings((prev) => ({ ...prev, timezone: e.target.value }))}
@@ -287,7 +288,7 @@ export default function SettingsTab() {
             )}
           >
             <option value={currentTimezone}>{currentTimezone}</option>
-          </select>
+          </Select>
         </div>
       </motion.div>
 
@@ -306,7 +307,7 @@ export default function SettingsTab() {
         <div className="space-y-2">
           <div className="flex items-center justify-between p-2 rounded-lg bg-bolt-elements-background-depth-2">
             <div className="flex flex-col">
-              <span className="text-sm text-bolt-elements-textPrimary">Toggle Theme</span>
+              <span className="text-sm text-bolt-elements-textPrimary">Changer de thème</span>
               <span className="text-xs text-bolt-elements-textSecondary">Switch between light and dark mode</span>
             </div>
             <div className="flex items-center gap-1">
@@ -336,7 +337,7 @@ export default function SettingsTab() {
             Appearance
           </h2>
           <p className="mt-1 text-xs text-bolt-elements-textSecondary">
-            Choose a light or dark color palette. Your choice is saved on this device.
+            Choose a light or dark color palette. Votre choix est enregistré sur cet appareil.
           </p>
         </div>
         {(['light', 'dark'] as const).map((mode) => (
@@ -398,13 +399,13 @@ export default function SettingsTab() {
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <label className="rounded-lg bg-bolt-elements-background-depth-2 p-3">
             <span className="flex justify-between text-xs font-medium text-bolt-elements-textPrimary">
-              <span>Accent intensity</span>
+              <span>Intensité de la couleur d’accent</span>
               <span>{interfaceOptions.accentIntensity}%</span>
             </span>
             <span className="mt-1 flex items-center gap-3">
-              <span className="text-[11px] text-bolt-elements-textSecondary">Low</span>
+              <span className="text-[11px] text-bolt-elements-textSecondary">Faible</span>
               <input
-                aria-label="Accent intensity"
+                aria-label="Intensité de la couleur d’accent"
                 type="range"
                 min="0"
                 max="100"
@@ -412,20 +413,20 @@ export default function SettingsTab() {
                 onChange={(event) =>
                   setInterfaceOptions({ ...interfaceOptions, accentIntensity: Number(event.target.value) })
                 }
-                className="w-full accent-bolt-elements-borderColorActive"
+                className="w-full cursor-pointer accent-accent-600 appearance-none rounded-full bg-bolt-elements-background-depth-3"
               />
-              <span className="text-[11px] text-bolt-elements-textSecondary">High</span>
+              <span className="text-[11px] text-bolt-elements-textSecondary">Élevée</span>
             </span>
           </label>
           <div className="flex items-center justify-between rounded-lg bg-bolt-elements-background-depth-2 p-3">
             <div>
-              <div className="text-xs font-medium text-bolt-elements-textPrimary">Corner radius</div>
-              <div className="text-[11px] text-bolt-elements-textSecondary">Sharp, soft or round</div>
+              <div className="text-xs font-medium text-bolt-elements-textPrimary">Arrondi des angles</div>
+              <div className="text-[11px] text-bolt-elements-textSecondary">Anguleux, doux ou arrondi</div>
             </div>
             <div
               className="flex rounded-md bg-bolt-elements-background-depth-1 p-0.5"
               role="group"
-              aria-label="Corner radius"
+              aria-label="Arrondi des angles"
             >
               {(['sharp', 'soft', 'round'] as const).map((radius) => (
                 <button

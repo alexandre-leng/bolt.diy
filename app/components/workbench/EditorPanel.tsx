@@ -23,7 +23,6 @@ import type { FileHistory } from '~/types/actions';
 import { classNames } from '~/utils/classNames'; // <-- Import classNames if not already present
 import { WORK_DIR } from '~/utils/constants';
 import { renderLogger } from '~/utils/logger';
-import { isMobile } from '~/utils/mobile';
 
 /*
  * Width share of the file tree. 20% is fine on a desktop but is ~78px on a 390px phone:
@@ -106,11 +105,11 @@ export const EditorPanel = memo(
             <Tabs.Root defaultValue="files" className="flex flex-col h-full">
               <PanelHeader className="w-full text-sm font-medium text-bolt-elements-textSecondary px-1">
                 <div className="h-full flex-shrink-0 flex items-center justify-between w-full">
-                  <Tabs.List className="h-full flex-shrink-0 flex items-center">
+                  <Tabs.List aria-label="Navigation des fichiers" className="h-full flex-shrink-0 flex items-center">
                     <Tabs.Trigger
                       value="files"
                       className={classNames(
-                        'h-full bg-transparent hover:bg-bolt-elements-background-depth-3 py-0.5 px-2 rounded-lg text-sm font-medium text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary data-[state=active]:text-bolt-elements-textPrimary',
+                        'h-full min-h-11 bg-transparent hover:bg-bolt-elements-background-depth-3 py-0.5 px-2 rounded-lg text-sm font-medium text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary data-[state=active]:text-bolt-elements-textPrimary',
                       )}
                     >
                       Files
@@ -118,7 +117,7 @@ export const EditorPanel = memo(
                     <Tabs.Trigger
                       value="search"
                       className={classNames(
-                        'h-full bg-transparent hover:bg-bolt-elements-background-depth-3 py-0.5 px-2 rounded-lg text-sm font-medium text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary data-[state=active]:text-bolt-elements-textPrimary',
+                        'h-full min-h-11 bg-transparent hover:bg-bolt-elements-background-depth-3 py-0.5 px-2 rounded-lg text-sm font-medium text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary data-[state=active]:text-bolt-elements-textPrimary',
                       )}
                     >
                       Search
@@ -126,7 +125,7 @@ export const EditorPanel = memo(
                     <Tabs.Trigger
                       value="locks"
                       className={classNames(
-                        'h-full bg-transparent hover:bg-bolt-elements-background-depth-3 py-0.5 px-2 rounded-lg text-sm font-medium text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary data-[state=active]:text-bolt-elements-textPrimary',
+                        'h-full min-h-11 bg-transparent hover:bg-bolt-elements-background-depth-3 py-0.5 px-2 rounded-lg text-sm font-medium text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary data-[state=active]:text-bolt-elements-textPrimary',
                       )}
                     >
                       Locks
@@ -186,7 +185,7 @@ export const EditorPanel = memo(
               editable={!isStreaming && editorDocument !== undefined}
               settings={editorSettings}
               doc={editorDocument}
-              autoFocusOnDocumentChange={!isMobile()}
+              autoFocusOnDocumentChange={false}
               onScroll={onEditorScroll}
               onChange={onEditorChange}
               onSave={onFileSave}

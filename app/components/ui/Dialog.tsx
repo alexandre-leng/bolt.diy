@@ -100,6 +100,7 @@ interface DialogProps {
   onClose?: () => void;
   onBackdrop?: () => void;
   onEscapeKeyDown?: (event: KeyboardEvent) => void;
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 export const Dialog = memo(
@@ -111,6 +112,7 @@ export const Dialog = memo(
     onClose,
     onBackdrop,
     onEscapeKeyDown,
+    onCloseAutoFocus,
   }: DialogProps) => {
     return (
       <RadixDialog.Portal>
@@ -127,7 +129,7 @@ export const Dialog = memo(
             onClick={onBackdrop}
           />
         </RadixDialog.Overlay>
-        <RadixDialog.Content asChild onEscapeKeyDown={onEscapeKeyDown}>
+        <RadixDialog.Content asChild onEscapeKeyDown={onEscapeKeyDown} onCloseAutoFocus={onCloseAutoFocus}>
           <motion.div
             className={classNames(
               'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-950 rounded-lg shadow-xl border border-bolt-elements-borderColor z-[9999] w-[min(520px,calc(100vw-2rem))] max-h-[90vh] overflow-y-auto focus:outline-none',
@@ -170,6 +172,7 @@ export interface ConfirmationDialogProps {
    * Callback when the dialog is closed
    */
   onClose: () => void;
+  onCloseAutoFocus?: (event: Event) => void;
 
   /**
    * Callback when the confirm button is clicked
@@ -213,6 +216,7 @@ export interface ConfirmationDialogProps {
 export function ConfirmationDialog({
   isOpen,
   onClose,
+  onCloseAutoFocus,
   title,
   description,
   confirmLabel = 'Confirm',
@@ -223,7 +227,7 @@ export function ConfirmationDialog({
 }: ConfirmationDialogProps) {
   return (
     <RadixDialog.Root open={isOpen} onOpenChange={onClose}>
-      <Dialog showCloseButton={false}>
+      <Dialog showCloseButton={false} onCloseAutoFocus={onCloseAutoFocus}>
         <div className="p-6 bg-white dark:bg-gray-950 relative z-10">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription className="mb-4">{description}</DialogDescription>
@@ -289,6 +293,7 @@ export interface SelectionDialogProps {
    * Callback when the dialog is closed
    */
   onClose: () => void;
+  onCloseAutoFocus?: (event: Event) => void;
 
   /**
    * Callback when the confirm button is clicked with selected item IDs
@@ -314,6 +319,7 @@ export function SelectionDialog({
   items,
   isOpen,
   onClose,
+  onCloseAutoFocus,
   onConfirm,
   confirmLabel = 'Confirm',
   maxHeight = '60vh',
@@ -418,7 +424,7 @@ export function SelectionDialog({
 
   return (
     <RadixDialog.Root open={isOpen} onOpenChange={onClose}>
-      <Dialog showCloseButton={false}>
+      <Dialog showCloseButton={false} onCloseAutoFocus={onCloseAutoFocus}>
         <div className="p-6 bg-white dark:bg-gray-950 relative z-10">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription className="mt-2 mb-4">
@@ -474,7 +480,7 @@ export function SelectionDialog({
             <Button
               onClick={handleConfirm}
               disabled={selectedIds.length === 0}
-              className="bg-accent-500 text-white hover:bg-accent-600 disabled:opacity-50 disabled:pointer-events-none"
+              className="bg-accent-700 text-white hover:bg-accent-800 disabled:opacity-50 disabled:pointer-events-none"
             >
               {confirmLabel}
             </Button>

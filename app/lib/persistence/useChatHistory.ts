@@ -103,9 +103,16 @@ function stripRewindParam() {
 }
 
 /** A readable name for a chat no artifact ever titled (Agent mode, discussion). */
-function fallbackDescription(messages: UIMessage[]): string | undefined {
+export function fallbackDescription(messages: UIMessage[]): string | undefined {
   const firstPrompt = messages.find((message) => message.role === 'user');
-  const text = firstPrompt ? getMessageText(firstPrompt).replace(/\s+/g, ' ').trim() : '';
+
+  const text = firstPrompt
+    ? getMessageText(firstPrompt)
+        .replace(/^\s*\[Model: [^\]]*\]\s*\[Provider: [^\]]*\]\s*/i, '')
+        .replace(/^\s*\[Model: [^\]]*\]\s*\n\s*\[Provider: [^\]]*\]\s*/i, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+    : '';
 
   if (!text) {
     return undefined;
@@ -138,7 +145,28 @@ function createAgentReplayMessage(files: Record<string, string>, commandActions 
     UIMessage | undefined;
 }
 
-export const db = persistenceEnabled ? await openDatabase() : undefined;
+const databasePromise = (async () => {
+  if (!persistenceEnabled) {
+    return undefined;
+  }
+
+  let ownerId = 'anonymous';
+
+  try {
+    const { fetchSession } = await import('~/lib/auth/session');
+    const session = await fetchSession();
+
+    if (session.authenticated && session.user?.id) {
+      ownerId = session.user.id;
+    }
+  } catch {
+    // Keep unauthenticated/offline storage isolated from authenticated accounts.
+  }
+
+  return openDatabase(ownerId);
+})();
+
+export const db = await databasePromise;
 
 export const chatId = atom<string | undefined>(undefined);
 export const description = atom<string | undefined>(undefined);
@@ -1299,7 +1327,7 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
       }
 
       try {
-        const newId = await duplicateChat(db, mixedId || listItemId);
+        const newId = await duplicateChat(db, listItemId || mixedId!);
         navigate(`/chat/${newId}`);
         toast.success('Chat duplicated successfully');
       } catch (error) {

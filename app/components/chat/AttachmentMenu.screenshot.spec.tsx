@@ -19,7 +19,7 @@ it('opens the screenshot action from the attachment menu', async () => {
       onWebSearchEnabledChange={vi.fn()}
     />,
   );
-  await userEvent.click(screen.getByTitle('Add attachment or connector'));
-  await userEvent.click(await screen.findByText('From a screenshot'));
+  await userEvent.click(screen.getByRole('button', { name: 'Ajouter une pièce jointe ou un connecteur' }));
+  await userEvent.click(await screen.findByText('Depuis une capture d’écran'));
   expect(onScreenshot).toHaveBeenCalledOnce();
 });

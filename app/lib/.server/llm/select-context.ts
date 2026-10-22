@@ -13,6 +13,9 @@ import { createScopedLogger } from '~/utils/logger';
 const ig = ignore().add(IGNORE_PATTERNS);
 const logger = createScopedLogger('select-context');
 
+export const SELECT_CONTEXT_TIMEOUT_MS = 60_000;
+export const SELECT_CONTEXT_MAX_OUTPUT_TOKENS = 4_096;
+
 export async function selectContext(props: {
   messages: UIMessage[];
   env?: Env;
@@ -23,8 +26,9 @@ export async function selectContext(props: {
   contextOptimization?: boolean;
   summary: string;
   onFinish?: (resp: Awaited<ReturnType<typeof generateText>>) => void;
+  abortSignal?: AbortSignal;
 }) {
-  const { messages, env: serverEnv, apiKeys, files, providerSettings, summary, onFinish } = props;
+  const { messages, env: serverEnv, apiKeys, files, providerSettings, summary, onFinish, abortSignal } = props;
 
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
@@ -174,6 +178,9 @@ export async function selectContext(props: {
       providerSettings,
     }),
     reasoning: 'none',
+    abortSignal,
+    timeout: SELECT_CONTEXT_TIMEOUT_MS,
+    maxOutputTokens: SELECT_CONTEXT_MAX_OUTPUT_TOKENS,
   });
 
   if (onFinish) {

@@ -1,5 +1,6 @@
 import { execSync as nodeExecSync } from 'node:child_process';
 import type { ActionFunctionArgs, LoaderFunction } from 'react-router';
+import { requireAdmin } from '~/lib/.server/api/admin-auth';
 
 /*
  * `execSync` is only available under Node (not the Cloudflare/workerd runtime). The previous
@@ -265,7 +266,13 @@ const getDiskInfo = (): DiskInfo[] => {
   }
 };
 
-export const loader: LoaderFunction = async ({ request: _request }) => {
+export const loader: LoaderFunction = async ({ request }) => {
+  const denied = requireAdmin(request);
+
+  if (denied) {
+    return denied;
+  }
+
   try {
     return Response.json(getDiskInfo());
   } catch (error) {
@@ -288,7 +295,13 @@ export const loader: LoaderFunction = async ({ request: _request }) => {
   }
 };
 
-export const action = async ({ request: _request }: ActionFunctionArgs) => {
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const denied = requireAdmin(request);
+
+  if (denied) {
+    return denied;
+  }
+
   try {
     return Response.json(getDiskInfo());
   } catch (error) {

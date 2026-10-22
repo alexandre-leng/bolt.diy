@@ -3,8 +3,8 @@ import { useToolAccessStore, type ToolAccessMode } from '~/lib/stores/toolAccess
 import { classNames } from '~/utils/classNames';
 
 const MODES: Array<{ id: ToolAccessMode; label: string; description: string }> = [
-  { id: 'ask-for-all', label: 'Ask For All', description: 'Ask before running each tool' },
-  { id: 'full-access', label: 'Full Access', description: 'Run tools without asking each time' },
+  { id: 'ask-for-all', label: 'Demander à chaque fois', description: 'Demander avant d’exécuter chaque outil' },
+  { id: 'full-access', label: 'Accès complet', description: 'Exécuter les outils sans demander à chaque fois' },
 ];
 
 export function ToolAccessMenu() {
@@ -18,8 +18,12 @@ export function ToolAccessMenu() {
         {/* Same look as the sibling toolbar controls (mode, model chip): no border, item tokens. */}
         <button
           type="button"
-          title="Choose tool access mode"
-          aria-label={`Tool access: ${selectedMode.label}`}
+          title={mode === 'full-access' ? 'Accès complet aux outils' : 'Demander une autorisation pour chaque outil'}
+          aria-label={
+            mode === 'full-access'
+              ? 'Accès aux outils : accès complet'
+              : 'Accès aux outils : demander une autorisation pour chaque outil'
+          }
           className={classNames(
             'inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs transition-colors',
             'bg-bolt-elements-item-backgroundDefault hover:bg-bolt-elements-item-backgroundActive',

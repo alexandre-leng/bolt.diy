@@ -10,7 +10,7 @@ import { loader } from './api.system.disk-info';
 describe('/api/system/disk-info', () => {
   it('returns real disk data on Node, not the unavailable placeholder', async () => {
     const response = (await loader({
-      request: new Request('https://bolt.example/api/system/disk-info'),
+      request: new Request('https://bolt.example/api/system/disk-info', { headers: { 'X-Bolt-User-Admin': 'true' } }),
     } as never)) as Response;
 
     const disks = (await response.json()) as Array<{ filesystem: string; size: number; error?: string }>;
@@ -28,7 +28,7 @@ describe('/api/system/disk-info', () => {
 
   it('does not return the development mock disks', async () => {
     const response = (await loader({
-      request: new Request('https://bolt.example/api/system/disk-info'),
+      request: new Request('https://bolt.example/api/system/disk-info', { headers: { 'X-Bolt-User-Admin': 'true' } }),
     } as never)) as Response;
 
     const disks = (await response.json()) as Array<{ filesystem: string }>;

@@ -18,14 +18,12 @@ const customEasingFn = cubicBezier(0.4, 0, 0.2, 1);
  */
 export const SendButton = ({ show, isStreaming, disabled, onClick }: SendButtonProps) => {
   const inactive = disabled || (!show && !isStreaming);
-  const label = isStreaming ? 'Stop generating' : 'Send message';
-
   return (
     <motion.button
       type="button"
       data-testid="send-button"
-      aria-label={label}
-      title={label}
+      aria-label={isStreaming ? 'Arrêter la génération' : 'Envoyer le message'}
+      title={isStreaming ? 'Arrêter la génération' : 'Envoyer le message'}
       className="bolt-primary-button flex shrink-0 justify-center items-center w-9 h-9 rounded-full transition-[background-color,opacity,transform] hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
       transition={{ ease: customEasingFn, duration: 0.17 }}
       initial={false}

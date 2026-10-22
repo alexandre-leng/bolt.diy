@@ -97,7 +97,7 @@ describe('preferences', () => {
   });
 
   it('pulls the account values down and reports it applied them', async () => {
-    localStorage.setItem('bolt_theme', 'light');
+    // No persisted local choice: the account preference is adopted.
     vi.stubGlobal(
       'fetch',
       vi.fn(() => Promise.resolve(jsonResponse({ ok: true, preferences: { theme: 'dark' } }))),

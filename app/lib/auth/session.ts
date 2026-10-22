@@ -52,7 +52,21 @@ function parseUser(payload: unknown): SessionUser | null {
   };
 }
 
-export async function fetchSession(signal?: AbortSignal): Promise<Session> {
+let sessionPromise: Promise<Session> | null = null;
+
+export function fetchSession(signal?: AbortSignal): Promise<Session> {
+  if (sessionPromise) {
+    return sessionPromise;
+  }
+
+  sessionPromise = fetchSessionUncached(signal).finally(() => {
+    sessionPromise = null;
+  });
+
+  return sessionPromise;
+}
+
+async function fetchSessionUncached(signal?: AbortSignal): Promise<Session> {
   try {
     const response = await fetch('/api/auth/me', {
       method: 'GET',

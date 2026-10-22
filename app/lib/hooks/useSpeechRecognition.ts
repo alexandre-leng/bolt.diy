@@ -199,6 +199,8 @@ export function useSpeechRecognition({ input, onTranscript }: UseSpeechRecogniti
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const truncatedRef = useRef(false);
   const isListeningRef = useRef(false);
+  const mountedRef = useRef(true);
+  const sessionRef = useRef(0);
 
   isListeningRef.current = isListening;
 
@@ -353,6 +355,10 @@ export function useSpeechRecognition({ input, onTranscript }: UseSpeechRecogniti
   /* ---------------- engine 2: MediaRecorder + /api/transcribe ---------------- */
 
   const transcribe = useCallback(async (blob: Blob) => {
+    if (!mountedRef.current) {
+      return;
+    }
+
     setIsTranscribing(true);
 
     try {
@@ -412,11 +418,15 @@ export function useSpeechRecognition({ input, onTranscript }: UseSpeechRecogniti
       console.error('Transcription request failed:', caught);
       setError({ code: 'network' });
     } finally {
-      setIsTranscribing(false);
+      if (mountedRef.current) {
+        setIsTranscribing(false);
+      }
     }
   }, []);
 
   const startServerRecording = useCallback(async () => {
+    const session = sessionRef.current;
+
     let stream: MediaStream;
 
     try {
@@ -426,24 +436,34 @@ export function useSpeechRecognition({ input, onTranscript }: UseSpeechRecogniti
 
       console.error('Microphone could not be opened:', name);
 
-      setError({
-        code:
-          name === 'NotAllowedError' || name === 'SecurityError'
-            ? 'permission-denied'
-            : name === 'NotFoundError' || name === 'OverconstrainedError'
-              ? 'no-microphone'
-              : 'unknown',
-      });
-      wantsToListenRef.current = false;
+      if (mountedRef.current && sessionRef.current === session) {
+        setError({
+          code:
+            name === 'NotAllowedError' || name === 'SecurityError'
+              ? 'permission-denied'
+              : name === 'NotFoundError' || name === 'OverconstrainedError'
+                ? 'no-microphone'
+                : 'unknown',
+        });
+        wantsToListenRef.current = false;
+      }
 
+      return;
+    }
+
+    if (!mountedRef.current || !wantsToListenRef.current || sessionRef.current !== session) {
+      stream.getTracks().forEach((track) => track.stop());
       return;
     }
 
     // A denied permission on an insecure origin resolves with no track instead of rejecting.
     if (stream.getAudioTracks().length === 0) {
       stream.getTracks().forEach((track) => track.stop());
-      setError({ code: 'no-microphone' });
-      wantsToListenRef.current = false;
+
+      if (mountedRef.current && sessionRef.current === session) {
+        setError({ code: 'no-microphone' });
+        wantsToListenRef.current = false;
+      }
 
       return;
     }
@@ -464,11 +484,22 @@ export function useSpeechRecognition({ input, onTranscript }: UseSpeechRecogniti
     };
 
     recorder.onerror = (event) => {
+      if (!mountedRef.current || sessionRef.current !== session) {
+        return;
+      }
+
       console.error('MediaRecorder error:', event);
       setError({ code: 'unknown' });
     };
 
     recorder.onstop = () => {
+      if (!mountedRef.current || sessionRef.current !== session) {
+        stopTracks();
+        chunksRef.current = [];
+
+        return;
+      }
+
       stopTracks();
 
       const elapsed = Date.now() - startedAtRef.current;
@@ -533,6 +564,7 @@ export function useSpeechRecognition({ input, onTranscript }: UseSpeechRecogniti
   const startListening = useCallback(() => {
     setError(null);
     truncatedRef.current = false;
+    sessionRef.current += 1;
 
     const active = detectEngine();
 
@@ -573,6 +605,7 @@ export function useSpeechRecognition({ input, onTranscript }: UseSpeechRecogniti
 
   const stopListening = useCallback(() => {
     wantsToListenRef.current = false;
+    sessionRef.current += 1;
     clearTimers();
 
     if (recognitionRef.current && isListeningRef.current) {
@@ -592,6 +625,7 @@ export function useSpeechRecognition({ input, onTranscript }: UseSpeechRecogniti
 
   const abortListening = useCallback(() => {
     wantsToListenRef.current = false;
+    sessionRef.current += 1;
     clearTimers();
 
     if (recognitionRef.current) {
@@ -613,6 +647,49 @@ export function useSpeechRecognition({ input, onTranscript }: UseSpeechRecogniti
   }, [clearTimers, stopTracks]);
 
   const clearError = useCallback(() => setError(null), []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      wantsToListenRef.current = false;
+      sessionRef.current += 1;
+      clearTimers();
+      chunksRef.current = [];
+
+      const recorder = recorderRef.current;
+      recorderRef.current = null;
+
+      if (recorder && recorder.state !== 'inactive') {
+        recorder.ondataavailable = null;
+        recorder.onerror = null;
+        recorder.onstop = null;
+
+        try {
+          recorder.stop();
+        } catch {
+          // Already stopped.
+        }
+      }
+
+      stopTracks();
+
+      const recognition = recognitionRef.current;
+
+      if (recognition) {
+        recognition.onresult = null;
+        recognition.onerror = null;
+        recognition.onend = null;
+
+        try {
+          recognition.abort();
+        } catch {
+          // Never started.
+        }
+      }
+    };
+  }, [clearTimers, stopTracks]);
 
   const state: DictationState = {
     supported: engine !== null,

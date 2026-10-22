@@ -23,12 +23,22 @@ body {
   background-color: var(--bolt-elements-bg-depth-1);
 }
 
-html[data-accent-intensity] .bg-accent-500 {
+html[data-accent-intensity] .bg-accent-500:not(.text-white),
+html[data-accent-intensity] .bg-accent-500.text-white {
   background-color: color-mix(
     in srgb,
     var(--bolt-elements-button-primary-text) var(--interface-accent-strength),
     transparent
   ) !important;
+}
+
+html[data-accent-intensity] .bg-accent-500.text-white {
+  background-color: color-mix(
+    in srgb,
+    var(--bolt-elements-button-primary-text) var(--interface-accent-strength),
+    transparent
+  ) !important;
+  color: #fff !important;
 }
 
 /*

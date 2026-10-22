@@ -1,7 +1,9 @@
 import Cookies from 'js-cookie';
 import React, { useEffect, useMemo, useState } from 'react';
 import { getApiKeysFromCookies } from '~/components/chat/APIKeyManager';
+import { ActionButton } from '~/components/ui/ActionButton';
 import { Card, CardContent } from '~/components/ui/Card';
+import { Select } from '~/components/ui/Select';
 import { Switch } from '~/components/ui/Switch';
 import {
   DICTATION_LANGUAGES,
@@ -37,18 +39,16 @@ import { classNames } from '~/utils/classNames';
 
 const SAMPLE_TEXT = 'Bonjour, ceci est un test de la voix de synthèse choisie.';
 
-const selectClass = classNames(
-  'w-full rounded-lg px-3 py-2 text-sm',
-  'bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor',
-  'text-bolt-elements-textPrimary',
-  'focus:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-focus',
-);
-
+/*
+ * The key field keeps its own classes: it needs right padding for the eye button. The surface is
+ * set explicitly for the same reason as the buttons (see ActionButton): a bare <input> keeps the
+ * platform background on Chromium in some themes.
+ */
 const inputClass = classNames(
-  'w-full rounded-lg px-3 py-2 text-sm',
+  'w-full min-h-11 rounded-lg px-3 py-2 text-sm',
   'bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor',
-  'text-bolt-elements-textPrimary',
-  'focus:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-focus',
+  'text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary',
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500',
 );
 
 /**
@@ -327,66 +327,46 @@ export default function VoiceTab() {
               <label htmlFor="dictation-language" className="mb-2 block text-sm text-bolt-elements-textSecondary">
                 Langue de dictée
               </label>
-              <select
+              <Select
                 id="dictation-language"
                 value={dictation.language}
                 onChange={(event) => updateDictation({ language: event.target.value })}
-                className={classNames(
-                  'w-full rounded-lg px-3 py-2 text-sm',
-                  'bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor',
-                  'text-bolt-elements-textPrimary',
-                  'focus:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-focus',
-                )}
               >
                 {DICTATION_LANGUAGES.map((language) => (
                   <option key={language.value} value={language.value}>
                     {language.label}
                   </option>
                 ))}
-              </select>
+              </Select>
               <p className="mt-1 text-xs text-bolt-elements-textSecondary">
                 Appliquée immédiatement au bouton micro du composeur.
               </p>
             </div>
 
             <div className="space-y-3">
-              <label className="flex items-start justify-between gap-3">
-                <span className="text-sm text-bolt-elements-textSecondary">
-                  Afficher le bouton micro
-                  <span className="block text-xs">Le masquer libère la place dans le composeur.</span>
-                </span>
-                <Switch
-                  aria-label="Afficher le bouton micro"
-                  checked={dictation.enabled}
-                  onCheckedChange={(checked) => updateDictation({ enabled: checked })}
-                />
-              </label>
+              <SwitchRow
+                id="dictation-show-mic"
+                label="Afficher le bouton micro"
+                description="Le masquer libère la place dans le composeur."
+                checked={dictation.enabled}
+                onChange={(checked) => updateDictation({ enabled: checked })}
+              />
 
-              <label className="flex items-start justify-between gap-3">
-                <span className="text-sm text-bolt-elements-textSecondary">
-                  Transcription serveur en secours
-                  <span className="block text-xs">
-                    Utilisée quand le navigateur n’a pas de reconnaissance vocale (Firefox, Safari), via Whisper.
-                  </span>
-                </span>
-                <Switch
-                  aria-label="Transcription serveur en secours"
-                  checked={dictation.serverFallback}
-                  onCheckedChange={(checked) => updateDictation({ serverFallback: checked })}
-                />
-              </label>
+              <SwitchRow
+                id="dictation-server-fallback"
+                label="Transcription serveur en secours"
+                description="Utilisée quand le navigateur n’a pas de reconnaissance vocale (Firefox, Safari), via Whisper."
+                checked={dictation.serverFallback}
+                onChange={(checked) => updateDictation({ serverFallback: checked })}
+              />
 
-              <label className="flex items-start justify-between gap-3">
-                <span className="text-sm text-bolt-elements-textSecondary">
-                  Relire le texte dicté
-                  <span className="block text-xs">Vérification à l’oreille, juste après la transcription.</span>
-                </span>
-                <Switch
-                  aria-label="Relire le texte dicté"
-                  checked={dictation.speakBack}
-                  onCheckedChange={(checked) => updateDictation({ speakBack: checked })}
-                />
-              </label>
+              <SwitchRow
+                id="dictation-speak-back"
+                label="Relire le texte dicté"
+                description="Vérification à l’oreille, juste après la transcription."
+                checked={dictation.speakBack}
+                onChange={(checked) => updateDictation({ speakBack: checked })}
+              />
             </div>
           </div>
 
@@ -418,10 +398,14 @@ export default function VoiceTab() {
             <h2 className="text-sm font-medium text-bolt-elements-textPrimary">Transcription serveur (OpenAI, Groq)</h2>
           </div>
 
+          {/*
+           * One explanation, not two: the card used to repeat the fallback sentence word for word
+           * from the switch above it ("Transcription serveur en secours … Firefox, Safari") and
+           * then add Brave, so the same paragraph appeared twice in a row.
+           */}
           <p className="text-xs text-bolt-elements-textSecondary">
-            Utilisée quand le navigateur n’a pas de reconnaissance vocale (Firefox, Safari, Brave). La clé saisie ici
-            est celle du fournisseur de modèles : elle est enregistrée dans ce navigateur, et jamais renvoyée par le
-            serveur.
+            La clé saisie ici est celle du fournisseur de modèles : elle est enregistrée dans ce navigateur, et jamais
+            renvoyée par le serveur.
           </p>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -429,7 +413,7 @@ export default function VoiceTab() {
               <label htmlFor="stt-provider" className="mb-2 block text-sm text-bolt-elements-textSecondary">
                 Service de transcription
               </label>
-              <select
+              <Select
                 id="stt-provider"
                 value={transcription.provider}
                 onChange={(event) =>
@@ -438,32 +422,30 @@ export default function VoiceTab() {
                     model: dictationProvider(event.target.value).defaultModel,
                   })
                 }
-                className={selectClass}
               >
                 {DICTATION_PROVIDERS.map((provider) => (
                   <option key={provider.name} value={provider.name}>
                     {provider.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
 
             <div>
               <label htmlFor="stt-model" className="mb-2 block text-sm text-bolt-elements-textSecondary">
                 Modèle
               </label>
-              <select
+              <Select
                 id="stt-model"
                 value={transcription.model}
                 onChange={(event) => updateTranscription({ model: event.target.value })}
-                className={selectClass}
               >
                 {dictationProvider(transcription.provider).models.map((model) => (
                   <option key={model.id} value={model.id}>
                     {model.label}
                   </option>
                 ))}
-              </select>
+              </Select>
               <p className="mt-1 text-xs text-bolt-elements-textSecondary">
                 {dictationProvider(transcription.provider).models.find((model) => model.id === transcription.model)
                   ?.note ?? ''}
@@ -518,24 +500,30 @@ export default function VoiceTab() {
                         aria-label={`Clé API ${provider.label}`}
                         className={classNames(inputClass, 'pr-12')}
                       />
-                      <button
-                        type="button"
+                      <ActionButton
                         onClick={() => setKeyVisible((previous) => ({ ...previous, [provider.apiKeyId]: !visible }))}
                         aria-label={visible ? `Masquer la clé ${provider.label}` : `Afficher la clé ${provider.label}`}
                         aria-pressed={visible}
                         title={visible ? 'Masquer' : 'Afficher'}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-item-backgroundActive hover:text-bolt-elements-textPrimary focus:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-focus"
+                        className="absolute right-1 top-1/2 min-h-9 min-w-9 -translate-y-1/2 bg-transparent px-2 text-bolt-elements-textSecondary"
                       >
-                        {visible ? <div className="i-ph:eye-slash" /> : <div className="i-ph:eye" />}
-                      </button>
+                        <span className={visible ? 'i-ph:eye-slash h-4 w-4' : 'i-ph:eye h-4 w-4'} aria-hidden="true" />
+                      </ActionButton>
                     </div>
-                    <button
-                      type="button"
+                    <ActionButton
+                      tone="primary"
                       onClick={() => saveKey(provider.apiKeyId)}
-                      className="min-h-[44px] rounded-lg bg-bolt-elements-button-primary-background px-3 py-2 text-sm font-medium text-bolt-elements-button-primary-text hover:bg-bolt-elements-button-primary-backgroundHover focus:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-focus"
+
+                      // An empty field would remove the stored key: that needs an explicit choice.
+                      disabled={!(keyDrafts[provider.apiKeyId] ?? '').trim() && !storedKey}
+                      title={
+                        (keyDrafts[provider.apiKeyId] ?? '').trim() || storedKey
+                          ? 'Enregistrer la clé dans ce navigateur'
+                          : 'Saisissez une clé pour l’enregistrer'
+                      }
                     >
                       Enregistrer
-                    </button>
+                    </ActionButton>
                   </div>
                 </div>
               );
@@ -543,19 +531,13 @@ export default function VoiceTab() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={testTranscription}
-              disabled={testing}
-              className={classNames(
-                'inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-bolt-elements-borderColor px-3 py-2 text-sm text-bolt-elements-textPrimary',
-                'hover:bg-bolt-elements-item-backgroundActive focus:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-focus',
-                'disabled:cursor-not-allowed disabled:opacity-50',
-              )}
-            >
-              <div className={testing ? 'i-ph:circle-notch-bold animate-spin' : 'i-ph:waveform'} />
+            <ActionButton onClick={testTranscription} disabled={testing}>
+              <span
+                className={testing ? 'i-ph:circle-notch-bold h-4 w-4 animate-spin' : 'i-ph:waveform h-4 w-4'}
+                aria-hidden="true"
+              />
               {testing ? 'Enregistrement (3 s), parlez…' : 'Tester la transcription'}
-            </button>
+            </ActionButton>
             <span className="text-xs text-bolt-elements-textSecondary">
               Enregistre 3 secondes puis transcrit pour de vrai avec le service et le modèle choisis.
             </span>
@@ -599,16 +581,11 @@ export default function VoiceTab() {
                   ? 'Voix (aucune détectée pour l’instant)'
                   : `Voix (${voices.length} disponible${voices.length === 1 ? '' : 's'})`}
               </label>
-              <select
+              <Select
                 id="tts-voice"
                 value={selectedVoice}
                 onChange={(event) => setSelectedVoice(event.target.value)}
-                className={classNames(
-                  'w-full rounded-lg px-3 py-2 text-sm',
-                  'bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor',
-                  'text-bolt-elements-textPrimary',
-                  'focus:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-focus',
-                )}
+                disabled={sortedVoices.length === 0}
               >
                 {sortedVoices.length === 0 ? <option value="">Aucune voix détectée</option> : null}
                 {sortedVoices.map((voice) => (
@@ -616,7 +593,7 @@ export default function VoiceTab() {
                     {voice.name} ({voice.lang}){voice.localService ? ' · locale' : ''}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
 
             <div className="space-y-3">
@@ -632,7 +609,7 @@ export default function VoiceTab() {
                   step={0.05}
                   value={rate}
                   onChange={(event) => setRate(Number(event.target.value))}
-                  className="w-full accent-purple-500"
+                  className="w-full cursor-pointer accent-accent-600 appearance-none rounded-full bg-bolt-elements-background-depth-3"
                 />
               </div>
               <div>
@@ -647,46 +624,77 @@ export default function VoiceTab() {
                   step={0.05}
                   value={pitch}
                   onChange={(event) => setPitch(Number(event.target.value))}
-                  className="w-full accent-purple-500"
+                  className="w-full cursor-pointer accent-accent-600 appearance-none rounded-full bg-bolt-elements-background-depth-3"
                 />
               </div>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={speak}
-              disabled={!synthesisSupported || voices.length === 0}
-              className={classNames(
-                'inline-flex min-h-[44px] items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium',
-                'bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text',
-                'hover:bg-bolt-elements-button-primary-backgroundHover',
-                'focus:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-focus',
-                'disabled:cursor-not-allowed disabled:opacity-50',
-              )}
-            >
-              <div className="i-ph:play-fill" />
+            <ActionButton tone="primary" onClick={speak} disabled={!synthesisSupported || voices.length === 0}>
+              <span className="i-ph:play-fill h-4 w-4" aria-hidden="true" />
               Écouter un exemple
-            </button>
-            <button
-              type="button"
+            </ActionButton>
+            <ActionButton
               onClick={() => {
-                window.speechSynthesis.cancel();
+                window.speechSynthesis?.cancel();
                 setIsSpeaking(false);
               }}
               disabled={!synthesisSupported || !isSpeaking}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-bolt-elements-borderColor px-3 py-2 text-sm text-bolt-elements-textPrimary hover:bg-bolt-elements-item-backgroundActive disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <div className="i-ph:stop-fill" />
+              <span className="i-ph:stop-fill h-4 w-4" aria-hidden="true" />
               Arrêter
-            </button>
+            </ActionButton>
             <span className="text-xs text-bolt-elements-textSecondary">
               Synthèse locale du navigateur : aucun texte n’est envoyé à un serveur.
             </span>
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+/**
+ * One label + switch row.
+ *
+ * The label used to be an inline text node immediately followed by a block description
+ * ("Afficher le bouton micro" then "Le masquer libère la place…") with no separator, so the two
+ * sentences ran together on screen and in the accessibility tree the row was announced as one
+ * long string. The label now points at the switch with `htmlFor`, the description is linked with
+ * `aria-describedby`, and the switch cannot be pushed off the row by a long sentence on a phone.
+ */
+function SwitchRow({
+  id,
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <label htmlFor={id} className="block text-sm text-bolt-elements-textPrimary">
+          {label}
+        </label>
+        <p id={`${id}-description`} className="mt-0.5 block text-xs text-bolt-elements-textSecondary">
+          {description}
+        </p>
+      </div>
+      <Switch
+        id={id}
+        className="mt-0.5 shrink-0"
+        aria-label={label}
+        aria-describedby={`${id}-description`}
+        checked={checked}
+        onCheckedChange={onChange}
+      />
     </div>
   );
 }

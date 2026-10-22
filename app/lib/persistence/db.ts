@@ -13,43 +13,76 @@ export interface IChatMetadata {
 const logger = createScopedLogger('ChatHistory');
 
 // this is used at the top level and never rejects
-export async function openDatabase(): Promise<IDBDatabase | undefined> {
+function parseOwnerId(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== 'object') {
+    return undefined;
+  }
+
+  const candidate = (payload as { user?: unknown }).user ?? payload;
+
+  if (!candidate || typeof candidate !== 'object') {
+    return undefined;
+  }
+
+  const user = candidate as { id?: unknown; email?: unknown };
+
+  return typeof user.id === 'string' && user.id ? user.id : undefined;
+}
+
+export async function openDatabase(ownerId?: string): Promise<IDBDatabase | undefined> {
   if (typeof indexedDB === 'undefined') {
     console.error('indexedDB is not available in this environment.');
     return undefined;
   }
 
-  return new Promise((resolve) => {
-    const request = indexedDB.open('boltHistory', 2);
+  const identityRequest = fetch('/api/auth/me', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+    .then(async (response) => {
+      if (!response.ok) {
+        return null;
+      }
 
-    request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
-      const db = (event.target as IDBOpenDBRequest).result;
-      const oldVersion = event.oldVersion;
+      return parseOwnerId(await response.json()) ?? null;
+    })
+    .catch(() => null);
 
-      if (oldVersion < 1) {
-        if (!db.objectStoreNames.contains('chats')) {
-          const store = db.createObjectStore('chats', { keyPath: 'id' });
+  const identifyOwner = await identityRequest;
+
+  const databaseName = ownerId
+    ? `boltHistory:${encodeURIComponent(ownerId)}`
+    : identifyOwner
+      ? `boltHistory:${encodeURIComponent(identifyOwner)}`
+      : 'boltHistory:anonymous';
+
+  try {
+    return await new Promise<IDBDatabase | undefined>((resolve) => {
+      const request = indexedDB.open(databaseName, 2);
+
+      request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
+        const database = (event.target as IDBOpenDBRequest).result;
+        const oldVersion = event.oldVersion;
+
+        if (oldVersion < 1 && !database.objectStoreNames.contains('chats')) {
+          const store = database.createObjectStore('chats', { keyPath: 'id' });
           store.createIndex('id', 'id', { unique: true });
           store.createIndex('urlId', 'urlId', { unique: true });
         }
-      }
 
-      if (oldVersion < 2) {
-        if (!db.objectStoreNames.contains('snapshots')) {
-          db.createObjectStore('snapshots', { keyPath: 'chatId' });
+        if (oldVersion < 2 && !database.objectStoreNames.contains('snapshots')) {
+          database.createObjectStore('snapshots', { keyPath: 'chatId' });
         }
-      }
-    };
+      };
 
-    request.onsuccess = (event: Event) => {
-      resolve((event.target as IDBOpenDBRequest).result);
-    };
+      request.onsuccess = (event: Event) => resolve((event.target as IDBOpenDBRequest).result);
 
-    request.onerror = (event: Event) => {
-      resolve(undefined);
-      logger.error((event.target as IDBOpenDBRequest).error);
-    };
-  });
+      request.onerror = (event: Event) => {
+        logger.error((event.target as IDBOpenDBRequest).error);
+        resolve(undefined);
+      };
+    });
+  } catch (error) {
+    logger.error(error);
+    return undefined;
+  }
 }
 
 export async function getAll(db: IDBDatabase): Promise<ChatHistoryItem[]> {
@@ -381,7 +414,7 @@ export async function forkChat(db: IDBDatabase, chatId: string, messageId: strin
 }
 
 export async function duplicateChat(db: IDBDatabase, id: string): Promise<string> {
-  const chat = await getMessagesByIdRaw(db, id);
+  const chat = (await getMessagesByIdRaw(db, id)) || (await getMessagesByUrlIdRaw(db, id));
 
   if (!chat) {
     throw new Error('Chat not found');

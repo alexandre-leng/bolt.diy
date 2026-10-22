@@ -75,8 +75,7 @@ export const useMCPStore = create<Store & Actions>((set, get) => ({
             toolEnabled: { ...defaultSettings.toolEnabled, ...savedSettings.toolEnabled },
           };
 
-          const serverTools = await updateServerConfig(settings.mcpConfig);
-          set(() => ({ settings, serverTools }));
+          set(() => ({ settings }));
         } catch (error) {
           console.error('Error parsing saved mcp config:', error);
           set(() => ({

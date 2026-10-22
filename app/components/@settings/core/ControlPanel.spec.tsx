@@ -84,7 +84,7 @@ describe('control panel: model settings are administrator-only', () => {
     sessionState.isAdmin = true;
     render(<ControlPanel open onClose={vi.fn()} />);
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /cloud providers/i })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: /fournisseurs cloud/i })).toBeInTheDocument());
   });
 
   it('hides the editable provider screens from a normal account, keeping the read-only view', async () => {
@@ -93,8 +93,8 @@ describe('control panel: model settings are administrator-only', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: /mon accès ia/i })).toBeInTheDocument());
 
-    expect(screen.queryByRole('button', { name: /cloud providers/i })).toBeNull();
-    expect(screen.queryByRole('button', { name: /local providers/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /fournisseurs cloud/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /fournisseurs locaux/i })).toBeNull();
   });
 });
 

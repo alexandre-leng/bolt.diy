@@ -260,7 +260,7 @@ export default function LocalProvidersTab() {
   };
 
   const handleDeleteOllamaModel = async (modelName: string) => {
-    if (!window.confirm(`Are you sure you want to delete ${modelName}?`)) {
+    if (!window.confirm(`Voulez-vous vraiment supprimer ${modelName} ?`)) {
       return;
     }
 

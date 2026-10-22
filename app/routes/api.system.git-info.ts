@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs } from 'react-router';
+import { requireAdmin } from '~/lib/.server/api/admin-auth';
 import { withSecurity } from '~/lib/security';
 
 interface GitInfo {
@@ -63,6 +64,12 @@ declare const __GIT_REPO_NAME: string;
  */
 
 async function gitInfoLoader({ request, context }: LoaderFunctionArgs & { context: AppContext }) {
+  const denied = requireAdmin(request);
+
+  if (denied) {
+    return denied;
+  }
+
   console.log('Git info API called with URL:', request.url);
 
   const { searchParams } = new URL(request.url);

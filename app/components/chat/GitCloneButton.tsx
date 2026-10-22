@@ -154,7 +154,7 @@ ${escapeBoltTags(file.content)}
       }
     } catch (error) {
       console.error('Error during import:', error);
-      toast.error('Failed to import repository');
+      toast.error('Échec de l’importation du dépôt');
     } finally {
       setLoading(false);
     }
@@ -167,7 +167,7 @@ ${escapeBoltTags(file.content)}
           setSelectedProvider(null);
           setIsDialogOpen(true);
         }}
-        title="Clone a repo"
+        title="Cloner un dépôt"
         variant="default"
         size="lg"
         className={classNames(
@@ -182,7 +182,7 @@ ${escapeBoltTags(file.content)}
         disabled={!ready || loading}
       >
         <GitBranch className="w-4 h-4" />
-        Clone a repo
+        Cloner un dépôt
       </Button>
 
       {/* Provider Selection Dialog */}
@@ -192,7 +192,7 @@ ${escapeBoltTags(file.content)}
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-bolt-elements-textPrimary dark:text-bolt-elements-textPrimary">
-                  Choose Repository Provider
+                  Choisir un fournisseur
                 </h3>
                 <button
                   onClick={() => setIsDialogOpen(false)}
@@ -216,7 +216,7 @@ ${escapeBoltTags(file.content)}
                         GitHub
                       </div>
                       <div className="text-sm text-bolt-elements-textSecondary dark:text-bolt-elements-textSecondary">
-                        Clone from GitHub repositories
+                        Cloner depuis vos dépôts GitHub
                       </div>
                     </div>
                   </div>
@@ -235,7 +235,7 @@ ${escapeBoltTags(file.content)}
                         GitLab
                       </div>
                       <div className="text-sm text-bolt-elements-textSecondary dark:text-bolt-elements-textSecondary">
-                        Clone from GitLab repositories
+                        Cloner depuis vos dépôts GitLab
                       </div>
                     </div>
                   </div>
@@ -257,10 +257,10 @@ ${escapeBoltTags(file.content)}
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-bolt-elements-textPrimary dark:text-bolt-elements-textPrimary">
-                    Import GitHub Repository
+                    Sélectionner un dépôt GitHub
                   </h3>
                   <p className="text-sm text-bolt-elements-textSecondary dark:text-bolt-elements-textSecondary">
-                    Clone a repository from GitHub to your workspace
+                    Importer un dépôt GitHub dans votre espace de travail
                   </p>
                 </div>
               </div>
@@ -293,10 +293,10 @@ ${escapeBoltTags(file.content)}
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-bolt-elements-textPrimary dark:text-bolt-elements-textPrimary">
-                    Import GitLab Repository
+                    Sélectionner un dépôt GitLab
                   </h3>
                   <p className="text-sm text-bolt-elements-textSecondary dark:text-bolt-elements-textSecondary">
-                    Clone a repository from GitLab to your workspace
+                    Importer un dépôt GitLab dans votre espace de travail
                   </p>
                 </div>
               </div>
@@ -318,7 +318,7 @@ ${escapeBoltTags(file.content)}
         </div>
       )}
 
-      {loading && <LoadingOverlay message="Please wait while we clone the repository..." />}
+      {loading && <LoadingOverlay message="Clonage du dépôt en cours…" />}
     </>
   );
 }

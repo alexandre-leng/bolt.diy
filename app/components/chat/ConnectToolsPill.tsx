@@ -11,6 +11,7 @@ export function ConnectToolsPill() {
     <button
       type="button"
       data-testid="connect-tools-pill"
+      aria-label="Connecter vos outils"
       onClick={() => requestOpenSettings('connectors')}
       className="mb-6 inline-flex items-center gap-2.5 rounded-full border border-[#eceae4] dark:border-white/10 bg-white/80 dark:bg-white/5 backdrop-blur-md py-1.5 pl-1.5 pr-3.5 text-sm text-[#1c1c1c] dark:text-white shadow-[0_1px_2px_rgba(16,24,40,0.05)] transition-colors hover:bg-white dark:hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500 animate-fade-in"
     >
@@ -24,7 +25,7 @@ export function ConnectToolsPill() {
           </span>
         ))}
       </span>
-      Connect your tools
+      Connecter vos outils
       <span className="i-ph:arrow-right text-base" aria-hidden="true" />
     </button>
   );

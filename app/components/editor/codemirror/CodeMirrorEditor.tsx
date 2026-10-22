@@ -148,6 +148,7 @@ export const CodeMirrorEditor = memo(
     const viewRef = useRef<EditorView>(undefined);
     const themeRef = useRef<Theme>(undefined);
     const docRef = useRef<EditorDocument>(undefined);
+    const activeFilePathRef = useRef<string | undefined>(undefined);
     const editorStatesRef = useRef<EditorStates>(undefined);
     const onScrollRef = useRef(onScroll);
     const onChangeRef = useRef(onChange);
@@ -230,8 +231,15 @@ export const CodeMirrorEditor = memo(
       });
 
       viewRef.current = view;
+      view.setTabFocusMode(true);
+
+      const enableTabBindings = () => view.setTabFocusMode(false);
+      view.contentDOM.addEventListener('mousedown', enableTabBindings);
+      view.contentDOM.addEventListener('focus', enableTabBindings);
 
       return () => {
+        view.contentDOM.removeEventListener('mousedown', enableTabBindings);
+        view.contentDOM.removeEventListener('focus', enableTabBindings);
         viewRef.current?.destroy();
         viewRef.current = undefined;
       };
@@ -288,6 +296,7 @@ export const CodeMirrorEditor = memo(
         editorStates.set(doc.filePath, state);
       }
 
+      activeFilePathRef.current = doc.filePath;
       view.setState(state);
 
       setEditorDocument(
@@ -295,8 +304,9 @@ export const CodeMirrorEditor = memo(
         theme,
         editable,
         languageCompartment,
-        autoFocusOnDocumentChange,
+        false,
         doc as TextEditorDocument,
+        () => activeFilePathRef.current === doc.filePath,
       );
 
       // Check if the file is locked and update the editor state accordingly
@@ -313,7 +323,7 @@ export const CodeMirrorEditor = memo(
     return (
       <div className={classNames('relative h-full', className)}>
         {doc?.isBinary && <BinaryContent />}
-        <div className="h-full overflow-hidden" ref={containerRef} />
+        <div ref={containerRef} className="h-full overflow-hidden" />
       </div>
     );
   },
@@ -435,8 +445,9 @@ function setEditorDocument(
   theme: Theme,
   editable: boolean,
   languageCompartment: Compartment,
-  autoFocus: boolean,
+  _autoFocus: boolean,
   doc: TextEditorDocument,
+  isCurrentDocument: () => boolean,
 ) {
   if (doc.value !== view.state.doc.toString()) {
     view.dispatch({
@@ -459,7 +470,7 @@ function setEditorDocument(
   });
 
   getLanguage(doc.filePath).then((languageSupport) => {
-    if (!languageSupport) {
+    if (!isCurrentDocument() || !languageSupport) {
       return;
     }
 
@@ -468,8 +479,10 @@ function setEditorDocument(
     });
 
     requestAnimationFrame(() => {
-      const currentLeft = view.scrollDOM.scrollLeft;
-      const currentTop = view.scrollDOM.scrollTop;
+      if (!isCurrentDocument()) {
+        return;
+      }
+
       const newLeft = doc.scroll?.left ?? 0;
       const newTop = doc.scroll?.top ?? 0;
 
@@ -488,7 +501,6 @@ function setEditorDocument(
               selection: { anchor: linePos },
               scrollIntoView: true,
             });
-            view.focus();
           } else {
             logger.warn(`Invalid line number ${line + 1} in ${totalLines}-line document`);
           }
@@ -497,22 +509,6 @@ function setEditorDocument(
         }
 
         return;
-      }
-
-      const needsScrolling = currentLeft !== newLeft || currentTop !== newTop;
-
-      if (autoFocus && editable) {
-        if (needsScrolling) {
-          view.scrollDOM.addEventListener(
-            'scroll',
-            () => {
-              view.focus();
-            },
-            { once: true },
-          );
-        } else {
-          view.focus();
-        }
       }
 
       view.scrollDOM.scrollTo(newLeft, newTop);

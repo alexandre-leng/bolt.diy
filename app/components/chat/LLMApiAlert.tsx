@@ -46,7 +46,7 @@ export default function LlmErrorAlert({ alert, clearAlert, onContinue }: Props) 
   };
 
   /*
-   * Errors here only ever close via the Dismiss button — nothing times out —
+   * Errors here only ever close via the Dismiss button, nothing times out,
    * and this button exists because the message is worth keeping: users paste it
    * into a bug report. Everything needed to reproduce goes on the clipboard.
    */
@@ -84,7 +84,7 @@ export default function LlmErrorAlert({ alert, clearAlert, onContinue }: Props) 
    * deployed build React's synthetic handler for this button never fired even
    * though the DOM event demonstrably reached it (verified with a capture-phase
    * listener on the button, on the root, and on `document`). The sibling
-   * Dismiss button — same parent, same event — works. A native listener on the
+   * Dismiss button (same parent, same event) works. A native listener on the
    * element itself removes the dependency on that delegation entirely.
    */
   const copyButtonRef = useRef<HTMLButtonElement>(null);

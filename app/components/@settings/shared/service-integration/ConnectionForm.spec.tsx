@@ -71,7 +71,7 @@ describe('ConnectionForm accessibility', () => {
     const onTokenChange = vi.fn();
     render(<ConnectionForm {...baseProps} onConnect={onConnect} onTokenChange={onTokenChange} error="Invalid token" />);
 
-    const input = screen.getByLabelText('Access Token');
+    const input = screen.getByLabelText('Jeton d’accès');
     const originalDescription = input.getAttribute('aria-describedby');
     expect(input).toHaveAttribute('type', 'password');
 
@@ -91,7 +91,7 @@ describe('ConnectionForm accessibility', () => {
 
   it('disables the reveal control while connecting', () => {
     render(<ConnectionForm {...baseProps} isConnecting />);
-    expect(screen.getByLabelText('Access Token')).toBeDisabled();
+    expect(screen.getByLabelText('Jeton d’accès')).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Afficher le jeton' })).toBeDisabled();
   });
 

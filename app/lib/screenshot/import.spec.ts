@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { importScreenshotHtml } from './import';
 
@@ -14,6 +15,38 @@ function project(files: Record<string, { type: 'file' | 'folder'; content?: stri
 }
 
 describe('screenshot HTML import', () => {
+  it('preserves the real React/Babel app after explicit script consent without executing it', async () => {
+    const source = readFileSync(new URL('./fixtures/react-babel.html', import.meta.url), 'utf8');
+    const workbench = project();
+    await importScreenshotHtml(source, workbench, { allowScripts: true });
+    expect(workbench.createFile).toHaveBeenCalledWith('/home/project/screenshot-generated.html', source);
+    expect(workbench.setSelectedFile).toHaveBeenCalledWith('/home/project/screenshot-generated.html');
+  });
+
+  it('consistently rejects the same inline script on every attempt without consent', async () => {
+    const active = '<!doctype html><html><body><script>alert(1)</script></body></html>';
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const workbench = project();
+      await expect(importScreenshotHtml(active, workbench)).rejects.toThrow();
+      expect(workbench.createFile).not.toHaveBeenCalled();
+    }
+  });
+  it('rejects an import queued for a project that has since changed', async () => {
+    let generation = 0;
+
+    const workbench = {
+      ...project(),
+      projectGeneration: { get: () => generation },
+      queueProjectMutation: async <T>(callback: () => Promise<T>) => {
+        generation += 1;
+        return callback();
+      },
+    };
+    await expect(importScreenshotHtml(html, workbench)).rejects.toThrow(/projet/i);
+    expect(workbench.createFile).not.toHaveBeenCalled();
+  });
+
   it('imports validated HTML to an isolated file without starting a server', async () => {
     const workbench = project();
     const path = await importScreenshotHtml(html, workbench);
@@ -22,10 +55,13 @@ describe('screenshot HTML import', () => {
     expect(workbench.setSelectedFile).toHaveBeenCalledWith(path);
   });
 
-  it('never overwrites an existing file', async () => {
-    const workbench = project({ '/home/project/screenshot-generated.html': { type: 'file', content: 'user data' } });
-    await expect(importScreenshotHtml(html, workbench)).rejects.toThrow(/already exists/i);
-    expect(workbench.createFile).not.toHaveBeenCalled();
+  it('preserves existing files and allocates a new import name', async () => {
+    const workbench = project({
+      '/home/project/screenshot-generated.html': { type: 'file', content: 'user data' },
+      '/home/project/screenshot-generated-2.html': { type: 'folder' },
+    });
+    await expect(importScreenshotHtml(html, workbench)).resolves.toBe('/home/project/screenshot-generated-3.html');
+    expect(workbench.createFile).toHaveBeenCalledWith('/home/project/screenshot-generated-3.html', html);
   });
 
   it('rejects active HTML in an existing Bolt project before any write', async () => {

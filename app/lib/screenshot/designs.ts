@@ -103,7 +103,13 @@ async function requestOne(args: {
   const response = await fetch('/api/screenshot/designs', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt: args.prompt, count: 1, model: args.model, size: args.size }),
+    body: JSON.stringify({
+      prompt: args.prompt,
+      count: 1,
+      directionIndex: args.index,
+      model: args.model,
+      size: args.size,
+    }),
     signal: args.signal,
   });
 

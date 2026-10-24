@@ -16,6 +16,12 @@ export function MobilePreviewButton() {
 
   const ready = previews.length > 0;
 
+  /*
+   * Icon-only below `sm` (36 px round, like the other header controls): with its label this
+   * pill was 97 px wide and, at 390 px, pushed the right cluster over the logo. The accessible
+   * name stays in `aria-label`; the label returns from `sm` up.
+   */
+
   return (
     <button
       type="button"
@@ -25,10 +31,11 @@ export function MobilePreviewButton() {
         workbenchStore.selectWorkbenchView('preview', { userInitiated: true });
         workbenchStore.showWorkbench.set(true);
       }}
-      className="lg:hidden relative inline-flex items-center gap-1.5 rounded-full border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-3 h-9 text-sm font-medium text-bolt-elements-textPrimary shadow-xs transition-colors hover:bg-bolt-elements-background-depth-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500"
+      title="Aperçu"
+      className="lg:hidden relative inline-flex items-center justify-center gap-1.5 rounded-full border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 w-9 px-0 sm:w-auto sm:px-3 h-9 shrink-0 text-sm font-medium text-bolt-elements-textPrimary shadow-xs transition-colors hover:bg-bolt-elements-background-depth-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500"
     >
       <span className="i-ph:play-circle text-base" aria-hidden="true" />
-      Aperçu
+      <span className="hidden sm:inline">Aperçu</span>
       {ready && (
         <span
           aria-hidden="true"

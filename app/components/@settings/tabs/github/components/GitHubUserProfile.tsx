@@ -29,11 +29,11 @@ export function GitHubUserProfile({ user, className = '' }: GitHubUserProfilePro
         <div className="flex items-center gap-4 mt-2 text-xs text-bolt-elements-textSecondary">
           <span className="flex items-center gap-1">
             <div className="i-ph:users w-3 h-3" />
-            {user.followers} followers
+            {user.followers} {user.followers > 1 ? 'abonnés' : 'abonné'}
           </span>
           <span className="flex items-center gap-1">
             <div className="i-ph:folder w-3 h-3" />
-            {user.public_repos} public repos
+            {user.public_repos} {user.public_repos > 1 ? 'dépôts publics' : 'dépôt public'}
           </span>
           <span className="flex items-center gap-1">
             <div className="i-ph:file-text w-3 h-3" />

@@ -6,7 +6,6 @@ import GitLabTab from '~/components/@settings/tabs/gitlab/GitLabTab';
 import NetlifyTab from '~/components/@settings/tabs/netlify/NetlifyTab';
 import SupabaseTab from '~/components/@settings/tabs/supabase/SupabaseTab';
 import VercelTab from '~/components/@settings/tabs/vercel/VercelTab';
-import { Dialog, DialogDescription, DialogRoot, DialogTitle, DialogButton } from '~/components/ui/Dialog';
 import { Switch } from '~/components/ui/Switch';
 import { activateConnector, type ConnectorActivationId } from '~/lib/services/connectorActivation';
 import { useMCPStore, type ConnectorId } from '~/lib/stores/mcp';
@@ -83,60 +82,72 @@ const CONNECTORS: Connector[] = [
   {
     id: 'github',
     name: 'GitHub',
-    description: 'Connect your GitHub account for repository management and version control',
+    description: 'Connectez votre compte GitHub pour gérer vos dépôts et le versionnage',
     icon: <GitHubIcon />,
     category: 'source-control',
   },
   {
     id: 'gitlab',
     name: 'GitLab',
-    description: 'Integrate with GitLab for code hosting and CI/CD pipelines',
+    description: 'Intégrez GitLab pour l’hébergement du code et les pipelines CI/CD',
     icon: <GitLabIcon />,
     category: 'source-control',
   },
   {
     id: 'vercel',
     name: 'Vercel',
-    description: 'Deploy and manage your projects on Vercel platform',
+    description: 'Déployez et gérez vos projets sur la plateforme Vercel',
     icon: <VercelIcon />,
     category: 'deployment',
   },
   {
     id: 'netlify',
     name: 'Netlify',
-    description: 'Deploy and manage your sites on Netlify',
+    description: 'Déployez et gérez vos sites sur Netlify',
     icon: <NetlifyIcon />,
     category: 'deployment',
   },
   {
     id: 'supabase',
     name: 'Supabase',
-    description: 'Connect to Supabase for database, auth, and storage',
+    description: 'Connectez Supabase pour la base de données, l’authentification et le stockage',
     icon: <SupabaseIcon />,
     category: 'database',
   },
   {
     id: 'browser-use-cloud',
     name: 'Browser Use Cloud',
-    description: 'Run hosted browser tasks and inspect websites from your chat',
+    description: 'Exécutez des tâches de navigation hébergées et inspectez des sites depuis le chat',
     icon: <div className="i-ph:globe-hemisphere-west w-5 h-5" />,
     category: 'browser-automation',
   },
 ];
 
 const CATEGORY_LABELS = {
-  'source-control': 'Source Control',
-  deployment: 'Deployment',
-  database: 'Database & Backend',
-  'browser-automation': 'Browser Automation',
+  'source-control': 'Contrôle de version',
+  deployment: 'Déploiement',
+  database: 'Base de données et backend',
+  'browser-automation': 'Navigation automatisée',
 };
 
-export default function ConnectorsTab() {
+export interface ConnectorCredentialRequest {
+  connectorId: ConnectorType;
+  initialError: string;
+}
+
+export interface ConnectorsTabProps {
+  /** Non-null while the enable-with-a-key dialog must be shown by the host panel. */
+  credentialRequest?: ConnectorCredentialRequest | null;
+  onCredentialRequestChange?: (request: ConnectorCredentialRequest | null) => void;
+}
+
+export default function ConnectorsTab({
+  // The request itself is consumed by the host dialog; this tab only raises and clears it.
+  credentialRequest: _credentialRequest,
+  onCredentialRequestChange,
+}: ConnectorsTabProps) {
   const [selectedConnector, setSelectedConnector] = useState<ConnectorType | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [credentialConnector, setCredentialConnector] = useState<Connector | null>(null);
-  const [apiKey, setApiKey] = useState('');
-  const [credentialError, setCredentialError] = useState('');
   const [isActivating, setIsActivating] = useState(false);
   const connectorEnabled = useMCPStore((state) => state.settings.connectorEnabled);
   const isInitialized = useMCPStore((state) => state.isInitialized);
@@ -160,7 +171,7 @@ export default function ConnectorsTab() {
 
     if (!enabled) {
       setConnectorEnabled(settingsId, false);
-      toast.info(`${connector.name} is off.`);
+      toast.info(`${connector.name} est désactivé.`);
 
       return;
     }
@@ -170,48 +181,14 @@ export default function ConnectorsTab() {
     try {
       await activateConnector(getActivationId(connector));
       setConnectorEnabled(settingsId, true);
-      toast.success(`${connector.name} is on. You can configure it here or open its configure page.`);
+      toast.success(`${connector.name} est activé. Vous pouvez le configurer ici.`);
     } catch (error) {
-      setCredentialConnector(connector);
-      setApiKey('');
-      setCredentialError(error instanceof Error ? error.message : 'Enter a valid API key to enable this connector.');
+      onCredentialRequestChange?.({
+        connectorId: connector.id,
+        initialError: error instanceof Error ? error.message : 'Saisissez une clé API valide pour activer cet outil.',
+      });
     } finally {
       setIsActivating(false);
-    }
-  };
-
-  const handleCredentialSubmit = async () => {
-    if (!credentialConnector) {
-      return;
-    }
-
-    setIsActivating(true);
-    setCredentialError('');
-
-    try {
-      await activateConnector(getActivationId(credentialConnector), apiKey);
-      setConnectorEnabled(getSettingsId(credentialConnector), true);
-      toast.success(`${credentialConnector.name} is on. You can now configure it on its connector page.`);
-      setCredentialConnector(null);
-      setApiKey('');
-    } catch (error) {
-      setCredentialError(
-        error instanceof Error ? error.message : 'That API key could not be validated. The connector remains off.',
-      );
-    } finally {
-      setIsActivating(false);
-    }
-  };
-
-  const closeCredentialDialog = () => {
-    if (!isActivating) {
-      if (credentialConnector) {
-        toast.info(`${credentialConnector.name} remains off until a valid API key is entered.`);
-      }
-
-      setCredentialConnector(null);
-      setApiKey('');
-      setCredentialError('');
     }
   };
 
@@ -260,7 +237,7 @@ export default function ConnectorsTab() {
           className="flex appearance-none items-center gap-2 border-0 bg-transparent text-sm text-bolt-elements-textSecondary transition-colors hover:text-bolt-elements-textPrimary"
         >
           <div className="i-ph:arrow-left w-4 h-4" />
-          Back to Connectors
+          Retour aux outils connectés
         </button>
         {renderConnectorContent()}
       </div>
@@ -273,13 +250,12 @@ export default function ConnectorsTab() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <div className="flex items-center gap-3 mb-2">
           <div className="i-ph:plug w-6 h-6 text-bolt-elements-item-contentAccent" />
-          <h2 className="text-lg font-medium text-bolt-elements-textPrimary">Connectors</h2>
+          <h2 className="text-lg font-medium text-bolt-elements-textPrimary">Outils connectés</h2>
         </div>
         <p className="text-sm text-bolt-elements-textSecondary">
-          Connect and manage your development tools and services in one place
+          Connectez et gérez vos outils de développement et vos services au même endroit.
         </p>
       </motion.div>
-
       {/* Category Filter */}
       <div className="flex items-center gap-2 flex-wrap">
         <button
@@ -291,7 +267,7 @@ export default function ConnectorsTab() {
               : 'border-bolt-elements-borderColor bg-transparent text-bolt-elements-textSecondary hover:border-bolt-elements-borderColorActive hover:text-bolt-elements-textPrimary',
           )}
         >
-          All
+          Tous
         </button>
         {Object.keys(connectorsByCategory).map((category) => (
           <button
@@ -308,7 +284,6 @@ export default function ConnectorsTab() {
           </button>
         ))}
       </div>
-
       {/* Connectors Grid */}
       <div className="space-y-8">
         {Object.entries(connectorsByCategory).map(([category, connectors]) => {
@@ -348,21 +323,32 @@ export default function ConnectorsTab() {
                     <div className="flex w-full flex-wrap items-center justify-between gap-3 border-t border-bolt-elements-borderColor pt-3 sm:w-auto sm:shrink-0 sm:flex-nowrap sm:justify-start sm:gap-4 sm:border-0 sm:pt-0">
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-bolt-elements-textSecondary">
-                          {connectorEnabled[getSettingsId(connector)] ? 'On' : 'Off'}
+                          {connectorEnabled[getSettingsId(connector)] ? 'Activé' : 'Désactivé'}
                         </span>
                         <Switch
                           checked={connectorEnabled[getSettingsId(connector)]}
                           disabled={!isInitialized || isActivating}
-                          aria-label={`${connectorEnabled[getSettingsId(connector)] ? 'Turn off' : 'Turn on'} ${connector.name}`}
+                          aria-label={`${connectorEnabled[getSettingsId(connector)] ? 'Désactiver' : 'Activer'} ${connector.name}`}
                           onCheckedChange={(enabled) => void handleConnectorToggle(connector, enabled)}
                         />
                       </div>
+                      {/*
+                       * Measured on the live build: six identical grey buttons reading a muted
+                       * grey on a darker grey, i.e. the one action on each card looked disabled.
+                       * A secondary surface with primary ink, and the arrow in the accent
+                       * colour, say "this opens something" without competing with the switch.
+                       */}
                       <button
                         type="button"
+                        data-testid={`connector-configure-${connector.id}`}
                         onClick={() => setSelectedConnector(connector.id)}
-                        className="flex min-h-11 items-center gap-2 rounded-md border border-bolt-elements-borderColor bg-bolt-elements-background-depth-3 px-3 py-1.5 text-sm font-medium text-bolt-elements-textSecondary transition-colors hover:border-bolt-elements-borderColorActive hover:bg-bolt-elements-background-depth-1 hover:text-bolt-elements-textPrimary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/50"
+                        className="flex min-h-11 items-center gap-1.5 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-3 py-1.5 text-sm font-medium text-bolt-elements-textPrimary transition-colors hover:border-bolt-elements-borderColorActive hover:bg-bolt-elements-item-backgroundActive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
                       >
-                        Configure <span aria-hidden="true">→</span>
+                        Configurer
+                        <span
+                          aria-hidden="true"
+                          className="i-ph:arrow-right h-3.5 w-3.5 text-bolt-elements-item-contentAccent"
+                        />
                       </button>
                     </div>
                   </motion.div>
@@ -372,43 +358,14 @@ export default function ConnectorsTab() {
           );
         })}
       </div>
-
-      <DialogRoot open={!!credentialConnector} onOpenChange={(open) => !open && closeCredentialDialog()}>
-        {credentialConnector && (
-          <Dialog className="max-w-[min(520px,calc(100vw-2rem))] p-6" showCloseButton onClose={closeCredentialDialog}>
-            <DialogTitle>Enable {credentialConnector.name}</DialogTitle>
-            <DialogDescription>
-              Enter a valid API key to turn this connector on. If validation fails, it stays off. After it is enabled,
-              use the Configure page for its remaining settings.
-            </DialogDescription>
-            <label className="mt-5 block text-sm font-medium" htmlFor="connector-api-key">
-              {credentialConnector.name} API key
-            </label>
-            <input
-              id="connector-api-key"
-              type="password"
-              autoComplete="new-password"
-              value={apiKey}
-              onChange={(event) => setApiKey(event.target.value)}
-              placeholder="Paste your API key"
-              className="mt-2 w-full rounded-md border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-3 py-2 text-sm text-bolt-elements-textPrimary outline-none focus:border-bolt-elements-borderColorActive"
-            />
-            {credentialError && (
-              <p role="alert" className="mt-2 text-sm text-bolt-elements-icon-error">
-                {credentialError}
-              </p>
-            )}
-            <div className="mt-5 flex justify-end gap-2">
-              <DialogButton type="secondary" onClick={closeCredentialDialog} disabled={isActivating}>
-                Cancel
-              </DialogButton>
-              <DialogButton type="primary" onClick={() => void handleCredentialSubmit()} disabled={isActivating}>
-                {isActivating ? 'Checking…' : 'Validate and turn on'}
-              </DialogButton>
-            </div>
-          </Dialog>
-        )}
-      </DialogRoot>
+      /* * The credential dialog is NOT mounted here, on purpose. * * `Dialog` draws its backdrop and its content as TWO
+      siblings at `z-[9999]`, and `DialogRoot` * wraps only the content. Mounted inside this tab, that left a
+      full-screen backdrop in the * settings tree with NO `role="dialog"` above it: Radix's dismiss layer (the one that
+      answers * Escape and `onOpenChange`) was never registered, so Escape did nothing, and any later click * on the
+      page hit that phantom layer instead of the control under the pointer. The focus trap * lived in the settings
+      dialog (z 101), i.e. underneath it. * * `ConnectorsTab` therefore only reports its state through
+      `onCredentialRequestChange`, and the * dialog is rendered by the settings panel itself, in its own portal (see
+      ControlPanel). */
     </div>
   );
 }

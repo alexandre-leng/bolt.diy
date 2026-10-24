@@ -130,7 +130,11 @@ export class FilesStore {
       observer.observe(document, { subtree: true, childList: true });
     }
 
-    this.#init();
+    /*
+     * A refused runtime boot (EBUSY quota) is reported to the user once by `~/lib/webcontainer`;
+     * here it must not also escape as an unhandled rejection.
+     */
+    this.#init().catch((error: unknown) => logger.warn('File watcher not started:', error));
   }
 
   /**

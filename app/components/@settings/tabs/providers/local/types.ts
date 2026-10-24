@@ -38,7 +38,7 @@ export const PROVIDER_ICONS = {
 } as const;
 
 export const PROVIDER_DESCRIPTIONS = {
-  Ollama: 'Run open-source models locally on your machine',
-  LMStudio: 'Local model inference with LM Studio',
-  OpenAILike: 'Connect to OpenAI-compatible API endpoints',
+  Ollama: 'Exécutez des modèles open source localement sur votre machine',
+  LMStudio: 'Inférence de modèles locaux avec LM Studio',
+  OpenAILike: 'Connectez-vous à des points de terminaison d’API compatibles OpenAI',
 } as const;

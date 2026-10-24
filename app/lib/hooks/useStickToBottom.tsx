@@ -547,7 +547,10 @@ export const useStickToBottom = (options: StickToBottomOptions = {}) => {
 
         const animation = settling
           ? 'instant'
-          : mergeAnimations(optionsRef.current, previousHeight ? optionsRef.current.resize : optionsRef.current.initial);
+          : mergeAnimations(
+              optionsRef.current,
+              previousHeight ? optionsRef.current.resize : optionsRef.current.initial,
+            );
 
         if (settling) {
           setIsAtBottom(true);

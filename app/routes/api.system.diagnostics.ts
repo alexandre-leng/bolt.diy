@@ -1,4 +1,5 @@
 import type { LoaderFunction, LoaderFunctionArgs } from 'react-router';
+import { requireAdmin } from '~/lib/.server/api/admin-auth';
 
 /**
  * Diagnostic API for troubleshooting connection issues
@@ -12,6 +13,12 @@ interface AppContext {
 }
 
 export const loader: LoaderFunction = async ({ request, context }: LoaderFunctionArgs & { context: AppContext }) => {
+  const denied = requireAdmin(request);
+
+  if (denied) {
+    return denied;
+  }
+
   // Get environment variables
   const envVars = {
     hasGithubToken: Boolean(process.env.GITHUB_ACCESS_TOKEN || context.env?.GITHUB_ACCESS_TOKEN),

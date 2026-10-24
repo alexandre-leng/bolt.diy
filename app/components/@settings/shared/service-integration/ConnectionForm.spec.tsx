@@ -15,9 +15,9 @@ const baseProps = {
 
 describe('ConnectionForm accessibility', () => {
   it('associates the token label with the input', () => {
-    render(<ConnectionForm {...baseProps} tokenLabel="Access Token" />);
+    render(<ConnectionForm {...baseProps} tokenLabel="Jeton d’accès" />);
 
-    expect(screen.getByLabelText('Access Token')).toBeInstanceOf(HTMLInputElement);
+    expect(screen.getByLabelText('Jeton d’accès')).toBeInstanceOf(HTMLInputElement);
   });
 
   it('associates the token type select with its label', () => {
@@ -33,7 +33,7 @@ describe('ConnectionForm accessibility', () => {
       />,
     );
 
-    const select = screen.getByLabelText('Token Type');
+    const select = screen.getByLabelText('Type de jeton');
     expect(select.tagName).toBe('SELECT');
     expect(select).toHaveAccessibleDescription('Full access');
   });
@@ -41,7 +41,7 @@ describe('ConnectionForm accessibility', () => {
   it('announces an error with role alert and links it to the input', () => {
     render(<ConnectionForm {...baseProps} error="Invalid token" />);
 
-    const input = screen.getByLabelText('Access Token');
+    const input = screen.getByLabelText('Jeton d’accès');
     const alert = screen.getByRole('alert');
 
     expect(alert).toHaveTextContent('Invalid token');
@@ -53,7 +53,7 @@ describe('ConnectionForm accessibility', () => {
   it('does not mark the input invalid or render an alert without an error', () => {
     render(<ConnectionForm {...baseProps} />);
 
-    const input = screen.getByLabelText('Access Token');
+    const input = screen.getByLabelText('Jeton d’accès');
     expect(input).not.toHaveAttribute('aria-invalid');
     expect(screen.queryByRole('alert')).toBeNull();
   });
@@ -61,16 +61,45 @@ describe('ConnectionForm accessibility', () => {
   it('keeps the token help link described by the input', () => {
     render(<ConnectionForm {...baseProps} />);
 
-    const link = screen.getByRole('link', { name: /get your token/i });
+    const link = screen.getByRole('link', { name: /obtenir votre jeton/i });
     expect(link).toHaveAttribute('href', 'https://example.com/token');
-    expect(screen.getByLabelText('Access Token').getAttribute('aria-describedby')).toContain(link.closest('div')!.id);
+    expect(screen.getByLabelText('Jeton d’accès').getAttribute('aria-describedby')).toContain(link.closest('div')!.id);
+  });
+
+  it('reveals and masks the token without submitting or breaking its error association', () => {
+    const onConnect = vi.fn((e: React.FormEvent) => e.preventDefault());
+    const onTokenChange = vi.fn();
+    render(<ConnectionForm {...baseProps} onConnect={onConnect} onTokenChange={onTokenChange} error="Invalid token" />);
+
+    const input = screen.getByLabelText('Jeton d’accès');
+    const originalDescription = input.getAttribute('aria-describedby');
+    expect(input).toHaveAttribute('type', 'password');
+
+    const toggle = screen.getByRole('button', { name: 'Afficher le jeton' });
+    fireEvent.click(toggle);
+    expect(input).toHaveAttribute('type', 'text');
+    expect(input).toHaveValue('abc');
+    expect(input).toHaveAttribute('aria-describedby', originalDescription);
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAccessibleDescription(expect.stringContaining('Invalid token'));
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Masquer le jeton' }));
+    expect(input).toHaveAttribute('type', 'password');
+    expect(onConnect).not.toHaveBeenCalled();
+    expect(onTokenChange).not.toHaveBeenCalled();
+  });
+
+  it('disables the reveal control while connecting', () => {
+    render(<ConnectionForm {...baseProps} isConnecting />);
+    expect(screen.getByLabelText('Jeton d’accès')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Afficher le jeton' })).toBeDisabled();
   });
 
   it('keeps the submit control reachable by name', () => {
     const onConnect = vi.fn((e: React.FormEvent) => e.preventDefault());
     render(<ConnectionForm {...baseProps} onConnect={onConnect} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /connect/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^connecter$/i }));
     expect(onConnect).toHaveBeenCalledTimes(1);
   });
 });

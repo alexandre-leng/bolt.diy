@@ -1,7 +1,6 @@
 import { useStore } from '@nanostores/react';
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Panel, type PanelImperativeHandle } from 'react-resizable-panels';
-import { RestartPreviewButton } from './RestartPreviewButton';
 import { Terminal, type TerminalRef } from './Terminal';
 import { TerminalManager } from './TerminalManager';
 import { readTerminalLog } from './readTerminalLog';
@@ -36,16 +35,16 @@ export const TerminalTabs = memo(() => {
     const content = readTerminalLog(terminal);
 
     if (!content) {
-      toast.info('Terminal has no output to copy.');
+      toast.info('Le terminal ne contient aucune sortie à copier.');
 
       return;
     }
 
     try {
       await navigator.clipboard.writeText(content);
-      toast.success('Terminal logs copied.');
+      toast.success('Journaux du terminal copiés.');
     } catch {
-      toast.error('Could not copy terminal logs. Check clipboard permission and try again.');
+      toast.error('Impossible de copier les journaux du terminal. Vérifiez l’autorisation du presse-papiers.');
     }
   };
 
@@ -144,11 +143,11 @@ export const TerminalTabs = memo(() => {
       }}
     >
       {isMinimized && (
-        <div className="h-full min-h-[34px] flex items-center justify-end bg-bolt-elements-background-depth-2 border-t border-bolt-elements-borderColor px-2">
+        <div className="h-full min-h-[44px] flex items-center justify-end bg-bolt-elements-background-depth-2 border-t border-bolt-elements-borderColor px-2">
           <button
             type="button"
-            className="flex items-center gap-2 px-3 py-1 rounded-md bg-transparent text-sm text-bolt-elements-textPrimary hover:bg-bolt-elements-terminals-buttonBackground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-focus"
-            title="Expand terminal"
+            className="flex min-h-11 items-center gap-2 px-3 py-1 rounded-md bg-transparent text-sm text-bolt-elements-textPrimary hover:bg-bolt-elements-terminals-buttonBackground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bolt-elements-focus"
+            title="Développer le terminal"
             onClick={() => {
               terminalPanelRef.current?.resize(`${DEFAULT_TERMINAL_SIZE}%`);
               workbenchStore.toggleTerminal(true);
@@ -162,98 +161,109 @@ export const TerminalTabs = memo(() => {
       )}
       <div className={classNames('h-full', { hidden: isMinimized })}>
         <div className="bg-bolt-elements-terminals-background h-full flex flex-col">
-          <div className="flex items-center bg-bolt-elements-background-depth-2 border-y border-bolt-elements-borderColor gap-1.5 min-h-[34px] p-2">
-            {Array.from({ length: terminalCount + 1 }, (_, index) => {
-              const isActive = activeTerminal === index;
+          <div className="flex items-center bg-bolt-elements-background-depth-2 border-y border-bolt-elements-borderColor gap-1.5 min-h-[44px] p-2">
+            <div
+              role="tablist"
+              aria-label="Terminaux"
+              aria-orientation="horizontal"
+              className="flex items-center gap-1.5"
+            >
+              {Array.from({ length: terminalCount + 1 }, (_, index) => {
+                const isActive = activeTerminal === index;
 
-              return (
-                <React.Fragment key={index}>
-                  {index == 0 ? (
-                    <button
-                      key={index}
-                      className={classNames(
-                        'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 h-full whitespace-nowrap rounded-full',
-                        {
-                          'bg-bolt-elements-terminals-buttonBackground text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary':
-                            isActive,
-                          'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-terminals-buttonBackground':
-                            !isActive,
-                        },
-                      )}
-                      onClick={() => setActiveTerminal(index)}
-                    >
-                      <div className="i-ph:terminal-window-duotone text-lg" />
-                      Bolt Terminal
-                    </button>
-                  ) : (
-                    <React.Fragment>
-                      {/*
+                return (
+                  <React.Fragment key={index}>
+                    {index == 0 ? (
+                      <button
+                        key={index}
+                        type="button"
+                        role="tab"
+                        aria-selected={isActive}
+                        className={classNames(
+                          'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 min-h-11 whitespace-nowrap rounded-full',
+                          {
+                            'bg-bolt-elements-terminals-buttonBackground text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary':
+                              isActive,
+                            'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-terminals-buttonBackground':
+                              !isActive,
+                          },
+                        )}
+                        onClick={() => setActiveTerminal(index)}
+                      >
+                        <div className="i-ph:terminal-window-duotone text-lg" />
+                        Terminal Bolt
+                      </button>
+                    ) : (
+                      <React.Fragment>
+                        {/*
                         Two sibling buttons, never a button inside a button: the nested shape is
                         invalid HTML and its accessible name was empty, so a screen reader announced
                         an unnamed button and a click could both select and close the tab. The
                         container carries the pill styling; each button owns one action.
                       */}
-                      <div
-                        className={classNames(
-                          'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 h-full whitespace-nowrap rounded-full',
-                          {
-                            'bg-bolt-elements-terminals-buttonBackground text-bolt-elements-textPrimary': isActive,
-                            'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-terminals-buttonBackground':
-                              !isActive,
-                          },
-                        )}
-                      >
-                        <button
-                          type="button"
-                          role="tab"
-                          aria-selected={isActive}
-                          className="flex items-center gap-1.5 cursor-pointer"
-                          onClick={() => setActiveTerminal(index)}
+                        <div
+                          className={classNames(
+                            'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 min-h-11 whitespace-nowrap rounded-full',
+                            {
+                              'bg-bolt-elements-terminals-buttonBackground text-bolt-elements-textPrimary': isActive,
+                              'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-terminals-buttonBackground':
+                                !isActive,
+                            },
+                          )}
                         >
-                          <div className="i-ph:terminal-window-duotone text-lg" />
-                          Terminal {terminalCount > 1 && index}
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={`Fermer le terminal ${index}`}
-                          title={`Fermer le terminal ${index}`}
-                          className="bg-transparent text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary hover:bg-transparent rounded cursor-pointer"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            closeTerminal(index);
-                          }}
-                        >
-                          <div className="i-ph:x text-xs" />
-                        </button>
-                      </div>
-                    </React.Fragment>
-                  )}
-                </React.Fragment>
-              );
-            })}
-            {terminalCount < MAX_TERMINALS && <IconButton icon="i-ph:plus" size="md" onClick={addTerminal} />}
+                          <button
+                            type="button"
+                            role="tab"
+                            aria-selected={isActive}
+                            aria-label={`Terminal ${index}`}
+                            className="flex min-h-11 items-center gap-1.5 cursor-pointer"
+                            onClick={() => setActiveTerminal(index)}
+                          >
+                            <div className="i-ph:terminal-window-duotone text-lg" />
+                            Terminal {terminalCount > 1 && index}
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Fermer le terminal ${index}`}
+                            title={`Fermer le terminal ${index}`}
+                            className="bg-transparent text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary hover:bg-transparent rounded cursor-pointer min-h-11 min-w-11 inline-flex items-center justify-center"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              closeTerminal(index);
+                            }}
+                          >
+                            <div className="i-ph:x text-xs" />
+                          </button>
+                        </div>
+                      </React.Fragment>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+            {terminalCount < MAX_TERMINALS && (
+              <IconButton
+                icon="i-ph:plus"
+                size="md"
+                aria-label="Nouveau terminal"
+                title="Nouveau terminal"
+                onClick={addTerminal}
+              />
+            )}
             <button
               type="button"
               onClick={() => void copyTerminalLog()}
-              aria-label="Copy terminal logs"
-              title="Copy terminal logs"
+              aria-label="Copier les journaux du terminal"
+              title="Copier les journaux du terminal"
               className="inline-flex min-h-11 items-center gap-1.5 rounded-md bg-transparent px-2 text-xs font-medium text-bolt-elements-textPrimary hover:bg-bolt-elements-terminals-buttonBackground focus-visible:outline focus-visible:outline-2 focus-visible:outline-bolt-elements-focus"
             >
               <span className="i-ph:copy text-base" aria-hidden="true" />
-              <span className="hidden sm:inline">Copy logs</span>
+              <span className="hidden sm:inline">Copier les journaux</span>
             </button>
-            <RestartPreviewButton
-              onRestart={async () => {
-                setActiveTerminal(0);
-
-                const { restartProjectPreview } = await import('~/lib/runtime/projectMcp');
-                await restartProjectPreview();
-              }}
-            />
             <IconButton
               className="ml-auto"
               icon="i-ph:minus"
-              title="Minimize terminal"
+              title="Réduire le terminal"
               size="md"
               onClick={() => {
                 terminalPanelRef.current?.resize(MINIMIZED_TERMINAL_SIZE);

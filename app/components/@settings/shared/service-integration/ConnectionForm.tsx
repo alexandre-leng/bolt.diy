@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import React, { useId } from 'react';
+import { SecretInput } from '~/components/ui/SecretInput';
 import { classNames } from '~/utils/classNames';
 
 interface TokenTypeOption {
@@ -37,14 +38,14 @@ export function ConnectionForm({
   onDisconnect,
   error,
   serviceName,
-  tokenLabel = 'Access Token',
+  tokenLabel = 'Jeton d’accès',
   tokenPlaceholder,
   getTokenUrl,
   environmentVariable,
   tokenTypes,
   selectedTokenType,
   onTokenTypeChange,
-  connectedMessage = `Connected to ${serviceName}`,
+  connectedMessage = `Connecté à ${serviceName}`,
   children,
 }: ConnectionFormProps) {
   const id = useId();
@@ -70,11 +71,11 @@ export function ConnectionForm({
               <div className="text-xs text-bolt-elements-textSecondary bg-bolt-elements-background-depth-1 dark:bg-bolt-elements-background-depth-1 p-3 rounded-lg mb-4">
                 <p className="flex items-center gap-1 mb-1">
                   <span className="i-ph:lightbulb w-3.5 h-3.5 text-bolt-elements-icon-success dark:text-bolt-elements-icon-success" />
-                  <span className="font-medium">Tip:</span> You can also set the{' '}
+                  <span className="font-medium">Astuce :</span> vous pouvez aussi définir la variable d’environnement{' '}
                   <code className="px-1 py-0.5 bg-bolt-elements-background-depth-2 dark:bg-bolt-elements-background-depth-2 rounded">
                     {environmentVariable}
                   </code>{' '}
-                  environment variable to connect automatically.
+                  pour vous connecter automatiquement.
                 </p>
               </div>
             )}
@@ -86,7 +87,7 @@ export function ConnectionForm({
                     htmlFor={tokenTypeId}
                     className="block text-sm text-bolt-elements-textSecondary dark:text-bolt-elements-textSecondary mb-2"
                   >
-                    Token Type
+                    Type de jeton
                   </label>
                   <select
                     id={tokenTypeId}
@@ -121,15 +122,14 @@ export function ConnectionForm({
                 <label htmlFor={tokenId} className="block text-sm text-bolt-elements-textSecondary mb-2">
                   {tokenLabel}
                 </label>
-                <input
+                <SecretInput
                   id={tokenId}
-                  type="password"
                   aria-invalid={error ? true : undefined}
                   aria-describedby={describedBy || undefined}
                   value={token}
                   onChange={(e) => onTokenChange(e.target.value)}
                   disabled={isConnecting}
-                  placeholder={tokenPlaceholder || `Enter your ${serviceName} access token`}
+                  placeholder={tokenPlaceholder || `Saisissez votre jeton d’accès ${serviceName}`}
                   className={classNames(
                     'w-full px-3 py-2 rounded-lg text-sm',
                     'bg-bolt-elements-background-depth-1',
@@ -146,7 +146,7 @@ export function ConnectionForm({
                     rel="noopener noreferrer"
                     className="text-bolt-elements-settings-linkText hover:underline inline-flex items-center gap-1"
                   >
-                    Get your token
+                    Obtenir votre jeton
                     <div className="i-ph:arrow-square-out w-4 h-4" />
                   </a>
                 </div>
@@ -178,12 +178,12 @@ export function ConnectionForm({
                 {isConnecting ? (
                   <>
                     <div className="i-ph:spinner-gap animate-spin" />
-                    Connecting...
+                    Connexion…
                   </>
                 ) : (
                   <>
                     <div className="i-ph:plug-charging w-4 h-4" />
-                    Connect
+                    Connecter
                   </>
                 )}
               </button>
@@ -201,7 +201,7 @@ export function ConnectionForm({
                 )}
               >
                 <div className="i-ph:plug w-4 h-4" />
-                Disconnect
+                Déconnecter
               </button>
               <span className="text-sm text-bolt-elements-textSecondary flex items-center gap-1">
                 <div className="i-ph:check-circle w-4 h-4 text-green-500" />

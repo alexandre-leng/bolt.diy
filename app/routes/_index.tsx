@@ -8,7 +8,13 @@ import { FirstRunOnboarding } from '~/components/onboarding/FirstRunOnboarding';
 import { HeroGlow } from '~/components/ui/HeroGlow';
 
 export const meta: MetaFunction = () => {
-  return [{ title: 'Bolt' }, { name: 'description', content: 'Talk with Bolt, an AI assistant from StackBlitz' }];
+  return [
+    { title: 'Bolt' },
+    {
+      name: 'description',
+      content: 'Bolt, l’assistant IA qui crée votre application en direct dans le navigateur.',
+    },
+  ];
 };
 
 export const loader = () => Response.json({});
@@ -43,7 +49,10 @@ export default function Index() {
   return (
     <div className="has-sticky-header flex flex-col h-full min-h-0 w-full overflow-y-auto overflow-x-hidden bg-bolt-elements-background-depth-1">
       <HeroGlow />
-      <div className="sticky top-0 z-above-sidebar shrink-0 bg-bolt-elements-background-depth-1">
+      <div
+        className="sticky top-0 z-above-sidebar shrink-0 bg-bolt-elements-background-depth-1"
+        data-testid="sticky-header-wrapper"
+      >
         <Header />
       </div>
       <div className="flex flex-col flex-1 min-h-0">

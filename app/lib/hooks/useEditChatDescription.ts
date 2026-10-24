@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { chatId as chatIdStore, db, description as descriptionStore, getMessages } from '~/lib/persistence';
 import { renameChat } from '~/lib/persistence/historySync';
 import { toast } from '~/lib/toastify';
+import { cleanChatTitle } from '~/utils/chatTitle';
 
 interface EditChatDescriptionOptions {
   initialDescription?: string;
@@ -35,10 +36,16 @@ type EditChatDescriptionHook = {
  * @returns {EditChatDescriptionHook} Methods and state for managing description edits.
  */
 export function useEditChatDescription({
-  initialDescription = descriptionStore.get()!,
+  initialDescription: storedDescription = descriptionStore.get()!,
   customChatId,
   syncWithGlobalStore,
 }: EditChatDescriptionOptions): EditChatDescriptionHook {
+  /*
+   * What the user sees and edits is the CLEANED title: stored titles may still start with
+   * `[Model: x] [Provider: y]`. Display only: nothing is written unless the user saves a change
+   * (an unchanged submit compares equal to this value and is a no-op).
+   */
+  const initialDescription = cleanChatTitle(storedDescription);
   const chatIdFromStore = useStore(chatIdStore);
   const [editing, setEditing] = useState(false);
   const [currentDescription, setCurrentDescription] = useState(initialDescription);
@@ -75,7 +82,7 @@ export function useEditChatDescription({
 
     try {
       const chat = await getMessages(db, chatId);
-      return chat?.description || initialDescription;
+      return cleanChatTitle(chat?.description) || initialDescription;
     } catch (error) {
       console.error('Failed to fetch latest description:', error);
       return initialDescription;

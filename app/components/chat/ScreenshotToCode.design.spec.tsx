@@ -69,6 +69,17 @@ describe('the mode switch is visible, not hidden in a menu', () => {
 
     // The active one is marked visually, not only semantically.
     expect(designMode.className).toContain('border-bolt-elements-borderColorActive');
+
+    /*
+     * A card must never share the dialog's own fill: depth-2 on a depth-2 surface was
+     * literally invisible, which is what made both cards read as "greyed out".
+     */
+    expect(designMode.className).not.toMatch(/(^|\s)bg-bolt-elements-background-depth-2(\s|$)/);
+    expect(imageMode.className).not.toMatch(/(^|\s)bg-bolt-elements-background-depth-2(\s|$)/);
+
+    // Each card paints its own surface instead of inheriting the UA button grey.
+    expect(designMode.className).toContain('bg-bolt-elements-background-depth-3');
+    expect(imageMode.className).toContain('bg-bolt-elements-background-depth-1');
   });
 });
 

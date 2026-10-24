@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getCachedSnapshot, invalidateChatCache } from './chatCache';
+import { fallbackDescription } from './useChatHistory';
 
 const { resetWorkbench, waitForExecutionQueue, setMessages, setSnapshot } = vi.hoisted(() => ({
   resetWorkbench: vi.fn(async (): Promise<void> => undefined),
@@ -203,6 +204,15 @@ describe('useChatHistory chat switching', () => {
      * chat's messages are appended to it by index.
      */
     await waitFor(() => expect(result.current.chatChanged).toBe(true));
+  });
+
+  it('removes model/provider prefixes in one-line and two-line prompts', () => {
+    const prompt = (text: string) => [{ role: 'user', content: text } as unknown as UIMessage];
+
+    expect(fallbackDescription(prompt('[Model: beam-free] [Provider: OpenCodeGo] Build a site'))).toBe('Build a site');
+    expect(fallbackDescription(prompt('[Model: beam-free]\n[Provider: OpenCodeGo]\nBuild a site'))).toBe(
+      'Build a site',
+    );
   });
 
   it('should not reset again while already on a fresh chat', async () => {

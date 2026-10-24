@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import type { ChatHistoryItem } from '~/lib/persistence';
+import { cleanChatTitle } from '~/utils/chatTitle';
 import { debounce } from '~/utils/debounce';
 
 interface UseSearchFilterOptions {
@@ -36,7 +37,13 @@ export function useSearchFilter({
         const value = item[field];
 
         if (typeof value === 'string') {
-          return value.toLowerCase().includes(query);
+          /*
+           * Search what the user SEES: a stored title may still start with
+           * « [Model: x] [Provider: y] », which typing « model » must not match.
+           */
+          const shown = field === 'description' ? cleanChatTitle(value) : value;
+
+          return shown.toLowerCase().includes(query);
         }
 
         return false;

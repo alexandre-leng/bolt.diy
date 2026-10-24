@@ -128,6 +128,7 @@ function Content({ children, ...props }: StickToBottomContentProps) {
   const context = useStickToBottomContext();
 
   return (
+    // eslint-disable-next-line @blitz/lines-around-comment
     /*
      * `h-auto` is the trap: this element is the SCROLLER (scrollRef), and every measurement the
      * stick logic makes comes from its own scrollHeight/clientHeight. With `h-auto` inside a

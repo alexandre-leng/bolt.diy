@@ -19,13 +19,13 @@ export function GitLabAuthDialog({ isOpen, onClose }: GitLabAuthDialogProps) {
     event.preventDefault();
 
     if (!token.trim()) {
-      toast.error('Please enter your GitLab access token');
+      toast.error('Veuillez saisir votre jeton d’accès GitLab');
       return;
     }
 
     try {
       await connect(token, gitlabUrl);
-      toast.success('Successfully connected to GitLab!');
+      toast.success('Connexion à GitLab réussie !');
       setToken('');
       onClose();
     } catch (error) {
@@ -51,7 +51,7 @@ export function GitLabAuthDialog({ isOpen, onClose }: GitLabAuthDialogProps) {
               aria-describedby="gitlab-auth-description"
             >
               <Dialog.Title className="text-lg font-medium text-bolt-elements-textPrimary dark:text-bolt-elements-textPrimary-dark mb-4">
-                Connect to GitLab
+                Connecter GitLab
               </Dialog.Title>
 
               <div className="flex items-center gap-3 mb-6">
@@ -65,13 +65,13 @@ export function GitLabAuthDialog({ isOpen, onClose }: GitLabAuthDialogProps) {
                 </div>
                 <div>
                   <h3 className="text-base font-medium text-bolt-elements-textPrimary dark:text-bolt-elements-textPrimary-dark">
-                    GitLab Connection
+                    Connexion GitLab
                   </h3>
                   <p
                     id="gitlab-auth-description"
                     className="text-sm text-bolt-elements-textSecondary dark:text-bolt-elements-textSecondary-dark"
                   >
-                    Connect your GitLab account to deploy your projects
+                    Connectez votre compte GitLab pour déployer vos projets
                   </p>
                 </div>
               </div>
@@ -79,7 +79,7 @@ export function GitLabAuthDialog({ isOpen, onClose }: GitLabAuthDialogProps) {
               <form onSubmit={handleConnect} className="space-y-4">
                 <div>
                   <label className="block text-sm text-bolt-elements-textSecondary dark:text-bolt-elements-textSecondary-dark mb-2">
-                    GitLab URL
+                    URL GitLab
                   </label>
                   <input
                     type="url"
@@ -101,14 +101,14 @@ export function GitLabAuthDialog({ isOpen, onClose }: GitLabAuthDialogProps) {
 
                 <div>
                   <label className="block text-sm text-bolt-elements-textSecondary dark:text-bolt-elements-textSecondary-dark mb-2">
-                    Access Token
+                    Jeton d’accès
                   </label>
                   <input
                     type="password"
                     value={token}
                     onChange={(e) => setToken(e.target.value)}
                     disabled={isConnecting}
-                    placeholder="Enter your GitLab access token"
+                    placeholder="Saisissez votre jeton d’accès GitLab"
                     className={classNames(
                       'w-full px-3 py-2 rounded-lg text-sm',
                       'bg-bolt-elements-background-depth-2 dark:bg-bolt-elements-background-depth-3',
@@ -127,11 +127,11 @@ export function GitLabAuthDialog({ isOpen, onClose }: GitLabAuthDialogProps) {
                       rel="noopener noreferrer"
                       className="text-orange-500 hover:text-orange-600 hover:underline inline-flex items-center gap-1"
                     >
-                      Get your token
+                      Obtenir votre jeton
                       <div className="i-ph:arrow-square-out w-3 h-3" />
                     </a>
                     <span className="mx-2">•</span>
-                    <span>Required scopes: api, read_repository</span>
+                    <span>Portées requises : api, read_repository</span>
                   </div>
                 </div>
 
@@ -150,7 +150,7 @@ export function GitLabAuthDialog({ isOpen, onClose }: GitLabAuthDialogProps) {
                     whileTap={{ scale: 0.98 }}
                     disabled={isConnecting}
                   >
-                    Cancel
+                    Annuler
                   </motion.button>
                   <motion.button
                     type="submit"
@@ -166,12 +166,12 @@ export function GitLabAuthDialog({ isOpen, onClose }: GitLabAuthDialogProps) {
                     {isConnecting ? (
                       <>
                         <div className="i-ph:spinner-gap animate-spin w-4 h-4" />
-                        Connecting...
+                        Connexion…
                       </>
                     ) : (
                       <>
                         <div className="i-ph:plug-charging w-4 h-4" />
-                        Connect to GitLab
+                        Connecter GitLab
                       </>
                     )}
                   </motion.button>

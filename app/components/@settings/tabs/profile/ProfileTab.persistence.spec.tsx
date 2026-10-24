@@ -82,7 +82,7 @@ describe('ProfileTab server persistence', () => {
     render(<ProfileTab />);
     editUsername('bob');
 
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Username updated'));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Nom d’utilisateur mis à jour'));
   });
 
   it('only sends the edited field, so the other keeps its stored value', async () => {

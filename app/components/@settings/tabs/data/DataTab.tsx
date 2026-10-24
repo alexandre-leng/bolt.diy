@@ -24,7 +24,9 @@ function useBoltHistoryDB() {
         setDb(database || null);
         setIsLoading(false);
       } catch (err) {
-        setError(err instanceof Error ? err : new Error('Unknown error initializing database'));
+        setError(
+          err instanceof Error ? err : new Error('Erreur inconnue lors de l’initialisation de la base de données'),
+        );
         setIsLoading(false);
       }
     };
@@ -53,10 +55,10 @@ function createChatItem(chat: Chat): ChatItem {
     id: chat.id,
 
     // Use description as title if available, or format a short ID
-    label: (chat as ExtendedChat).title || chat.description || `Chat ${chat.id.slice(0, 8)}`,
+    label: (chat as ExtendedChat).title || chat.description || `Conversation ${chat.id.slice(0, 8)}`,
 
     // Format the description with message count and timestamp
-    description: `${chat.messages.length} messages - Last updated: ${new Date((chat as ExtendedChat).updatedAt || Date.parse(chat.timestamp)).toLocaleString()}`,
+    description: `${chat.messages.length} message${chat.messages.length > 1 ? 's' : ''}, dernière mise à jour : ${new Date((chat as ExtendedChat).updatedAt || Date.parse(chat.timestamp)).toLocaleString('fr-FR')}`,
   };
 }
 
@@ -73,6 +75,9 @@ interface ChatItem {
 }
 
 export function DataTab() {
+  const exportOpenerRef = useRef<HTMLElement | null>(null);
+  const deleteOpenerRef = useRef<HTMLElement | null>(null);
+
   // Use our custom hook for the boltHistory database
   const { db, isLoading: dbLoading } = useBoltHistoryDB();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -86,13 +91,13 @@ export function DataTab() {
 
   // State for settings categories and available chats
   const [settingsCategories] = useState<SettingsCategory[]>([
-    { id: 'core', label: 'Core Settings', description: 'User profile and main settings' },
-    { id: 'providers', label: 'Providers', description: 'API keys and provider configurations' },
-    { id: 'features', label: 'Features', description: 'Feature flags and settings' },
-    { id: 'ui', label: 'UI', description: 'UI configuration and preferences' },
-    { id: 'connections', label: 'Connections', description: 'External service connections' },
-    { id: 'debug', label: 'Debug', description: 'Debug settings and logs' },
-    { id: 'updates', label: 'Updates', description: 'Update settings and notifications' },
+    { id: 'core', label: 'Paramètres principaux', description: 'Profil utilisateur et paramètres principaux' },
+    { id: 'providers', label: 'Fournisseurs', description: 'Clés API et configuration des fournisseurs' },
+    { id: 'features', label: 'Fonctionnalités', description: 'Options et paramètres des fonctionnalités' },
+    { id: 'ui', label: 'Interface', description: 'Configuration de l’interface et préférences' },
+    { id: 'connections', label: 'Connexions', description: 'Connexions aux services externes' },
+    { id: 'debug', label: 'Débogage', description: 'Paramètres de débogage et journaux' },
+    { id: 'updates', label: 'Mises à jour', description: 'Paramètres de mise à jour et notifications' },
   ]);
 
   const [availableChats, setAvailableChats] = useState<ExtendedChat[]>([]);
@@ -155,7 +160,9 @@ export function DataTab() {
         })
         .catch((error) => {
           console.error('Error loading chats:', error);
-          toast.error('Failed to load chats: ' + (error instanceof Error ? error.message : 'Unknown error'));
+          toast.error(
+            'Impossible de charger les conversations : ' + (error instanceof Error ? error.message : 'Erreur inconnue'),
+          );
         });
     }
   }, [db]);
@@ -223,11 +230,15 @@ export function DataTab() {
       {/* Delete Chats Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={showDeleteInlineConfirm}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          deleteOpenerRef.current?.focus();
+        }}
         onClose={() => setShowDeleteInlineConfirm(false)}
-        title="Delete All Chats?"
-        description="This will permanently delete all your chat history. This action cannot be undone."
-        confirmLabel="Delete All"
-        cancelLabel="Cancel"
+        title="Supprimer toutes les conversations ?"
+        description="Cette action supprimera définitivement tout l’historique de vos conversations. Elle est irréversible."
+        confirmLabel="Tout supprimer"
+        cancelLabel="Annuler"
         variant="destructive"
         isLoading={isDeleting}
         onConfirm={handleResetChatsWithState}
@@ -236,36 +247,44 @@ export function DataTab() {
       {/* Settings Selection Dialog */}
       <SelectionDialog
         isOpen={showSettingsSelection}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          exportOpenerRef.current?.focus();
+        }}
         onClose={() => setShowSettingsSelection(false)}
-        title="Select Settings to Export"
+        title="Sélectionner les paramètres à exporter"
         items={settingsCategories}
         onConfirm={(selectedIds) => {
           handleExportSelectedSettings(selectedIds);
           setShowSettingsSelection(false);
         }}
-        confirmLabel="Export Selected"
+        confirmLabel="Exporter la sélection"
       />
 
       {/* Chats Selection Dialog */}
       <SelectionDialog
         isOpen={showChatsSelection}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          exportOpenerRef.current?.focus();
+        }}
         onClose={() => setShowChatsSelection(false)}
-        title="Select Chats to Export"
+        title="Sélectionner les conversations à exporter"
         items={chatItems}
         onConfirm={(selectedIds) => {
           handleExportSelectedChats(selectedIds);
           setShowChatsSelection(false);
         }}
-        confirmLabel="Export Selected"
+        confirmLabel="Exporter la sélection"
       />
 
       {/* Chats Section */}
       <div>
-        <h2 className="text-xl font-semibold mb-4 text-bolt-elements-textPrimary">Chats</h2>
+        <h2 className="text-xl font-semibold mb-4 text-bolt-elements-textPrimary">Conversations</h2>
         {dbLoading ? (
           <div className="flex items-center justify-center p-4">
             <div className="i-ph-spinner-gap-bold animate-spin w-6 h-6 mr-2" />
-            <span>Loading chats database...</span>
+            <span>Chargement de la base de données des conversations…</span>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -276,10 +295,10 @@ export function DataTab() {
                     <div className="i-ph-download-duotone w-5 h-5" />
                   </motion.div>
                   <CardTitle className="text-lg group-hover:text-bolt-elements-item-contentAccent transition-colors">
-                    Export All Chats
+                    Exporter toutes les conversations
                   </CardTitle>
                 </div>
-                <CardDescription>Export all your chats to a JSON file.</CardDescription>
+                <CardDescription>Exportez toutes vos conversations dans un fichier JSON.</CardDescription>
               </CardHeader>
               <CardFooter>
                 <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="w-full">
@@ -287,7 +306,7 @@ export function DataTab() {
                     onClick={async () => {
                       try {
                         if (!db) {
-                          toast.error('Database not available');
+                          toast.error('Base de données indisponible');
                           return;
                         }
 
@@ -298,15 +317,15 @@ export function DataTab() {
                         });
 
                         if (availableChats.length === 0) {
-                          toast.warning('No chats available to export');
+                          toast.warning('Aucune conversation à exporter');
                           return;
                         }
 
                         await handleExportAllChats();
                       } catch (error) {
-                        console.error('Error exporting chats:', error);
+                        console.error('Erreur lors de l’export des conversations:', error);
                         toast.error(
-                          `Failed to export chats: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                          `Impossible d’exporter les conversations : ${error instanceof Error ? error.message : 'Erreur inconnue'}`,
                         );
                       }
                     }}
@@ -321,12 +340,12 @@ export function DataTab() {
                     {isExporting ? (
                       <>
                         <div className="i-ph-spinner-gap-bold animate-spin w-4 h-4 mr-2" />
-                        Exporting...
+                        Export en cours…
                       </>
                     ) : availableChats.length === 0 ? (
-                      'No Chats to Export'
+                      'Aucune conversation à exporter'
                     ) : (
-                      'Export All'
+                      'Tout exporter'
                     )}
                   </Button>
                 </motion.div>
@@ -340,15 +359,18 @@ export function DataTab() {
                     <div className="i-ph:list-checks w-5 h-5" />
                   </motion.div>
                   <CardTitle className="text-lg group-hover:text-bolt-elements-item-contentAccent transition-colors">
-                    Export Selected Chats
+                    Exporter certaines conversations
                   </CardTitle>
                 </div>
-                <CardDescription>Choose specific chats to export.</CardDescription>
+                <CardDescription>Choisissez les conversations à exporter.</CardDescription>
               </CardHeader>
               <CardFooter>
                 <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="w-full">
                   <Button
-                    onClick={() => setShowChatsSelection(true)}
+                    onClick={(event) => {
+                      exportOpenerRef.current = event.currentTarget;
+                      setShowChatsSelection(true);
+                    }}
                     disabled={isExporting || chatItems.length === 0}
                     variant="outline"
                     size="sm"
@@ -360,10 +382,10 @@ export function DataTab() {
                     {isExporting ? (
                       <>
                         <div className="i-ph-spinner-gap-bold animate-spin w-4 h-4 mr-2" />
-                        Exporting...
+                        Export en cours…
                       </>
                     ) : (
-                      'Select Chats'
+                      'Sélectionner des conversations'
                     )}
                   </Button>
                 </motion.div>
@@ -377,10 +399,10 @@ export function DataTab() {
                     <div className="i-ph-upload-duotone w-5 h-5" />
                   </motion.div>
                   <CardTitle className="text-lg group-hover:text-bolt-elements-item-contentAccent transition-colors">
-                    Import Chats
+                    Importer des conversations
                   </CardTitle>
                 </div>
-                <CardDescription>Import chats from a JSON file.</CardDescription>
+                <CardDescription>Importer des conversations depuis un fichier JSON.</CardDescription>
               </CardHeader>
               <CardFooter>
                 <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="w-full">
@@ -397,10 +419,10 @@ export function DataTab() {
                     {isImporting ? (
                       <>
                         <div className="i-ph-spinner-gap-bold animate-spin w-4 h-4 mr-2" />
-                        Importing...
+                        Import en cours…
                       </>
                     ) : (
-                      'Import Chats'
+                      'Importer des conversations'
                     )}
                   </Button>
                 </motion.div>
@@ -412,7 +434,7 @@ export function DataTab() {
 
       {/* Settings Section */}
       <div>
-        <h2 className="text-xl font-semibold mb-4 text-bolt-elements-textPrimary">Settings</h2>
+        <h2 className="text-xl font-semibold mb-4 text-bolt-elements-textPrimary">Réglages</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <Card className="bg-bolt-elements-background-depth-2 transition-colors hover:bg-bolt-elements-background-depth-3">
             <CardHeader>
@@ -421,10 +443,10 @@ export function DataTab() {
                   <div className="i-ph-download-duotone w-5 h-5" />
                 </motion.div>
                 <CardTitle className="text-lg group-hover:text-bolt-elements-item-contentAccent transition-colors">
-                  Export All Settings
+                  Tout exporter les paramètres
                 </CardTitle>
               </div>
-              <CardDescription>Export all your settings to a JSON file.</CardDescription>
+              <CardDescription>Exportez tous vos paramètres dans un fichier JSON.</CardDescription>
             </CardHeader>
             <CardFooter>
               <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="w-full">
@@ -441,10 +463,10 @@ export function DataTab() {
                   {isExporting ? (
                     <>
                       <div className="i-ph-spinner-gap-bold animate-spin w-4 h-4 mr-2" />
-                      Exporting...
+                      Export en cours…
                     </>
                   ) : (
-                    'Export All'
+                    'Tout exporter'
                   )}
                 </Button>
               </motion.div>
@@ -458,15 +480,18 @@ export function DataTab() {
                   <div className="i-ph:funnel-duotone w-5 h-5" />
                 </motion.div>
                 <CardTitle className="text-lg group-hover:text-bolt-elements-item-contentAccent transition-colors">
-                  Export Selected Settings
+                  Exporter certains paramètres
                 </CardTitle>
               </div>
-              <CardDescription>Choose specific settings to export.</CardDescription>
+              <CardDescription>Choisissez les paramètres à exporter.</CardDescription>
             </CardHeader>
             <CardFooter>
               <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="w-full">
                 <Button
-                  onClick={() => setShowSettingsSelection(true)}
+                  onClick={(event) => {
+                    exportOpenerRef.current = event.currentTarget;
+                    setShowSettingsSelection(true);
+                  }}
                   disabled={isExporting || settingsCategories.length === 0}
                   variant="outline"
                   size="sm"
@@ -478,10 +503,10 @@ export function DataTab() {
                   {isExporting ? (
                     <>
                       <div className="i-ph-spinner-gap-bold animate-spin w-4 h-4 mr-2" />
-                      Exporting...
+                      Export en cours…
                     </>
                   ) : (
-                    'Select Settings'
+                    'Sélectionner des paramètres'
                   )}
                 </Button>
               </motion.div>
@@ -495,10 +520,10 @@ export function DataTab() {
                   <div className="i-ph-upload-duotone w-5 h-5" />
                 </motion.div>
                 <CardTitle className="text-lg group-hover:text-bolt-elements-item-contentAccent transition-colors">
-                  Import Settings
+                  Importer les paramètres
                 </CardTitle>
               </div>
-              <CardDescription>Import settings from a JSON file.</CardDescription>
+              <CardDescription>Importez des paramètres depuis un fichier JSON.</CardDescription>
             </CardHeader>
             <CardFooter>
               <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="w-full">
@@ -515,10 +540,10 @@ export function DataTab() {
                   {isImporting ? (
                     <>
                       <div className="i-ph-spinner-gap-bold animate-spin w-4 h-4 mr-2" />
-                      Importing...
+                      Import en cours…
                     </>
                   ) : (
-                    'Import Settings'
+                    'Importer les paramètres'
                   )}
                 </Button>
               </motion.div>
@@ -529,7 +554,7 @@ export function DataTab() {
 
       {/* API Keys Section */}
       <div>
-        <h2 className="text-xl font-semibold mb-4 text-bolt-elements-textPrimary">API Keys</h2>
+        <h2 className="text-xl font-semibold mb-4 text-bolt-elements-textPrimary">Clés API</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <Card className="bg-bolt-elements-background-depth-2 transition-colors hover:bg-bolt-elements-background-depth-3">
             <CardHeader>
@@ -538,10 +563,10 @@ export function DataTab() {
                   <div className="i-ph-file-text-duotone w-5 h-5" />
                 </motion.div>
                 <CardTitle className="text-lg group-hover:text-bolt-elements-item-contentAccent transition-colors">
-                  Download Template
+                  Télécharger le modèle
                 </CardTitle>
               </div>
-              <CardDescription>Download a template file for your API keys.</CardDescription>
+              <CardDescription>Téléchargez un fichier modèle pour vos clés API.</CardDescription>
             </CardHeader>
             <CardFooter>
               <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="w-full">
@@ -558,10 +583,10 @@ export function DataTab() {
                   {isDownloadingTemplate ? (
                     <>
                       <div className="i-ph-spinner-gap-bold animate-spin w-4 h-4 mr-2" />
-                      Downloading...
+                      Téléchargement…
                     </>
                   ) : (
-                    'Download'
+                    'Télécharger'
                   )}
                 </Button>
               </motion.div>
@@ -575,10 +600,10 @@ export function DataTab() {
                   <div className="i-ph-upload-duotone w-5 h-5" />
                 </motion.div>
                 <CardTitle className="text-lg group-hover:text-bolt-elements-item-contentAccent transition-colors">
-                  Import API Keys
+                  Importer des clés API
                 </CardTitle>
               </div>
-              <CardDescription>Import API keys from a JSON file.</CardDescription>
+              <CardDescription>Importez des clés API depuis un fichier JSON.</CardDescription>
             </CardHeader>
             <CardFooter>
               <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="w-full">
@@ -595,10 +620,10 @@ export function DataTab() {
                   {isImportingKeys ? (
                     <>
                       <div className="i-ph-spinner-gap-bold animate-spin w-4 h-4 mr-2" />
-                      Importing...
+                      Import en cours…
                     </>
                   ) : (
-                    'Import Keys'
+                    'Importer les clés'
                   )}
                 </Button>
               </motion.div>
@@ -609,25 +634,28 @@ export function DataTab() {
 
       {/* Danger Section */}
       <div>
-        <h2 className="text-xl font-semibold mb-4 text-red-500 dark:text-red-400">Danger</h2>
+        <h2 className="text-xl font-semibold mb-4 text-red-500 dark:text-red-400">Zone sensible</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <Card className="border-red-500/30 bg-bolt-elements-background-depth-2">
             <CardHeader>
               <div className="flex items-center mb-2">
                 <div className="i-ph-trash-duotone w-5 h-5 text-red-500 dark:text-red-400 mr-2" />
-                <CardTitle className="text-lg">Delete All Chats</CardTitle>
+                <CardTitle className="text-lg">Supprimer toutes les conversations</CardTitle>
               </div>
-              <CardDescription>Permanently delete all your chat history.</CardDescription>
+              <CardDescription>Supprimez définitivement tout l’historique de vos conversations.</CardDescription>
             </CardHeader>
             <CardFooter>
               <Button
-                onClick={() => setShowDeleteInlineConfirm(true)}
+                onClick={(event) => {
+                  deleteOpenerRef.current = event.currentTarget;
+                  setShowDeleteInlineConfirm(true);
+                }}
                 disabled={isDeleting || chatItems.length === 0}
                 variant="destructive"
                 size="sm"
                 className="w-full justify-center"
               >
-                {isDeleting ? 'Deleting...' : 'Delete All Chats'}
+                {isDeleting ? 'Suppression…' : 'Supprimer toutes les conversations'}
               </Button>
             </CardFooter>
           </Card>

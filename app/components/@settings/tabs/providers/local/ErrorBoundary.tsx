@@ -38,8 +38,10 @@ export default class ErrorBoundary extends Component<Props, State> {
       return (
         <div className={classNames('p-6 rounded-lg border border-red-500/20', 'bg-red-500/5 text-center')}>
           <AlertCircle className="w-12 h-12 mx-auto text-red-500 mb-4" />
-          <h3 className="text-lg font-medium text-red-500 mb-2">Something went wrong</h3>
-          <p className="text-sm text-red-400 mb-4">There was an error loading the local providers section.</p>
+          <h3 className="text-lg font-medium text-red-500 mb-2">Une erreur est survenue</h3>
+          <p className="text-sm text-red-400 mb-4">
+            Une erreur s’est produite lors du chargement de la section des fournisseurs locaux.
+          </p>
           <button
             onClick={() => this.setState({ hasError: false, error: undefined })}
             className={classNames(
@@ -49,11 +51,11 @@ export default class ErrorBoundary extends Component<Props, State> {
               'transition-colors duration-200',
             )}
           >
-            Try Again
+            Réessayer
           </button>
           {process.env.NODE_ENV === 'development' && this.state.error && (
             <details className="mt-4 text-left">
-              <summary className="cursor-pointer text-sm text-red-400 hover:text-red-300">Error Details</summary>
+              <summary className="cursor-pointer text-sm text-red-400 hover:text-red-300">Détails de l’erreur</summary>
               <pre className="mt-2 p-2 bg-red-500/10 rounded text-xs text-red-300 overflow-auto">
                 {this.state.error.stack}
               </pre>

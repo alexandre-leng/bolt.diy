@@ -6,6 +6,7 @@ import { BsRobot, BsCloud } from 'react-icons/bs';
 import { FaCloud, FaBrain } from 'react-icons/fa';
 import { SiGoogle, SiGithub, SiHuggingface, SiPerplexity } from 'react-icons/si';
 import { TbBrain, TbCloudComputing } from 'react-icons/tb';
+import { Select } from '~/components/ui/Select';
 import { Switch } from '~/components/ui/Switch';
 import { useSettings } from '~/lib/hooks/useSettings';
 import { logStore } from '~/lib/stores/logs';
@@ -54,9 +55,9 @@ const PROVIDER_ICONS: Record<ProviderName, IconType> = {
 
 // Update PROVIDER_DESCRIPTIONS to use the same type
 const PROVIDER_DESCRIPTIONS: Partial<Record<ProviderName, string>> = {
-  Anthropic: 'Access Claude and other Anthropic models',
-  Github: 'Use OpenAI models hosted through GitHub infrastructure',
-  OpenAI: 'Use GPT-4, GPT-3.5, and other OpenAI models',
+  Anthropic: 'Accédez à Claude et aux autres modèles Anthropic',
+  Github: 'Utilisez les modèles OpenAI hébergés via l’infrastructure GitHub',
+  OpenAI: 'Utilisez GPT-4, GPT-3.5 et les autres modèles OpenAI',
 };
 
 /**
@@ -112,7 +113,9 @@ const CloudProvidersTab = () => {
       });
 
       setCategoryEnabled(enabled);
-      toast.success(enabled ? 'All cloud providers enabled' : 'All cloud providers disabled');
+      toast.success(
+        enabled ? 'Tous les fournisseurs cloud sont activés' : 'Tous les fournisseurs cloud sont désactivés',
+      );
     },
     [filteredProviders, settings],
   );
@@ -124,10 +127,10 @@ const CloudProvidersTab = () => {
 
       if (enabled) {
         logStore.logProvider(`Provider ${provider.name} enabled`, { provider: provider.name });
-        toast.success(`${provider.name} enabled`);
+        toast.success(`${provider.name} activé`);
       } else {
         logStore.logProvider(`Provider ${provider.name} disabled`, { provider: provider.name });
-        toast.success(`${provider.name} disabled`);
+        toast.success(`${provider.name} désactivé`);
       }
     },
     [settings],
@@ -158,7 +161,7 @@ const CloudProvidersTab = () => {
         provider: provider.name,
         baseUrl: newBaseUrl,
       });
-      toast.success(`${provider.name} base URL updated`);
+      toast.success(`URL de base de ${provider.name} mise à jour`);
       setEditingProvider(null);
     },
     [settings],
@@ -184,13 +187,15 @@ const CloudProvidersTab = () => {
               <TbCloudComputing className="w-5 h-5" />
             </div>
             <div>
-              <h4 className="text-md font-medium text-bolt-elements-textPrimary">Cloud Providers</h4>
-              <p className="text-sm text-bolt-elements-textSecondary">Connect to cloud-based AI models and services</p>
+              <h4 className="text-md font-medium text-bolt-elements-textPrimary">Fournisseurs cloud</h4>
+              <p className="text-sm text-bolt-elements-textSecondary">
+                Connectez-vous aux modèles et services d’IA dans le cloud
+              </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-sm text-bolt-elements-textSecondary">Enable All Cloud</span>
+            <span className="text-sm text-bolt-elements-textSecondary">Tout activer (cloud)</span>
             <Switch checked={categoryEnabled} onCheckedChange={handleToggleCategory} />
           </div>
         </div>
@@ -250,8 +255,8 @@ const CloudProvidersTab = () => {
                       <p className="text-xs text-bolt-elements-textSecondary mt-0.5">
                         {PROVIDER_DESCRIPTIONS[provider.name as keyof typeof PROVIDER_DESCRIPTIONS] ||
                           (URL_CONFIGURABLE_PROVIDERS.includes(provider.name)
-                            ? 'Configure custom endpoint for this provider'
-                            : 'Standard AI provider integration')}
+                            ? 'Configurez un point de terminaison personnalisé pour ce fournisseur'
+                            : 'Intégration standard d’un fournisseur d’IA')}
                       </p>
                     </div>
                     <Switch
@@ -272,7 +277,7 @@ const CloudProvidersTab = () => {
                           <input
                             type="text"
                             defaultValue={provider.settings.baseUrl}
-                            placeholder={`Enter ${provider.name} base URL`}
+                            placeholder={`Saisissez l’URL de base de ${provider.name}`}
                             className={classNames(
                               'flex-1 px-3 py-1.5 rounded-lg text-sm',
                               'bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor',
@@ -298,7 +303,7 @@ const CloudProvidersTab = () => {
                             <div className="flex items-center gap-2 text-bolt-elements-textSecondary">
                               <div className="i-ph:link text-sm" />
                               <span className="group-hover/url:text-purple-500 transition-colors">
-                                {provider.settings.baseUrl || 'Click to set base URL'}
+                                {provider.settings.baseUrl || 'Cliquez pour définir l’URL de base'}
                               </span>
                             </div>
                           </div>
@@ -309,7 +314,7 @@ const CloudProvidersTab = () => {
                         <div className="mt-2 text-xs text-green-500">
                           <div className="flex items-center gap-1">
                             <div className="i-ph:info" />
-                            <span>Environment URL set in .env file</span>
+                            <span>URL d’environnement définie dans le fichier .env</span>
                           </div>
                         </div>
                       )}
@@ -322,35 +327,23 @@ const CloudProvidersTab = () => {
                         <div className="i-ph:brain text-sm" />
                         <span>Réflexion (raisonnement)</span>
                       </label>
-                      {/* Same control shape as the composer: no native arrow, one chevron, fixed height. */}
-                      <div className="relative mt-1.5">
-                        <select
+                      {/* One shared field geometry for every settings dropdown (see Select). */}
+                      <div className="mt-1.5">
+                        <Select
                           aria-label={`Niveau de réflexion pour ${provider.name}`}
                           value={provider.settings.effort ?? 'auto'}
                           onChange={(event) => handleUpdateEffort(provider, event.target.value)}
-                          className={classNames(
-                            'w-full px-3 py-1.5 pr-9 rounded-lg text-sm',
-                            'bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor',
-                            'text-bolt-elements-textPrimary',
-                            'focus:outline-none focus:ring-2 focus:ring-purple-500/30',
-                            'transition-all duration-200 appearance-none cursor-pointer truncate',
-                          )}
+                          className="px-3 py-1.5"
                         >
                           {REASONING_CHOICES.map((choice) => (
                             <option key={choice.value} value={choice.value}>
                               {choice.label}
                             </option>
                           ))}
-                        </select>
-                        <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2">
-                          <div
-                            className="i-ph:caret-down w-4 h-4 text-bolt-elements-textSecondary opacity-75"
-                            aria-hidden="true"
-                          />
-                        </div>
+                        </Select>
                       </div>
                       <p className="mt-1 text-xs text-bolt-elements-textTertiary">
-                        Automatique garde le réglage qui laisse l'agent écrire des fichiers ; un niveau plus élevé fait
+                        Automatique garde le réglage qui laisse l’agent écrire des fichiers ; un niveau plus élevé fait
                         réfléchir le modèle davantage (plus lent, plus cher).
                       </p>
                     </div>

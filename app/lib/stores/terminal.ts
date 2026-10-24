@@ -11,7 +11,13 @@ export class TerminalStore {
   #pendingBoltOutput = '';
   #boltOutputReady = false;
 
-  showTerminal: WritableAtom<boolean> = import.meta.hot?.data?.showTerminal ?? atom(true);
+  /*
+   * Le terminal demarre REPLIE (34px a l'entete "Terminal"), pas ouvert a 25 %.
+   * Alex l'a demande explicitement : l'editeur garde la place a l'arrivee sur un projet.
+   * Un seul defaut a changer ici : `TerminalTabs` et `Workbench.client` lisent tous deux
+   * cet atome pour leur taille par defaut.
+   */
+  showTerminal: WritableAtom<boolean> = import.meta.hot?.data?.showTerminal ?? atom(false);
 
   constructor(webcontainerPromise: Promise<WebContainer>) {
     this.#webcontainer = webcontainerPromise;

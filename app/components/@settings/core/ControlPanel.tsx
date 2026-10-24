@@ -5,12 +5,14 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { AvatarDropdown } from './AvatarDropdown';
 import { TAB_LABELS, TAB_ICONS, DEFAULT_TAB_CONFIG, TAB_DESCRIPTIONS } from './constants';
 import type { TabType, Profile } from './types';
+import { ConnectorCredentialDialog } from '~/components/@settings/core/ConnectorCredentialDialog';
+import { SettingsHeader } from '~/components/@settings/core/SettingsHeader';
 import { TabTile } from '~/components/@settings/shared/components/TabTile';
 
 // Import all tab components
 import AccountTab from '~/components/@settings/tabs/account/AccountTab';
 import AdminKeysTab from '~/components/@settings/tabs/admin/AdminKeysTab';
-import ConnectorsTab from '~/components/@settings/tabs/connectors/ConnectorsTab';
+import ConnectorsTab, { type ConnectorCredentialRequest } from '~/components/@settings/tabs/connectors/ConnectorsTab';
 import { DataTab } from '~/components/@settings/tabs/data/DataTab';
 import { EventLogsTab } from '~/components/@settings/tabs/event-logs/EventLogsTab';
 import FeaturesTab from '~/components/@settings/tabs/features/FeaturesTab';
@@ -94,10 +96,12 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
   const [isDocumentationOpen, setIsDocumentationOpen] = useState(false);
   const [hasVisitedCloudProviders, setHasVisitedCloudProviders] = useState(false);
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(true);
+  const [connectorCredential, setConnectorCredential] = useState<ConnectorCredentialRequest | null>(null);
 
   const navigationRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLElement>(null);
   const tabButtons = useRef(new Map<TabType, HTMLButtonElement>());
+  const closeFocusPending = useRef(false);
 
   // Mobile panes are display:none, so move focus before the user continues in the visible pane.
   useEffect(() => {
@@ -210,11 +214,9 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
       setLoadingTab(null);
       setMobileNavigationOpen(true);
     } else {
-      // A deep link goes straight to its content on phones; the overview starts at navigation.
       setMobileNavigationOpen(!initialTab);
 
-      // When opening, set initial tab if provided
-      if (initialTab) {
+      if (initialTab && (isAdmin || !['cloud-providers', 'local-providers', 'admin-keys'].includes(initialTab))) {
         setActiveTab(initialTab);
         setLoadingTab(null);
 
@@ -223,14 +225,17 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
         }
       } else {
         setActiveTab(null);
+        setMobileNavigationOpen(true);
       }
     }
-  }, [open, initialTab]);
+  }, [open, initialTab, isAdmin]);
 
   // Handle closing
   const handleClose = () => {
+    closeFocusPending.current = true;
     setActiveTab(null);
     setLoadingTab(null);
+    setConnectorCredential(null);
     onClose();
   };
 
@@ -254,7 +259,9 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
       case 'local-providers':
         return <LocalProvidersTab />;
       case 'connectors':
-        return <ConnectorsTab />;
+        return (
+          <ConnectorsTab credentialRequest={connectorCredential} onCredentialRequestChange={setConnectorCredential} />
+        );
       case 'github':
         return <GitHubTab />;
       case 'gitlab':
@@ -378,7 +385,25 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
 
           <RadixDialog.Content
             aria-describedby={undefined}
-            onEscapeKeyDown={handleClose}
+            onCloseAutoFocus={(event) => {
+              if (closeFocusPending.current) {
+                event.preventDefault();
+                closeFocusPending.current = false;
+              }
+            }}
+            onEscapeKeyDown={(event) => {
+              if (!window.matchMedia('(min-width: 640px)').matches && !mobileNavigationOpen) {
+                event.preventDefault();
+                setMobileNavigationOpen(true);
+
+                const selectedButton = activeTab ? tabButtons.current.get(activeTab) : undefined;
+                requestAnimationFrame(() => selectedButton?.focus());
+
+                return;
+              }
+
+              handleClose();
+            }}
             onPointerDownOutside={handleClose}
             className="relative z-[101]"
           >
@@ -396,21 +421,6 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
               )}
             >
               <div className="relative z-10 flex h-full min-h-0">
-                {/*
-                 * A permanent close control. On desktop "Retour au projet" and outside-click are the
-                 * only exits, and on phones that link scrolls away with the navigation list, which
-                 * reads as a panel you cannot close. Sits above both panes, outside the scroll areas.
-                 */}
-                <button
-                  type="button"
-                  data-testid="settings-close"
-                  aria-label="Fermer les réglages"
-                  title="Fermer"
-                  onClick={handleClose}
-                  className="absolute right-3 top-3 z-20 flex h-11 w-11 items-center justify-center rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary transition-colors hover:bg-bolt-elements-item-backgroundActive hover:text-bolt-elements-textPrimary focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500 sm:h-10 sm:w-10"
-                >
-                  <span className="i-ph:x h-5 w-5" aria-hidden="true" />
-                </button>
                 <aside
                   ref={navigationRef}
                   data-testid="settings-navigation"
@@ -419,13 +429,14 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
                     mobileNavigationOpen ? 'flex' : 'hidden sm:flex',
                   )}
                 >
-                  <button
-                    onClick={handleClose}
-                    className="mx-4 mt-4 mr-16 flex appearance-none items-center gap-2 border-0 border-b border-solid border-bolt-elements-borderColor bg-transparent px-2 pb-5 pt-2 text-left text-sm font-semibold text-bolt-elements-textPrimary hover:text-bolt-elements-item-contentAccent sm:mr-4"
-                  >
-                    <span className="i-ph:arrow-left w-4 h-4" /> Retour au projet
-                  </button>
-                  <nav className="min-h-0 flex-1 overflow-y-auto modern-scrollbar px-3 py-4 pt-5">
+                  <div className="shrink-0 px-3 pb-1 pt-[calc(var(--header-height)+0.25rem)] sm:pt-3">
+                    <SettingsHeader
+                      showingSection={!mobileNavigationOpen}
+                      onBack={() => (mobileNavigationOpen ? handleClose() : setMobileNavigationOpen(true))}
+                      onClose={handleClose}
+                    />
+                  </div>
+                  <nav className="min-h-0 flex-1 overflow-y-auto modern-scrollbar px-3 py-1">
                     {navigationTabs.map((group) => (
                       <div key={group.label} className="mb-5">
                         <p className="mb-2 px-2 text-[11px] font-medium uppercase tracking-wide text-bolt-elements-textTertiary">
@@ -486,10 +497,20 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
                     mobileNavigationOpen ? 'hidden sm:block' : 'block',
                   )}
                 >
+                  {/*
+                   * Explicit surface: without `bg-transparent`/`appearance-none` a <button> keeps
+                   * the browser's light-grey fill, so in the dark theme its light ink sat on
+                   * rgb(239,239,239) (measured 1.08:1). Now it paints the dialog surface in both
+                   * themes, with the theme's primary ink.
+                   */}
                   <button
                     type="button"
-                    className="mb-5 flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-medium text-bolt-elements-textPrimary hover:text-bolt-elements-item-contentAccent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500 sm:hidden"
-                    onClick={() => setMobileNavigationOpen(true)}
+                    data-testid="settings-all-mobile"
+                    className="mb-5 flex min-h-11 appearance-none items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-sm font-medium text-bolt-elements-textPrimary transition-colors hover:bg-bolt-elements-item-backgroundActive hover:text-bolt-elements-item-contentAccent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500 sm:hidden"
+                    onClick={() => {
+                      setMobileNavigationOpen(true);
+                      requestAnimationFrame(() => activeTab && tabButtons.current.get(activeTab)?.focus());
+                    }}
                   >
                     <span className="i-ph:arrow-left text-lg" aria-hidden="true" /> Tous les réglages
                   </button>
@@ -542,6 +563,13 @@ export const ControlPanel = ({ open, onClose, initialTab }: ControlPanelProps) =
         </div>
       </RadixDialog.Portal>
       <DocumentationPanel open={isDocumentationOpen} onClose={() => setIsDocumentationOpen(false)} />
+      <ConnectorCredentialDialog
+        request={connectorCredential}
+        onClose={() => setConnectorCredential(null)}
+        onActivated={(connectorId) =>
+          setConnectorCredential((current) => (current?.connectorId === connectorId ? null : current))
+        }
+      />
     </RadixDialog.Root>
   );
 };

@@ -150,7 +150,7 @@ export const FileTree = memo(
       setRootCreating(null);
 
       if (!kind || !rootFolder || !isSafeEntryName(name)) {
-        toast.error('Invalid name');
+        toast.error('Nom invalide');
 
         return;
       }
@@ -163,9 +163,9 @@ export const FileTree = memo(
           : await workbenchStore.createFolder(targetPath);
 
       if (success) {
-        toast.success(kind === 'file' ? 'File created successfully' : 'Folder created successfully');
+        toast.success(kind === 'file' ? 'Fichier créé' : 'Dossier créé');
       } else {
-        toast.error(kind === 'file' ? 'Failed to create file' : 'Failed to create folder');
+        toast.error(kind === 'file' ? 'Impossible de créer le fichier' : 'Impossible de créer le dossier');
       }
     };
 
@@ -175,25 +175,25 @@ export const FileTree = memo(
           <div className="flex gap-2">
             <button
               type="button"
-              className="flex items-center gap-1.5 px-2 py-1 rounded-md text-bolt-elements-textSecondary hover:bg-bolt-elements-item-backgroundActive hover:text-bolt-elements-item-contentActive"
+              className="flex min-h-11 items-center gap-1.5 px-2 py-1 rounded-md text-bolt-elements-textSecondary hover:bg-bolt-elements-item-backgroundActive hover:text-bolt-elements-item-contentActive"
               onClick={() => setRootCreating('file')}
             >
               <span className="i-ph:file-plus" aria-hidden="true" />
-              New File
+              Nouveau fichier
             </button>
             <button
               type="button"
-              className="flex items-center gap-1.5 px-2 py-1 rounded-md text-bolt-elements-textSecondary hover:bg-bolt-elements-item-backgroundActive hover:text-bolt-elements-item-contentActive"
+              className="flex min-h-11 items-center gap-1.5 px-2 py-1 rounded-md text-bolt-elements-textSecondary hover:bg-bolt-elements-item-backgroundActive hover:text-bolt-elements-item-contentActive"
               onClick={() => setRootCreating('folder')}
             >
               <span className="i-ph:folder-plus" aria-hidden="true" />
-              New Folder
+              Nouveau dossier
             </button>
           </div>
           {rootCreating && (
             <InlineInput
               depth={0}
-              placeholder={rootCreating === 'file' ? 'Enter file name...' : 'Enter folder name...'}
+              placeholder={rootCreating === 'file' ? 'Saisir le nom du fichier…' : 'Saisir le nom du dossier…'}
               onSubmit={submitRootCreate}
               onCancel={() => setRootCreating(null)}
             />
@@ -276,7 +276,7 @@ function ContextMenuItem({ onSelect, children }: { onSelect?: () => void; childr
   return (
     <ContextMenu.Item
       onSelect={onSelect}
-      className="flex items-center gap-2 px-2 py-1.5 outline-0 text-sm text-bolt-elements-textPrimary cursor-pointer ws-nowrap text-bolt-elements-item-contentDefault hover:text-bolt-elements-item-contentActive hover:bg-bolt-elements-item-backgroundActive rounded-md"
+      className="flex min-h-11 items-center gap-2 px-2 py-1.5 outline-0 text-sm text-bolt-elements-textPrimary cursor-pointer ws-nowrap text-bolt-elements-item-contentDefault hover:text-bolt-elements-item-contentActive hover:bg-bolt-elements-item-backgroundActive rounded-md"
     >
       <span className="size-4 shrink-0"></span>
       <span>{children}</span>
@@ -416,9 +416,9 @@ function FileContextMenu({
     const success = await workbenchStore.createFile(newFilePath, '');
 
     if (success) {
-      toast.success('File created successfully');
+      toast.success('Fichier créé');
     } else {
-      toast.error('Failed to create file');
+      toast.error('Impossible de créer le fichier');
     }
 
     setIsCreatingFile(false);
@@ -429,9 +429,9 @@ function FileContextMenu({
     const success = await workbenchStore.createFolder(newFolderPath);
 
     if (success) {
-      toast.success('Folder created successfully');
+      toast.success('Dossier créé');
     } else {
-      toast.error('Failed to create folder');
+      toast.error('Impossible de créer le dossier');
     }
 
     setIsCreatingFolder(false);
@@ -461,10 +461,10 @@ function FileContextMenu({
       if (success) {
         toast.success(`${isFolder ? 'Folder' : 'File'} deleted successfully`);
       } else {
-        toast.error(`Failed to delete ${isFolder ? 'folder' : 'file'}`);
+        toast.error(`Impossible de supprimer ${isFolder ? 'le dossier' : 'le fichier'}`);
       }
     } catch (error) {
-      toast.error(`Error deleting ${isFolder ? 'folder' : 'file'}`);
+      toast.error(`Erreur lors de la suppression ${isFolder ? 'du dossier' : 'du fichier'}`);
       logger.error(error);
     }
   };
@@ -574,19 +574,19 @@ function FileContextMenu({
               <ContextMenuItem onSelect={() => setIsCreatingFile(true)}>
                 <div className="flex items-center gap-2">
                   <div className="i-ph:file-plus" />
-                  New File
+                  Nouveau fichier
                 </div>
               </ContextMenuItem>
               <ContextMenuItem onSelect={() => setIsCreatingFolder(true)}>
                 <div className="flex items-center gap-2">
                   <div className="i-ph:folder-plus" />
-                  New Folder
+                  Nouveau dossier
                 </div>
               </ContextMenuItem>
             </ContextMenu.Group>
             <ContextMenu.Group className="p-1">
-              <ContextMenuItem onSelect={onCopyPath}>Copy path</ContextMenuItem>
-              <ContextMenuItem onSelect={onCopyRelativePath}>Copy relative path</ContextMenuItem>
+              <ContextMenuItem onSelect={onCopyPath}>Copier le chemin</ContextMenuItem>
+              <ContextMenuItem onSelect={onCopyRelativePath}>Copier le chemin relatif</ContextMenuItem>
             </ContextMenu.Group>
             {/* Add lock/unlock options for files and folders */}
             <ContextMenu.Group className="p-1 border-t-px border-solid border-bolt-elements-borderColor">
@@ -595,13 +595,13 @@ function FileContextMenu({
                   <ContextMenuItem onSelect={handleLockFile}>
                     <div className="flex items-center gap-2">
                       <div className="i-ph:lock-simple" />
-                      Lock File
+                      Verrouiller le fichier
                     </div>
                   </ContextMenuItem>
                   <ContextMenuItem onSelect={handleUnlockFile}>
                     <div className="flex items-center gap-2">
                       <div className="i-ph:lock-key-open" />
-                      Unlock File
+                      Déverrouiller le fichier
                     </div>
                   </ContextMenuItem>
                 </>
@@ -610,13 +610,13 @@ function FileContextMenu({
                   <ContextMenuItem onSelect={handleLockFolder}>
                     <div className="flex items-center gap-2">
                       <div className="i-ph:lock-simple" />
-                      Lock Folder
+                      Verrouiller le dossier
                     </div>
                   </ContextMenuItem>
                   <ContextMenuItem onSelect={handleUnlockFolder}>
                     <div className="flex items-center gap-2">
                       <div className="i-ph:lock-key-open" />
-                      Unlock Folder
+                      Déverrouiller le dossier
                     </div>
                   </ContextMenuItem>
                 </>
@@ -625,9 +625,9 @@ function FileContextMenu({
             {/* Add delete option in a new group */}
             <ContextMenu.Group className="p-1 border-t-px border-solid border-bolt-elements-borderColor">
               <ContextMenuItem onSelect={() => setIsDeleteDialogOpen(true)}>
-                <div className="flex items-center gap-2 text-red-500">
+                <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
                   <div className="i-ph:trash" />
-                  Delete {isFolder ? 'Folder' : 'File'}
+                  Supprimer {isFolder ? 'le dossier' : 'le fichier'}
                 </div>
               </ContextMenuItem>
             </ContextMenu.Group>
@@ -647,7 +647,7 @@ function FileContextMenu({
       {isCreatingFile && (
         <InlineInput
           depth={depth}
-          placeholder="Enter file name..."
+          placeholder="Saisir le nom du fichier…"
           onSubmit={handleCreateFile}
           onCancel={() => setIsCreatingFile(false)}
         />
@@ -655,7 +655,7 @@ function FileContextMenu({
       {isCreatingFolder && (
         <InlineInput
           depth={depth}
-          placeholder="Enter folder name..."
+          placeholder="Saisir le nom du dossier…"
           onSubmit={handleCreateFolder}
           onCancel={() => setIsCreatingFolder(false)}
         />
@@ -674,7 +674,7 @@ function Folder({ folder, collapsed, selected = false, onCopyPath, onCopyRelativ
         className={classNames('group', {
           'bg-transparent text-bolt-elements-item-contentDefault hover:text-bolt-elements-item-contentActive hover:bg-bolt-elements-item-backgroundActive':
             !selected,
-          'bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent': selected,
+          'bg-bolt-elements-item-backgroundAccent !text-accent-700': selected,
         })}
         depth={folder.depth}
         iconClasses={classNames({
@@ -687,7 +687,7 @@ function Folder({ folder, collapsed, selected = false, onCopyPath, onCopyRelativ
           <div className="flex-1 truncate pr-2">{folder.name}</div>
           {isLocked && (
             <span
-              className={classNames('shrink-0', 'i-ph:lock-simple scale-80 text-red-500')}
+              className={classNames('shrink-0', 'i-ph:lock-simple scale-80 text-red-700 dark:text-red-400')}
               title={'Folder is locked'}
             />
           )}
@@ -764,9 +764,8 @@ function File({
     <FileContextMenu onCopyPath={onCopyPath} onCopyRelativePath={onCopyRelativePath} fullPath={fullPath}>
       <NodeButton
         className={classNames('group', {
-          'bg-transparent hover:bg-bolt-elements-item-backgroundActive text-bolt-elements-item-contentDefault':
-            !selected,
-          'bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent': selected,
+          'bg-transparent hover:bg-bolt-elements-item-backgroundActive text-bolt-elements-textSecondary': !selected,
+          'bg-bolt-elements-item-backgroundAccent !text-accent-700': selected,
         })}
         depth={depth}
         iconClasses={classNames('i-ph:file-duotone scale-98', {
@@ -783,14 +782,14 @@ function File({
           <div className="flex items-center gap-1">
             {showStats && (
               <div className="flex items-center gap-1 text-xs">
-                {additions > 0 && <span className="text-green-500">+{additions}</span>}
-                {deletions > 0 && <span className="text-red-500">-{deletions}</span>}
+                {additions > 0 && <span className="text-green-700 dark:text-green-400">+{additions}</span>}
+                {deletions > 0 && <span className="text-red-700 dark:text-red-400">-{deletions}</span>}
               </div>
             )}
             {locked && (
               <span
-                className={classNames('shrink-0', 'i-ph:lock-simple scale-80 text-red-500')}
-                title={'File is locked'}
+                className={classNames('shrink-0', 'i-ph:lock-simple scale-80 text-red-700 dark:text-red-400')}
+                title={'Fichier verrouillé'}
               />
             )}
             {unsavedChanges && <span className="i-ph:circle-fill scale-68 shrink-0 text-orange-500" />}
@@ -813,7 +812,7 @@ function NodeButton({ depth, iconClasses, onClick, className, children }: Button
   return (
     <button
       className={classNames(
-        'flex items-center gap-1.5 w-full pr-2 border-2 border-transparent text-faded py-0.5',
+        'flex items-center gap-1.5 w-full pr-2 border-2 border-transparent text-bolt-elements-textSecondary py-0.5 min-h-11',
         className,
       )}
       style={{ paddingLeft: `${6 + depth * NODE_PADDING_LEFT}px` }}

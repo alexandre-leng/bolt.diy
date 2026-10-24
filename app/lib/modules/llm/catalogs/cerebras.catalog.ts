@@ -13,29 +13,41 @@
 export interface CatalogModel {
   /** Model id as the gateway expects it. */
   id: string;
+
   /** Human label, from models.dev. */
   label: string;
+
   /** Context window in tokens. */
   context: number;
+
   /** Maximum output tokens. */
   maxOutput: number;
+
   /** Wire protocol the gateway speaks for this model. */
   protocol: 'chat' | 'responses' | 'messages';
+
   /** True when the model refuses `thinking: disabled`. */
   thinkingOnly: boolean;
+
   /** True for text+image input. */
   vision: boolean;
+
   /** True when the model supports tool calls (required for the agent loop). */
   tools: boolean;
+
   /** USD per million tokens, shown in the settings screen. */
   costInput: number | null;
   costOutput: number | null;
+
   /** models.dev lifecycle status; 'deprecated' entries stay available but are marked. */
   status: string | null;
+
   /** Where the entry comes from. */
   source: 'models.dev' | 'override';
+
   /** False for a thinking-only model: it refuses `thinking: disabled` (a 400 when forced). */
   canDisable: boolean;
+
   /** Reasoning levels the model accepts, from models.dev (`reasoning_effort` values). */
   efforts: string[];
 }
@@ -44,8 +56,38 @@ export interface CatalogModel {
 export const CATALOG_GENERATED_AT = '2026-10-19';
 
 export const CEREBRAS_CATALOG: CatalogModel[] = [
-  { id: 'gpt-oss-120b', label: "GPT OSS 120B", context: 131072, maxOutput: 40960, protocol: 'responses', thinkingOnly: false, vision: false, tools: true, costInput: 0.35, costOutput: 0.75, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'medium', 'high'] },
-  { id: 'qwen-3.8-27b', label: "Qwen3.8 27B", context: 131072, maxOutput: 40960, protocol: 'chat', thinkingOnly: false, vision: true, tools: true, costInput: 0.99, costOutput: 1.49, status: null, source: 'models.dev', canDisable: true, efforts: ['none', 'low', 'medium', 'high'] },
+  {
+    id: 'gpt-oss-120b',
+    label: 'GPT OSS 120B',
+    context: 131072,
+    maxOutput: 40960,
+    protocol: 'responses',
+    thinkingOnly: false,
+    vision: false,
+    tools: true,
+    costInput: 0.35,
+    costOutput: 0.75,
+    status: null,
+    source: 'models.dev',
+    canDisable: true,
+    efforts: ['low', 'medium', 'high'],
+  },
+  {
+    id: 'qwen-3.8-27b',
+    label: 'Qwen3.8 27B',
+    context: 131072,
+    maxOutput: 40960,
+    protocol: 'chat',
+    thinkingOnly: false,
+    vision: true,
+    tools: true,
+    costInput: 0.99,
+    costOutput: 1.49,
+    status: null,
+    source: 'models.dev',
+    canDisable: true,
+    efforts: ['none', 'low', 'medium', 'high'],
+  },
 ];
 
 /** Protocol to use for a model, falling back to the id pattern for unknown ones. */

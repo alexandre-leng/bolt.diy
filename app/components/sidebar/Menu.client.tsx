@@ -30,7 +30,7 @@ import {
   type ChatHistoryItem,
   useChatHistory,
 } from '~/lib/persistence';
-import { migrateLocalHistoryToServer, markDeleted } from '~/lib/persistence/historySync';
+import { PULL_BATCH_SIZE, migrateLocalHistoryToServer, markDeleted, clearDeleted } from '~/lib/persistence/historySync';
 import { deleteHistory } from '~/lib/persistence/syncClient';
 import { chatStore } from '~/lib/stores/chat';
 import {
@@ -43,9 +43,11 @@ import {
   unpeekSidebar,
 } from '~/lib/stores/sidebar';
 import { toast } from '~/lib/toastify';
+import { cleanChatTitle } from '~/utils/chatTitle';
 import { classNames } from '~/utils/classNames';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger } from '~/utils/logger';
+import { restoreSettingsFocus } from '~/utils/restoreFocus';
 
 const logger = createScopedLogger('HistoryMenu');
 
@@ -76,6 +78,13 @@ const menuVariants = {
     },
   },
 } satisfies Variants;
+
+/*
+ * Delay before resuming a partial download of the server history. The batch applies at most
+ * `PULL_BATCH_SIZE` conversations per pass, so a large account fills in progressively instead of
+ * waiting on one long sync that can time out.
+ */
+const PULL_RETRY_DELAY_MS = 1500;
 
 type DialogContent =
   { type: 'delete'; item: ChatHistoryItem } | { type: 'bulkDelete'; items: ChatHistoryItem[] } | null;
@@ -128,6 +137,12 @@ export function syncableChatIds(items: ChatHistoryItem[]): string[] {
 export const Menu = () => {
   const { duplicateCurrentChat, exportChat } = useChatHistory({ loadHistory: false });
   const menuRef = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLElement | null>(null);
+  const settingsOpenerRef = useRef<HTMLElement | null>(null);
+  const cancelSettingsFocusRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => () => cancelSettingsFocusRef.current?.(), []);
+
   const [list, setList] = useState<ChatHistoryItem[]>([]);
 
   /*
@@ -136,9 +151,16 @@ export const Menu = () => {
    */
   const [syncState, setSyncState] = useState<'unknown' | 'syncing' | 'synced' | 'offline'>('unknown');
 
+  /* Server conversations still to download on this device; shown so "empty" is never a dead end. */
+  const [pendingPulls, setPendingPulls] = useState(0);
+  const pendingPullsRef = useRef(0);
+
+  /* `loadEntries` is defined below and the retry timer needs the latest one. */
+  const loadEntriesRef = useRef<() => void>(() => undefined);
+
   /*
    * Sidebar visibility lives in a shared store (not useState) so the toggle
-   * icon in the header — a sibling component — can drive it. Touch devices
+   * icon in the header : a sibling component : can drive it. Touch devices
    * start collapsed: on a phone the 340px panel would cover the whole chat.
    */
   const open = useStore(sidebarOpenStore);
@@ -177,31 +199,49 @@ export const Menu = () => {
     /*
      * Local cache first so the list renders immediately, then reconcile with bolt-history:
      * a conversation started on another device exists only on the server. Failures are
-     * silent by design — an unreachable server must not empty a list the user can see.
+     * silent by design : an unreachable server must not empty a list the user can see.
      */
     setSyncState('syncing');
+    setPendingPulls(pendingPullsRef.current);
 
     getAll(database)
       .then((all) => {
         /*
-         * The list shows the presentable chats; the migration gets every cached id — see
+         * The list shows the presentable chats; the migration gets every cached id : see
          * `syncableChatIds` for why those two sets must not be the same.
          */
         setList(listableChats(all));
 
         // setList returns void, so keep the list in scope rather than chaining it through.
-        return migrateLocalHistoryToServer(database, syncableChatIds(all)).then((result) => {
-          setSyncState(result.offline ? 'offline' : 'synced');
+        return migrateLocalHistoryToServer(database, syncableChatIds(all), { batchSize: PULL_BATCH_SIZE }).then(
+          (result) => {
+            setSyncState(result.offline ? 'offline' : 'synced');
 
-          if (result.pulled > 0 || result.pushed > 0) {
-            // Chats arrived from the server, or a local one got its urlId: re-read.
-            void getAll(database).then((list) => setList(listableChats(list)));
-          }
+            if (result.pulled > 0 || result.pushed > 0) {
+              // Chats arrived from the server, or a local one got its urlId: re-read.
+              void getAll(database).then((list) => setList(listableChats(list)));
+            }
 
-          if (result.offline) {
-            logger.debug('history sync offline; showing the local cache only');
-          }
-        });
+            /*
+             * The server holds conversations this device still lacks, and the next pass continues
+             * from them. Without this loop a large account stayed on "Aucune conversation": the
+             * first pass pulled a few, and the ones that missed the download window were retried
+             * only on the next visit.
+             */
+            if (result.pending.length > 0 && !result.offline) {
+              pendingPullsRef.current = result.pending.length;
+              window.setTimeout(() => loadEntriesRef.current(), PULL_RETRY_DELAY_MS);
+            } else {
+              pendingPullsRef.current = 0;
+            }
+
+            setPendingPulls(pendingPullsRef.current);
+
+            if (result.offline) {
+              logger.debug('history sync offline; showing the local cache only');
+            }
+          },
+        );
       })
       .catch((error) => {
         setSyncState('offline');
@@ -209,10 +249,18 @@ export const Menu = () => {
       });
   }, []);
 
+  /*
+   * `loadEntries` is re-created when its dependencies change; the retry timer must always call
+   * the current one, so it is parked in a ref rather than captured by the timeout.
+   */
+  useEffect(() => {
+    loadEntriesRef.current = loadEntries;
+  }, [loadEntries]);
+
   const deleteChat = useCallback(
     async (id: string): Promise<void> => {
       if (!db) {
-        throw new Error('Database not available');
+        throw new Error('Base de données indisponible');
       }
 
       /*
@@ -221,7 +269,7 @@ export const Menu = () => {
        * Order matters. This function used to only wipe IndexedDB, and the very next
        * `loadEntries()` called `migrateLocalHistoryToServer`, which still saw the chat on
        * the server, counted it as "pulled" and wrote it straight back into the local
-       * cache — the conversation reappeared a second after being deleted. The server is
+       * cache : the conversation reappeared a second after being deleted. The server is
        * the source of truth across devices, so it has to be purged for the deletion to
        * stick. Purging the server first also means a failure there aborts before the
        * local copy is gone, so the user never ends up with a half-deleted chat.
@@ -247,10 +295,13 @@ export const Menu = () => {
 
       let serverConfirmed = false;
 
+      // Tombstone the chat before the writes, so a batch stopping halfway leaves no resurrected row.
+      markDeleted(id, urlId);
+
       for (const serverId of serverIds) {
         const serverResult = await deleteHistory(serverId);
 
-        // 404: the server never had (or already dropped) this key — the outcome we want.
+        // 404: the server never had (or already dropped) this key, the outcome we want.
         if (serverResult.ok || isNotFound(serverResult)) {
           serverConfirmed = true;
           break;
@@ -265,15 +316,9 @@ export const Menu = () => {
        * devices, all under a "deleted" success toast.
        */
       if (!serverConfirmed) {
+        clearDeleted(id, urlId);
         throw new Error('Le serveur n’a pas confirmé la suppression.');
       }
-
-      /*
-       * Record the deletion BEFORE the list refresh. `loadEntries` runs a sync that would
-       * otherwise pull the chat back from a server response that raced this DELETE, or
-       * re-push it from a cache read taken before the wipe below.
-       */
-      markDeleted(id, urlId);
 
       // Delete chat snapshot from localStorage
       try {
@@ -323,7 +368,7 @@ export const Menu = () => {
           }
         })
         .catch((error) => {
-          console.error('Failed to delete chat:', error);
+          console.error('Échec de la suppression de la conversation :', error);
           toast.error('Échec de la suppression : la conversation est conservée. Réessayez plus tard.', {
             position: 'bottom-right',
             autoClose: 5000,
@@ -428,7 +473,7 @@ export const Menu = () => {
     const selectedChats = list.filter((item) => selectedItems.includes(item.id));
 
     if (selectedChats.length === 0) {
-      toast.error('Could not find selected chats');
+      toast.error('Impossible de trouver les conversations sélectionnées');
       return;
     }
 
@@ -470,8 +515,8 @@ export const Menu = () => {
   }, [loadEntries]);
 
   /*
-   * `loadEntries` returns early while `db` is still undefined — the database opens
-   * asynchronously — so the mount-time call above usually does nothing, and nothing ever
+   * `loadEntries` returns early while `db` is still undefined : the database opens
+   * asynchronously : so the mount-time call above usually does nothing, and nothing ever
    * retried it: the sync simply never ran, so local conversations never reached the server
    * and server conversations never appeared. Re-run when the database becomes available.
    */
@@ -552,6 +597,7 @@ export const Menu = () => {
 
   useEffect(() => {
     const handleOpenGitHubSettings = () => {
+      settingsOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setSettingsInitialTab('github');
       setIsSettingsOpen(true);
       unpeekSidebar();
@@ -559,6 +605,7 @@ export const Menu = () => {
 
     // Mobile bottom navigation's Settings tab.
     const handleOpenSettings = (event: Event) => {
+      settingsOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setSettingsInitialTab((event as CustomEvent<{ tab?: string }>).detail?.tab);
       setIsSettingsOpen(true);
       unpeekSidebar();
@@ -579,13 +626,46 @@ export const Menu = () => {
   };
 
   const handleSettingsClick = () => {
+    settingsOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setIsSettingsOpen(true);
     unpeekSidebar();
   };
 
+  useEffect(() => {
+    if (open) {
+      const handleEscape = (event: KeyboardEvent) => {
+        if (event.key !== 'Escape') {
+          return;
+        }
+
+        event.preventDefault();
+        closeSidebar();
+        requestAnimationFrame(() => toggleRef.current?.focus());
+      };
+
+      document.addEventListener('keydown', handleEscape);
+
+      return () => {
+        document.removeEventListener('keydown', handleEscape);
+      };
+    }
+
+    return undefined;
+  }, [open]);
+
   const handleSettingsClose = () => {
     setIsSettingsOpen(false);
     setSettingsInitialTab(undefined);
+
+    /*
+     * A08: `requestAnimationFrame(() => opener.focus())` left focus on <body> at every width.
+     * The opener is gone (phone: the bottom navigation unmounts while the dialog is open) or
+     * hidden (desktop: opening the dialog closes the side panel), and `focus()` on either is a
+     * silent no-op. Try the opener, then its remounted equivalent, then the header toggle,
+     * verifying each attempt and retrying for a few frames while the close is committed.
+     */
+    cancelSettingsFocusRef.current?.();
+    cancelSettingsFocusRef.current = restoreSettingsFocus(settingsOpenerRef.current);
 
     /*
      * Tell the /settings route the panel is gone. That route only exists to keep a URL working;
@@ -602,20 +682,34 @@ export const Menu = () => {
 
   return (
     <>
-      {/* Full screen on phones (Lovable's Projects tab), a 340px panel from 768px. */}
+      {/* Panneau Projets: ouvert */}
       <motion.div
         ref={menuRef}
         id="sidebar-panel"
+        role={typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches ? 'dialog' : 'region'}
+        aria-modal={typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches ? true : undefined}
+        aria-label="Projets"
+        tabIndex={-1}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && sidebarOpenStore.get()) {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleRef.current = document.querySelector('[data-testid="sidebar-toggle"]');
+            closeSidebar();
+            requestAnimationFrame(() => toggleRef.current?.focus());
+          }
+        }}
         data-settings-open={isSettingsOpen ? 'true' : 'false'}
         initial="closed"
         animate={open ? 'open' : 'closed'}
         variants={menuVariants}
         className={classNames(
-          'flex selection-accent flex-col side-menu fixed top-0 h-full w-screen md:w-[340px] md:rounded-r-2xl',
+          'flex selection-accent flex-col side-menu fixed top-[var(--header-height)] h-[calc(100dvh-var(--header-height))] w-screen md:w-[340px] md:rounded-r-2xl',
           'bg-bolt-elements-background-depth-1 border-r border-bolt-elements-borderColor',
           'shadow-sm text-sm',
           isSettingsOpen ? 'z-40' : 'z-sidebar',
         )}
+        style={{ top: 'var(--header-height)', height: 'calc(100dvh - var(--header-height))' }}
       >
         {/*
          * Panel header. It holds only the help and account controls: the close button that used
@@ -646,7 +740,7 @@ export const Menu = () => {
                 className={classNames(
                   'flex gap-1 items-center rounded-lg px-3 py-2 transition-colors',
                   selectionMode
-                    ? 'bg-accent-500 text-white'
+                    ? '!bg-accent-700 !text-white'
                     : 'bg-transparent border border-bolt-elements-borderColor text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary',
                 )}
                 aria-label={selectionMode ? 'Quitter la sélection' : 'Sélectionner des conversations'}
@@ -677,7 +771,7 @@ export const Menu = () => {
               {syncState === 'offline' && (
                 <span
                   data-testid="history-sync-offline"
-                  title="Historique local uniquement — le serveur est injoignable"
+                  title="Historique local uniquement : le serveur est injoignable"
                   className="flex items-center gap-1 rounded-full border border-amber-500/40 px-2 py-0.5 text-[11px] text-amber-600 dark:text-amber-400"
                 >
                   <span className="i-ph:cloud-slash text-xs" aria-hidden="true" />
@@ -691,6 +785,14 @@ export const Menu = () => {
                   className="i-ph:cloud-arrow-up animate-pulse text-sm text-bolt-elements-textTertiary"
                   aria-hidden="true"
                 />
+              )}
+              {pendingPulls > 0 && (
+                <span
+                  data-testid="history-sync-pending"
+                  className="rounded-full border border-bolt-elements-borderColor px-2 py-0.5 text-[11px] text-bolt-elements-textTertiary"
+                >
+                  {pendingPulls} en cours de téléchargement
+                </span>
               )}
             </div>
             {selectionMode && (
@@ -712,7 +814,27 @@ export const Menu = () => {
           <div className="flex-1 overflow-auto modern-scrollbar px-3 pb-3">
             {filteredList.length === 0 && (
               <div className="px-4 text-gray-500 dark:text-gray-400 text-sm">
-                {list.length === 0 ? 'Aucune conversation' : 'Aucun résultat'}
+                {list.length === 0 ? (
+                  syncState === 'offline' ? (
+                    <span role="status">Aucune conversation en local, historique hors ligne</span>
+                  ) : syncState === 'syncing' || pendingPulls > 0 ? (
+                    <span role="status">Chargement de vos conversations…</span>
+                  ) : syncState === 'unknown' ? null : (
+                    <div className="space-y-2">
+                      <p>Aucun projet pour l'instant.</p>
+                      <p>Décrivez une application sur l’accueil pour commencer.</p>
+                      <a
+                        href="/"
+                        className="inline-flex items-center gap-2 rounded-lg !bg-accent-700 px-3 py-2 !text-white hover:!bg-accent-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500"
+                      >
+                        <span className="i-ph:plus" aria-hidden="true" />
+                        Nouveau projet
+                      </a>
+                    </div>
+                  )
+                ) : (
+                  'Aucun résultat'
+                )}
               </div>
             )}
             {/* onOpenChange: Radix closes on Escape (and Android back) only through it. */}
@@ -759,7 +881,7 @@ export const Menu = () => {
                         <p>
                           Vous allez supprimer{' '}
                           <span className="font-medium text-bolt-elements-textPrimary">
-                            {dialogContent.item.description}
+                            {cleanChatTitle(dialogContent.item.description)}
                           </span>
                         </p>
                         <p className="mt-2">Cette action est définitive sur tous vos appareils.</p>
@@ -797,7 +919,9 @@ export const Menu = () => {
                           <ul className="list-disc pl-5 space-y-1">
                             {dialogContent.items.map((item) => (
                               <li key={item.id} className="text-sm">
-                                <span className="font-medium text-bolt-elements-textPrimary">{item.description}</span>
+                                <span className="font-medium text-bolt-elements-textPrimary">
+                                  {cleanChatTitle(item.description)}
+                                </span>
                               </li>
                             ))}
                           </ul>
@@ -817,7 +941,7 @@ export const Menu = () => {
                            *
                            * The selection can shrink while the dialog is open (a chat is deleted
                            * elsewhere, or a sync removes it), which would make the confirm button
-                           * delete fewer — or, as here, the user deselects an item after opening
+                           * delete fewer : or, as here, the user deselects an item after opening
                            * the dialog and the count on screen no longer matches what gets
                            * deleted. Deriving the ids from `dialogContent.items` makes the action
                            * match the confirmation the user read.

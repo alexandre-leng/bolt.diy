@@ -13,29 +13,41 @@
 export interface CatalogModel {
   /** Model id as the gateway expects it. */
   id: string;
+
   /** Human label, from models.dev. */
   label: string;
+
   /** Context window in tokens. */
   context: number;
+
   /** Maximum output tokens. */
   maxOutput: number;
+
   /** Wire protocol the gateway speaks for this model. */
   protocol: 'chat' | 'responses' | 'messages';
+
   /** True when the model refuses `thinking: disabled`. */
   thinkingOnly: boolean;
+
   /** True for text+image input. */
   vision: boolean;
+
   /** True when the model supports tool calls (required for the agent loop). */
   tools: boolean;
+
   /** USD per million tokens, shown in the settings screen. */
   costInput: number | null;
   costOutput: number | null;
+
   /** models.dev lifecycle status; 'deprecated' entries stay available but are marked. */
   status: string | null;
+
   /** Where the entry comes from. */
   source: 'models.dev' | 'override';
+
   /** False for a thinking-only model: it refuses `thinking: disabled` (a 400 when forced). */
   canDisable: boolean;
+
   /** Reasoning levels the model accepts, from models.dev (`reasoning_effort` values). */
   efforts: string[];
 }
@@ -44,10 +56,70 @@ export interface CatalogModel {
 export const CATALOG_GENERATED_AT = '2026-10-19';
 
 export const DEEPSEEK_CATALOG: CatalogModel[] = [
-  { id: 'deepseek-flash', label: "DeepSeek V4.1 Flash 1017", context: 1000000, maxOutput: 393216, protocol: 'chat', thinkingOnly: false, vision: true, tools: true, costInput: 0.15, costOutput: 0.6, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'high', 'max'] },
-  { id: 'deepseek-v4-flash', label: "DeepSeek V4 Flash", context: 1000000, maxOutput: 393216, protocol: 'chat', thinkingOnly: false, vision: true, tools: true, costInput: 0.15, costOutput: 0.6, status: 'deprecated', source: 'models.dev', canDisable: true, efforts: ['low', 'high', 'max'] },
-  { id: 'deepseek-v4-flash-vision-exp', label: "DeepSeek V4 Flash Vision Exp", context: 1000000, maxOutput: 393216, protocol: 'chat', thinkingOnly: false, vision: true, tools: true, costInput: 0.15, costOutput: 0.6, status: 'deprecated', source: 'models.dev', canDisable: true, efforts: ['low', 'high', 'max'] },
-  { id: 'deepseek-v4-pro', label: "DeepSeek V4 Pro", context: 1000000, maxOutput: 393216, protocol: 'chat', thinkingOnly: false, vision: false, tools: true, costInput: 0.66, costOutput: 1.98, status: null, source: 'models.dev', canDisable: true, efforts: ['low', 'high', 'max'] },
+  {
+    id: 'deepseek-flash',
+    label: 'DeepSeek V4.1 Flash 1017',
+    context: 1000000,
+    maxOutput: 393216,
+    protocol: 'chat',
+    thinkingOnly: false,
+    vision: true,
+    tools: true,
+    costInput: 0.15,
+    costOutput: 0.6,
+    status: null,
+    source: 'models.dev',
+    canDisable: true,
+    efforts: ['low', 'high', 'max'],
+  },
+  {
+    id: 'deepseek-v4-flash',
+    label: 'DeepSeek V4 Flash',
+    context: 1000000,
+    maxOutput: 393216,
+    protocol: 'chat',
+    thinkingOnly: false,
+    vision: true,
+    tools: true,
+    costInput: 0.15,
+    costOutput: 0.6,
+    status: 'deprecated',
+    source: 'models.dev',
+    canDisable: true,
+    efforts: ['low', 'high', 'max'],
+  },
+  {
+    id: 'deepseek-v4-flash-vision-exp',
+    label: 'DeepSeek V4 Flash Vision Exp',
+    context: 1000000,
+    maxOutput: 393216,
+    protocol: 'chat',
+    thinkingOnly: false,
+    vision: true,
+    tools: true,
+    costInput: 0.15,
+    costOutput: 0.6,
+    status: 'deprecated',
+    source: 'models.dev',
+    canDisable: true,
+    efforts: ['low', 'high', 'max'],
+  },
+  {
+    id: 'deepseek-v4-pro',
+    label: 'DeepSeek V4 Pro',
+    context: 1000000,
+    maxOutput: 393216,
+    protocol: 'chat',
+    thinkingOnly: false,
+    vision: false,
+    tools: true,
+    costInput: 0.66,
+    costOutput: 1.98,
+    status: null,
+    source: 'models.dev',
+    canDisable: true,
+    efforts: ['low', 'high', 'max'],
+  },
 ];
 
 /** Protocol to use for a model, falling back to the id pattern for unknown ones. */

@@ -38,6 +38,26 @@ $zIndexMax: 999;
   z-index: 2;
 }
 
+/*
+ * "Aller au dernier message" is chrome, anchored just above the composer's reserved band, in its
+ * own layer: it must never slide under the fixed composer (which is what `sticky bottom-0` inside
+ * the scrolling transcript did) and must never cover it either.
+ */
+.bolt-scroll-to-bottom {
+  position: fixed;
+  bottom: calc(var(--composer-space, 9.5rem) + 0.5rem);
+  left: calc(var(--chat-fixed-left, 0px) + 1.5rem);
+  width: calc(var(--chat-fixed-width, 100vw) - 3rem);
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 4;
+
+  > button {
+    pointer-events: auto;
+  }
+}
+
 .z-workbench {
   z-index: 3;
 }

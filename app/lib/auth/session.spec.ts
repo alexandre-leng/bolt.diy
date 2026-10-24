@@ -20,6 +20,22 @@ describe('fetchSession', () => {
 
   const user = { id: 'u1', email: 'alexandre@lengereau.fr', emailVerified: true, isAdmin: true };
 
+  it('deduplicates concurrent /api/auth/me reads', async () => {
+    let resolveResponse: ((response: Response) => void) | undefined;
+    mockFetch(
+      () =>
+        new Promise((resolve) => {
+          resolveResponse = resolve;
+        }),
+    );
+
+    const first = fetchSession();
+    const second = fetchSession();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    resolveResponse?.(new Response(JSON.stringify({ ok: true, user }), { status: 200 }));
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+  });
+
   it('reads the signed-in account from /api/auth/me', async () => {
     mockFetch(async () => new Response(JSON.stringify({ ok: true, user }), { status: 200 }));
 

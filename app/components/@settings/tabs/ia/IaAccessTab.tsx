@@ -16,7 +16,6 @@ import { classNames } from '~/utils/classNames';
  */
 
 interface PolicyPayload {
-  managedMode: boolean;
   defaultModel: { provider: string; model: string };
   effortPolicy: 'free' | 'auto-only';
   allowedProviders: string[];
@@ -26,7 +25,6 @@ interface PolicyPayload {
 }
 
 const EMPTY: PolicyPayload = {
-  managedMode: false,
   defaultModel: { provider: '', model: '' },
   effortPolicy: 'free',
   allowedProviders: [],
@@ -87,10 +85,17 @@ export function IaAccessTab() {
 
   const current = policy ?? EMPTY;
 
-  /* Without a policy every provider the app ships is usable: say so, do not show an empty list. */
-  const openProviders = current.managedMode
-    ? current.allowedProviders
-    : [...new Set([...current.allowedProviders, ...Object.keys(current.providers), ...current.userKeyProviders])];
+  /*
+   * A written policy is the instance rule and it is exhaustive; no policy means every provider
+   * the deployment ships is in play. The endpoint already resolves `allowedProviders` that way,
+   * so an empty list here only happens when nothing is configured at all.
+   */
+  const openProviders =
+    current.allowedProviders.length > 0
+      ? current.allowedProviders
+      : [...new Set([...Object.keys(current.providers), ...current.userKeyProviders])];
+
+  const restricted = current.allowedProviders.length > 0;
 
   const stateOf = (name: string): State => {
     const managed = current.providers[name] === true;
@@ -109,7 +114,7 @@ export function IaAccessTab() {
       };
     }
 
-    if (current.allowedProviders.includes(name) || !current.managedMode) {
+    if (!restricted || current.allowedProviders.includes(name)) {
       return {
         kind: 'locked',
         detail: 'Aucune clé configurée pour ce fournisseur. Demandez à l’administrateur de l’ouvrir.',
@@ -133,16 +138,16 @@ export function IaAccessTab() {
           <span
             className={classNames(
               'rounded px-1.5 py-0.5 text-[11px] font-medium',
-              current.managedMode
+              restricted
                 ? 'bg-accent-500/15 text-bolt-elements-textPrimary'
                 : 'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary',
             )}
           >
-            {current.managedMode ? 'géré par l’administrateur' : 'configuration libre'}
+            {restricted ? 'géré par l’administrateur' : 'configuration libre'}
           </span>
         </div>
         <p className="mt-1 text-xs text-bolt-elements-textSecondary">
-          {current.managedMode
+          {restricted
             ? 'Les modèles sont configurés pour vous. Vous choisissez parmi ceux qui sont autorisés, et vous ne manipulez aucune clé.'
             : 'Aucune restriction n’est active : les fournisseurs disponibles dépendent des clés configurées sur cette instance.'}
         </p>

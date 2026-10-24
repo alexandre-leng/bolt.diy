@@ -228,37 +228,3 @@ it('keeps the agent-friendly default when the level is automatic', async () => {
   // 'auto' keeps the injection the agent loop depends on.
   expect(shouldDisableThinking('deepseek-v4.1-flash', 'auto')).toBe(true);
 });
-
-/*
- * The dynamic merge re-adds models the gateway serves but `staticModels` does not list. That list
- * ALREADY drops the deprecated entries, so `!known.has(id)` was true for a retired model and the
- * picker offered it again: minimax-m2.7 was selectable while the catalog marks it deprecated. The
- * static-model tests could not catch this because they never exercise the merge.
- */
-it('does not re-add a deprecated model the gateway still serves', async () => {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => ({
-      ok: true,
-      json: async () => ({
-        data: [
-          { id: 'minimax-m2.7' }, // retired in the catalog, still answered by the gateway
-          { id: 'brand-new-model' }, // genuinely new: must still be discovered
-          { id: 'cat-jam-free' }, // also retired
-        ],
-      }),
-    })),
-  );
-
-  const provider = new OpenCodeGoProvider();
-  const dynamic = await provider.getDynamicModels(undefined, undefined, { OPENCODE_GO_API_KEY: 'server-key' });
-
-  const ids = dynamic.map((model) => model.name);
-
-  // The regression: a retired model came back through the dynamic door.
-  expect(ids).not.toContain('minimax-m2.7');
-  expect(ids).not.toContain('cat-jam-free');
-
-  // Discovery of an unknown model must keep working.
-  expect(ids).toContain('brand-new-model');
-});

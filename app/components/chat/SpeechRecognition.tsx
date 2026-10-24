@@ -153,7 +153,7 @@ export const DictationStatus = ({
       />
       {isTranscribing
         ? 'Transcription de l’enregistrement…'
-        : `Dictée en cours (${languageLabel}) — parlez, puis cliquez à nouveau pour transcrire.`}
+        : `Dictée en cours (${languageLabel}) : parlez, puis cliquez à nouveau pour transcrire.`}
     </div>
   );
 };

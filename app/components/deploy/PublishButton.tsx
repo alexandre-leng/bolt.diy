@@ -192,6 +192,8 @@ export function PublishButton() {
     }
   };
 
+  const publishLabel = restoring ? 'Restauration…' : state.status === 'publishing' ? 'Publication…' : 'Publier';
+
   return (
     <div className="flex items-center gap-2">
       <button
@@ -200,6 +202,7 @@ export function PublishButton() {
         onClick={publish}
         disabled={!hasFiles || state.status === 'publishing'}
         title={restoring ? 'Restauration du projet en cours…' : undefined}
+        aria-label={publishLabel}
         className={classNames(
           'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium',
           'bolt-primary-button hover:opacity-90',
@@ -217,7 +220,8 @@ export function PublishButton() {
           }
           aria-hidden="true"
         />
-        {restoring ? 'Restauration…' : state.status === 'publishing' ? 'Publication…' : 'Publier'}
+        {/* Icon-only below `sm`: the 390 px header cannot hold every labelled control. */}
+        <span className="hidden sm:inline">{publishLabel}</span>
       </button>
 
       {state.status === 'done' && (
@@ -226,9 +230,12 @@ export function PublishButton() {
           target="_blank"
           rel="noreferrer"
           data-testid="publish-link"
-          className="flex items-center gap-1 rounded-md border border-bolt-elements-borderColor px-2.5 py-1.5 text-xs text-bolt-elements-textPrimary hover:bg-bolt-elements-item-backgroundActive"
+          aria-label="Voir le site en ligne"
+          title="Voir le site en ligne"
+          className="flex shrink-0 items-center gap-1 rounded-md border border-bolt-elements-borderColor px-2.5 py-1.5 text-xs text-bolt-elements-textPrimary hover:bg-bolt-elements-item-backgroundActive"
         >
-          En ligne <span className="i-ph:arrow-square-out" aria-hidden="true" />
+          <span className="hidden sm:inline">En ligne</span>
+          <span className="i-ph:arrow-square-out" aria-hidden="true" />
         </a>
       )}
 
@@ -238,9 +245,16 @@ export function PublishButton() {
        */}
       {state.status === 'error' && (
         <span className="flex items-center gap-1 min-w-0 max-w-[40vw]">
+          {/* Phones: an icon carrying the message, the 390 px header has no room for the text. */}
+          <span
+            role="img"
+            aria-label={state.message}
+            title={state.message}
+            className="sm:hidden i-ph:warning-circle shrink-0 text-base text-red-500"
+          />
           <span
             data-testid="publish-error"
-            className="truncate text-xs text-red-500"
+            className="hidden sm:block truncate text-xs text-red-500"
             title={state.log ? `${state.message}\n${state.log}` : state.message}
           >
             {state.message}

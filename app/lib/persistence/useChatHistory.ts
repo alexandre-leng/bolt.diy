@@ -30,6 +30,7 @@ import {
   setSnapshot,
   type IChatMetadata,
 } from './db';
+import { detectDebugScope } from './debugChat';
 import { pushChat, reconcileChat } from './historySync';
 import { createMessage, getMessageAnnotations, getMessageText, hasMessageFlag, type AnyPart } from './messageMigration';
 import { buildAgentReplayMessage } from './restoreArtifacts';
@@ -103,9 +104,16 @@ function stripRewindParam() {
 }
 
 /** A readable name for a chat no artifact ever titled (Agent mode, discussion). */
-function fallbackDescription(messages: UIMessage[]): string | undefined {
+export function fallbackDescription(messages: UIMessage[]): string | undefined {
   const firstPrompt = messages.find((message) => message.role === 'user');
-  const text = firstPrompt ? getMessageText(firstPrompt).replace(/\s+/g, ' ').trim() : '';
+
+  const text = firstPrompt
+    ? getMessageText(firstPrompt)
+        .replace(/^\s*\[Model: [^\]]*\]\s*\[Provider: [^\]]*\]\s*/i, '')
+        .replace(/^\s*\[Model: [^\]]*\]\s*\n\s*\[Provider: [^\]]*\]\s*/i, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+    : '';
 
   if (!text) {
     return undefined;
@@ -138,7 +146,28 @@ function createAgentReplayMessage(files: Record<string, string>, commandActions 
     UIMessage | undefined;
 }
 
-export const db = persistenceEnabled ? await openDatabase() : undefined;
+const databasePromise = (async () => {
+  if (!persistenceEnabled) {
+    return undefined;
+  }
+
+  let ownerId = 'anonymous';
+
+  try {
+    const { fetchSession } = await import('~/lib/auth/session');
+    const session = await fetchSession();
+
+    if (session.authenticated && session.user?.id) {
+      ownerId = session.user.id;
+    }
+  } catch {
+    // Keep unauthenticated/offline storage isolated from authenticated accounts.
+  }
+
+  return openDatabase(ownerId);
+})();
+
+export const db = await databasePromise;
 
 export const chatId = atom<string | undefined>(undefined);
 export const description = atom<string | undefined>(undefined);
@@ -993,6 +1022,16 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
     ready,
     initialMessages,
     chatChanged,
+
+    /**
+     * Whether the conversation now open is a debug session.
+     *
+     * Read from the stored messages rather than from the live stream: a chat that is still
+     * unsaved has no `initialMessages` at all, and it is precisely the one a debug run creates
+     * — that case is covered by the marker written at save time (see `storeMessageHistory`).
+     * See `detectDebugScope` for the (deliberately narrow) rule.
+     */
+    debugScope: detectDebugScope(initialMessages),
     updateChatMestaData: async (metadata: IChatMetadata) => {
       const id = chatId.get();
 
@@ -1033,6 +1072,17 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
 
         if (messages.length === 0) {
           return;
+        }
+
+        /*
+         * Keep the debug marker on the record even when the chat was created before the
+         * marker existed, or by a path that did not go through createChatFromMessages.
+         * Computed here, once per save, from the messages being saved.
+         */
+        const debugScope = detectDebugScope(messages);
+
+        if (debugScope && !chatMetadata.get()?.debugScope) {
+          chatMetadata.set({ gitUrl: '', ...chatMetadata.get(), debugScope });
         }
 
         streamingRef.current = isStreaming;
@@ -1299,7 +1349,7 @@ export function useChatHistory({ loadHistory = true }: { loadHistory?: boolean }
       }
 
       try {
-        const newId = await duplicateChat(db, mixedId || listItemId);
+        const newId = await duplicateChat(db, listItemId || mixedId!);
         navigate(`/chat/${newId}`);
         toast.success('Chat duplicated successfully');
       } catch (error) {

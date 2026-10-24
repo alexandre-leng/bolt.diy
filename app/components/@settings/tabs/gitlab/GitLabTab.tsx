@@ -41,7 +41,7 @@ export default function GitLabTab() {
     if (!connection?.user) {
       setConnectionTest({
         status: 'error',
-        message: 'No connection established',
+        message: 'Aucune connexion établie',
         timestamp: Date.now(),
       });
       return;
@@ -49,7 +49,7 @@ export default function GitLabTab() {
 
     setConnectionTest({
       status: 'testing',
-      message: 'Testing connection...',
+      message: 'Test de la connexion…',
     });
 
     try {
@@ -58,20 +58,20 @@ export default function GitLabTab() {
       if (isValid) {
         setConnectionTest({
           status: 'success',
-          message: `Connected successfully as ${connection.user.username}`,
+          message: `Connecté avec succès en tant que ${connection.user.username}`,
           timestamp: Date.now(),
         });
       } else {
         setConnectionTest({
           status: 'error',
-          message: 'Connection test failed',
+          message: 'Échec du test de connexion',
           timestamp: Date.now(),
         });
       }
     } catch (error) {
       setConnectionTest({
         status: 'error',
-        message: `Connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        message: `Échec de la connexion : ${error instanceof Error ? error.message : 'Erreur inconnue'}`,
         timestamp: Date.now(),
       });
     }
@@ -83,12 +83,12 @@ export default function GitLabTab() {
       <div className="space-y-6">
         <div className="flex items-center gap-2">
           <GitLabLogo />
-          <h2 className="text-lg font-medium text-bolt-elements-textPrimary">GitLab Integration</h2>
+          <h2 className="text-lg font-medium text-bolt-elements-textPrimary">Intégration GitLab</h2>
         </div>
         <div className="flex items-center justify-center p-4">
           <div className="flex items-center gap-2">
             <div className="i-ph:spinner-gap-bold animate-spin w-4 h-4" />
-            <span className="text-bolt-elements-textSecondary">Loading...</span>
+            <span className="text-bolt-elements-textSecondary">Chargement…</span>
           </div>
         </div>
       </div>
@@ -101,7 +101,7 @@ export default function GitLabTab() {
       <div className="space-y-6">
         <div className="flex items-center gap-2">
           <GitLabLogo />
-          <h2 className="text-lg font-medium text-bolt-elements-textPrimary">GitLab Integration</h2>
+          <h2 className="text-lg font-medium text-bolt-elements-textPrimary">Intégration GitLab</h2>
         </div>
         <div className="text-sm text-red-600 dark:text-red-400 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
           {error}
@@ -116,11 +116,11 @@ export default function GitLabTab() {
       <div className="space-y-6">
         <div className="flex items-center gap-2">
           <GitLabLogo />
-          <h2 className="text-lg font-medium text-bolt-elements-textPrimary">GitLab Integration</h2>
+          <h2 className="text-lg font-medium text-bolt-elements-textPrimary">Intégration GitLab</h2>
         </div>
         <p className="text-sm text-bolt-elements-textSecondary">
-          Connect your GitLab account to enable advanced repository management features, statistics, and seamless
-          integration.
+          Connectez votre compte GitLab pour activer la gestion avancée des dépôts, les statistiques et une intégration
+          transparente.
         </p>
         <GitLabConnection
           connectionTest={connectionTest}
@@ -132,8 +132,8 @@ export default function GitLabTab() {
           actions={[
             {
               id: 'read_projects',
-              name: 'Read projects and statistics',
-              description: 'Fetch GitLab projects and account statistics.',
+              name: 'Lire les projets et les statistiques',
+              description: 'Récupère les projets GitLab et les statistiques du compte.',
             },
           ]}
         />
@@ -153,7 +153,7 @@ export default function GitLabTab() {
         <div className="flex items-center gap-2">
           <GitLabLogo />
           <h2 className="text-lg font-medium text-bolt-elements-textPrimary dark:text-bolt-elements-textPrimary">
-            GitLab Integration
+            Intégration GitLab
           </h2>
         </div>
         <div className="flex items-center gap-2">
@@ -169,7 +169,7 @@ export default function GitLabTab() {
       </motion.div>
 
       <p className="text-sm text-bolt-elements-textSecondary dark:text-bolt-elements-textSecondary">
-        Manage your GitLab integration with advanced repository features and comprehensive statistics
+        Gérez votre intégration GitLab avec des fonctionnalités avancées pour vos dépôts et des statistiques complètes
       </p>
 
       <ConnectorActionPermissions
@@ -177,8 +177,8 @@ export default function GitLabTab() {
         actions={[
           {
             id: 'read_projects',
-            name: 'Read projects and statistics',
-            description: 'Fetch GitLab projects and account statistics.',
+            name: 'Lire les projets et les statistiques',
+            description: 'Récupérer les projets GitLab et les statistiques du compte.',
           },
         ]}
       />
@@ -296,7 +296,7 @@ export default function GitLabTab() {
           transition={{ delay: 0.4 }}
           className="border-t border-bolt-elements-borderColor pt-6"
         >
-          <h3 className="text-base font-medium text-bolt-elements-textPrimary mb-4">Statistics</h3>
+          <h3 className="text-base font-medium text-bolt-elements-textPrimary mb-4">Statistiques</h3>
           <StatsDisplay
             stats={connection.stats}
             onRefresh={async () => {

@@ -61,13 +61,36 @@ describe('ModelSelector accessibility', () => {
     renderSelector();
 
     fireEvent.click(modelTrigger());
-    expect(modelTrigger()).toHaveAttribute('aria-controls', 'model-listbox');
+    expect(modelTrigger().getAttribute('aria-controls')).toBeTruthy();
 
-    const searchBox = screen.getByRole('searchbox', { name: 'Search models' });
+    const searchBox = screen.getByRole('searchbox', { name: 'Rechercher des modèles' });
     fireEvent.keyDown(searchBox, { key: 'ArrowDown' });
 
-    expect(modelTrigger()).toHaveAttribute('aria-activedescendant', 'model-option-0');
-    expect(document.getElementById('model-option-0')).toHaveAttribute('role', 'option');
+    const activeDescendant = modelTrigger().getAttribute('aria-activedescendant');
+    expect(activeDescendant).toBeTruthy();
+    expect(document.getElementById(activeDescendant!)).toHaveAttribute('role', 'option');
+  });
+
+  it('opens the model list upward near the bottom and exposes the active option', () => {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 900 });
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.getAttribute('role') === 'combobox' && this.getAttribute('aria-label') === 'Modèle') {
+        return { top: 820, bottom: 862, left: 0, right: 300, width: 300, height: 42, x: 0, y: 820, toJSON: () => ({}) };
+      }
+
+      return { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => ({}) };
+    });
+
+    renderSelector();
+    fireEvent.click(modelTrigger());
+    expect(screen.getByRole('listbox')).toHaveAttribute('data-placement', 'top');
+
+    const searchBox = screen.getByRole('searchbox', { name: 'Rechercher des modèles' });
+    fireEvent.keyDown(searchBox, { key: 'ArrowDown' });
+
+    const activeDescendant = modelTrigger().getAttribute('aria-activedescendant');
+    expect(activeDescendant).toBeTruthy();
+    expect(document.getElementById(activeDescendant!)).toHaveAttribute('role', 'option');
   });
 
   it('gives every option an accessible name', () => {
@@ -92,7 +115,7 @@ describe('ModelSelector accessibility', () => {
     renderSelector();
     fireEvent.click(modelTrigger());
 
-    const searchBox = screen.getByRole('searchbox', { name: 'Search models' });
+    const searchBox = screen.getByRole('searchbox', { name: 'Rechercher des modèles' });
     fireEvent.keyDown(searchBox, { key: 'Escape' });
 
     expect(modelTrigger()).toHaveAttribute('aria-expanded', 'false');

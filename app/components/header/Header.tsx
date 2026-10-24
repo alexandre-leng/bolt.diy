@@ -31,7 +31,17 @@ export function Header() {
        * a panel it was buried under. This cluster holds the one toggle and the one back control,
        * so it must stay painted above the panel.
        */}
-      <div className="flex items-center gap-1 min-w-0 z-above-sidebar text-bolt-elements-textPrimary">
+      {/*
+       * `shrink-0`, not `min-w-0`: with `min-w-0` this cluster shrank below its own content when
+       * the right-hand controls were wider than the phone (390 px, conversation with a running
+       * preview), and the logo kept painting over « Nouveau projet » (measured: 23 px overlap,
+       * elementFromPoint on the button = the logo image). The right cluster is now sized to fit
+       * instead (icon-only controls below `sm`), so nothing has to shrink here.
+       */}
+      <div
+        data-testid="header-left-cluster"
+        className="flex items-center gap-1 shrink-0 z-above-sidebar text-bolt-elements-textPrimary"
+      >
         {/*
          * No back control here: the user removed it as redundant. The logo already returns to the
          * landing page (it is a link, labelled), and the sidebar leads to the conversation list.
@@ -66,14 +76,17 @@ export function Header() {
           />
         </a>
       </div>
-      {chat.started && ( // Display ChatDescription and HeaderActionButtons only when the chat has started.
+      {chat.started && ( // Display the chat label on desktop only; phone space belongs to the controls.
         <>
-          <span className="flex-1 min-w-0 px-2 sm:px-4 truncate text-center text-sm sm:text-base text-bolt-elements-textPrimary">
+          <span
+            data-testid="header-title-slot"
+            className="hidden sm:flex flex-1 min-w-0 justify-center px-2 sm:px-4 overflow-hidden text-center text-sm sm:text-base text-bolt-elements-textPrimary"
+          >
             <ClientOnly>{() => <ChatDescription />}</ClientOnly>
           </span>
           <ClientOnly>
             {() => (
-              <div className="flex items-center gap-1 shrink-0">
+              <div data-testid="header-right-cluster" className="flex items-center gap-1 shrink-0 ml-auto">
                 {/*
                  * "New project" — Lovable keeps a `+` next to the account on the
                  * right of the header. Same destination as the sidebar's

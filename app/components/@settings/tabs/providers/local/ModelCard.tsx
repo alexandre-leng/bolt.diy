@@ -28,9 +28,9 @@ function ModelCard({ model, onUpdate, onDelete }: ModelCardProps) {
                     'bg-red-500/10 text-red-500': model.status === 'error',
                   })}
                 >
-                  {model.status === 'updating' && 'Updating'}
-                  {model.status === 'updated' && 'Updated'}
-                  {model.status === 'error' && 'Error'}
+                  {model.status === 'updating' && 'Mise à jour…'}
+                  {model.status === 'updated' && 'À jour'}
+                  {model.status === 'error' && 'Erreur'}
                 </span>
               )}
             </div>
@@ -66,12 +66,12 @@ function ModelCard({ model, onUpdate, onDelete }: ModelCardProps) {
               {model.status === 'updating' ? (
                 <>
                   <Loader2 className="w-3 h-3 animate-spin" />
-                  Updating
+                  Mise à jour…
                 </>
               ) : (
                 <>
                   <RotateCw className="w-3 h-3" />
-                  Update
+                  Mettre à jour
                 </>
               )}
             </button>
@@ -85,7 +85,7 @@ function ModelCard({ model, onUpdate, onDelete }: ModelCardProps) {
               )}
             >
               <Trash2 className="w-3 h-3" />
-              Delete
+              Supprimer
             </button>
           </div>
         </div>

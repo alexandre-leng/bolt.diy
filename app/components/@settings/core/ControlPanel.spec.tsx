@@ -84,7 +84,7 @@ describe('control panel: model settings are administrator-only', () => {
     sessionState.isAdmin = true;
     render(<ControlPanel open onClose={vi.fn()} />);
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /cloud providers/i })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: /fournisseurs cloud/i })).toBeInTheDocument());
   });
 
   it('hides the editable provider screens from a normal account, keeping the read-only view', async () => {
@@ -93,8 +93,8 @@ describe('control panel: model settings are administrator-only', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: /mon accès ia/i })).toBeInTheDocument());
 
-    expect(screen.queryByRole('button', { name: /cloud providers/i })).toBeNull();
-    expect(screen.queryByRole('button', { name: /local providers/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /fournisseurs cloud/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /fournisseurs locaux/i })).toBeNull();
   });
 });
 
@@ -134,10 +134,18 @@ describe('ControlPanel accessibility', () => {
     await waitFor(() => expect(screen.getByTestId('settings-content')).toHaveFocus());
   });
 
-  it('returns focus to the navigation when the mobile "All settings" control is used', async () => {
+  it('returns focus to the navigation when the mobile back control is used', async () => {
     render(<ControlPanel open onClose={vi.fn()} initialTab="profile" />);
 
-    fireEvent.click(screen.getByRole('button', { name: /tous les réglages|all settings/i }));
+    /*
+     * Two panes now share one header component (sidebar column and content column), and both
+     * are in the tree: the content one is the visible pane on a phone, so pick by test id.
+     */
+    const back = screen
+      .getAllByTestId('settings-back')
+      .find((element) => element.getAttribute('aria-label') === 'Retour à tous les réglages');
+    expect(back).toBeTruthy();
+    fireEvent.click(back as HTMLElement);
 
     await waitFor(() => {
       const active = document.activeElement as HTMLElement;
@@ -191,5 +199,36 @@ describe('ControlPanel accessibility', () => {
     fireEvent.click(screen.getByTestId('settings-close'));
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+/*
+ * Vérification prod du 22/10: « Tous les réglages » (bouton mobile) peignait le gris du
+ * navigateur rgb(239,239,239) sous une encre claire en thème sombre (1,08:1). jsdom ne calcule
+ * pas les couleurs: on fige la règle qui l'évite (une surface explicite sur chaque bouton du
+ * panneau); le contraste réel est remesuré en production dans les deux thèmes.
+ */
+describe('control panel: every button paints its own surface', () => {
+  it('gives « Tous les réglages » a themed, transparent surface and theme ink', async () => {
+    setViewport(true);
+    render(<ControlPanel open onClose={vi.fn()} initialTab="profile" />);
+
+    const allSettings = await screen.findByTestId('settings-all-mobile');
+    expect(allSettings.textContent).toContain('Tous les réglages');
+    expect(allSettings.className).toMatch(/\bbg-transparent\b/);
+    expect(allSettings.className).toMatch(/\bappearance-none\b/);
+    expect(allSettings.className).toMatch(/\btext-bolt-elements-textPrimary\b/);
+  });
+
+  it('leaves no <button> of the panel on the browser default background', async () => {
+    setViewport(true);
+    render(<ControlPanel open onClose={vi.fn()} initialTab="profile" />);
+    await screen.findByTestId('settings-all-mobile');
+
+    const bare = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).filter(
+      (button) => !/(^|\s)!?(bg-|bolt-primary-button)/.test(button.className),
+    );
+
+    expect(bare.map((button) => button.textContent || button.getAttribute('aria-label'))).toEqual([]);
   });
 });

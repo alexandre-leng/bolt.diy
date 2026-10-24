@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { APIKeyManager } from './APIKeyManager';
+import { resetSessionCache } from '~/lib/auth/session';
 import type { ProviderInfo } from '~/types/model';
 
 /*
@@ -88,8 +89,18 @@ describe('APIKeyManager admin gate', () => {
   });
 
   it('shows them to an administrator', async () => {
+    /*
+     * `/api/auth/me` is read once and shared across concurrent components, so drop the cached
+     * answer before stubbing this administrator, or the component receives the previous
+     * (non-admin) answer and hides the pencil.
+     */
+    resetSessionCache();
     stubRoutes(true);
 
+    /*
+     * No key is typed on purpose: with a saved key the component offers no "Get API Key" link,
+     * because the account already has one.
+     */
     render(<APIKeyManager provider={withLink('GateAdmin')} apiKey="" setApiKey={vi.fn()} />);
 
     expect(await screen.findByTitle('Edit API Key')).toBeTruthy();

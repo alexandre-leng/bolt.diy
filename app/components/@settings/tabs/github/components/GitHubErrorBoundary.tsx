@@ -49,15 +49,17 @@ export class GitHubErrorBoundary extends Component<Props, State> {
           </div>
 
           <div>
-            <h3 className="text-lg font-medium text-bolt-elements-textPrimary mb-2">GitHub Integration Error</h3>
+            <h3 className="text-lg font-medium text-bolt-elements-textPrimary mb-2">Erreur de l’intégration GitHub</h3>
             <p className="text-sm text-bolt-elements-textSecondary mb-4 max-w-md">
-              Something went wrong while loading GitHub data. This could be due to network issues, API limits, or a
-              temporary problem.
+              Une erreur s’est produite lors du chargement des données GitHub. Cela peut venir d’un problème réseau, des
+              limites de l’API ou d’un incident temporaire.
             </p>
 
             {this.state.error && (
               <details className="text-xs text-bolt-elements-textTertiary mb-4">
-                <summary className="cursor-pointer hover:text-bolt-elements-textSecondary">Show error details</summary>
+                <summary className="cursor-pointer hover:text-bolt-elements-textSecondary">
+                  Afficher les détails de l’erreur
+                </summary>
                 <pre className="mt-2 p-2 bg-bolt-elements-background-depth-2 rounded text-left overflow-auto">
                   {this.state.error.message}
                 </pre>
@@ -67,10 +69,10 @@ export class GitHubErrorBoundary extends Component<Props, State> {
 
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={this.handleRetry}>
-              Try Again
+              Réessayer
             </Button>
             <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
-              Reload Page
+              Recharger la page
             </Button>
           </div>
         </div>
@@ -98,7 +100,7 @@ export function useGitHubErrorHandler() {
      * For example: Sentry, LogRocket, etc.
      */
 
-    return error instanceof Error ? error.message : 'An unknown error occurred';
+    return error instanceof Error ? error.message : 'Une erreur inconnue s’est produite';
   }, []);
 
   return { handleError };

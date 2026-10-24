@@ -11,7 +11,7 @@ interface LoadingStateProps {
 }
 
 export function LoadingState({
-  message = 'Loading...',
+  message = 'Chargement…',
   size = 'md',
   className,
   showProgress = false,

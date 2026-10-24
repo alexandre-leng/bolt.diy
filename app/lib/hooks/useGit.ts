@@ -34,12 +34,22 @@ export function useGit() {
   const [fs, setFs] = useState<PromiseFsClient>();
   const fileData = useRef<Record<string, { data: any; encoding?: string }>>({});
   useEffect(() => {
-    webcontainerPromise.then((container) => {
-      fileData.current = {};
-      setWebcontainer(container);
-      setFs(getFs(container, fileData));
-      setReady(true);
-    });
+    /*
+     * Two-argument `then`, not `.catch`: `webcontainer` is a bare thenable at runtime (see
+     * `~/lib/webcontainer`), it has no `catch` method. A refused boot is reported to the user once
+     * there; Git simply stays disabled (`ready` false).
+     */
+    webcontainerPromise.then(
+      (container) => {
+        fileData.current = {};
+        setWebcontainer(container);
+        setFs(getFs(container, fileData));
+        setReady(true);
+      },
+      (error: unknown) => {
+        console.warn('[git] runtime not available:', error);
+      },
+    );
   }, []);
 
   const gitClone = useCallback(

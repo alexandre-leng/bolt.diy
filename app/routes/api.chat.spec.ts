@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { action as chatAction } from './api.chat';
+import { __resetKeyCacheForTests } from '~/lib/.server/api/instance-keys';
 import { streamText } from '~/lib/.server/llm/stream-text';
 import { MCPService } from '~/lib/services/mcpService';
 
@@ -74,15 +75,83 @@ function invoke(body: unknown = baseBody) {
   } as never);
 }
 
+/*
+ * The key resolver reads the accounts service and fails closed when it cannot read the policy, so
+ * this file answers that one lookup for the whole run. A per-test stub cannot do it: the
+ * `vi.unstubAllGlobals()` of afterEach restores the real `fetch`, and the next case would answer
+ * 503 for a policy it simply could not read.
+ */
+const passthrough = globalThis.fetch;
+
+vi.stubGlobal(
+  'fetch',
+  vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).includes('/internal/effective-keys')) {
+      return Response.json({
+        apiKeys: { OpenCodeGo: 'test-key' },
+        baseUrls: {},
+        allowUserKeys: [],
+        source: { OpenCodeGo: 'instance' },
+        policy: {
+          defaultModel: { provider: '', model: '' },
+          allowedProviders: [],
+          allowedModels: {},
+          effortPolicy: 'free',
+        },
+      });
+    }
+
+    return passthrough ? passthrough(input, init) : Response.json({});
+  }),
+);
+
+/**
+ * Answer the gateway calls a case makes, while still serving the accounts lookup.
+ *
+ * `vi.stubGlobal('fetch', …)` would also swallow `/internal/effective-keys`, and the resolver then
+ * refuses the whole turn with 503 before the code under test runs.
+ */
+function stubGateway(handler: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/internal/effective-keys') ? effectiveKeysResponse() : handler(input, init),
+    ),
+  );
+}
+
+function effectiveKeysResponse() {
+  return Promise.resolve(
+    Response.json({
+      apiKeys: { OpenCodeGo: 'test-key' },
+      baseUrls: {},
+      allowUserKeys: [],
+      source: { OpenCodeGo: 'instance' },
+      policy: {
+        defaultModel: { provider: '', model: '' },
+        allowedProviders: [],
+        allowedModels: {},
+        effortPolicy: 'free',
+      },
+    }),
+  );
+}
+
 describe('POST /api/chat', () => {
+  /*
+   * The key resolver is cached per account and fails closed when it cannot read the policy, so
+   * each case starts from a cleared cache AND a stub that answers the accounts lookup: without
+   * the stub the resolver keeps the first case's failure and every later turn answers 503.
+   */
   beforeEach(() => {
+    __resetKeyCacheForTests();
     vi.stubEnv('OPENCODE_GO_API_KEY', 'test-key');
     vi.spyOn(MCPService.getInstance(), 'checkServersAvailabilities').mockResolvedValue({});
   });
 
   afterEach(() => {
+    __resetKeyCacheForTests();
     vi.unstubAllEnvs();
-    vi.unstubAllGlobals();
     vi.restoreAllMocks();
     vi.mocked(streamText).mockClear();
   });
@@ -93,10 +162,7 @@ describe('POST /api/chat', () => {
       web_search: { description: 'MCP search', inputSchema: { type: 'object' } },
     } as never);
 
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => completionsResponse([{ content: 'hello', finishReason: 'stop' }])),
-    );
+    stubGateway(async () => completionsResponse([{ content: 'hello', finishReason: 'stop' }]));
 
     const response = await invoke(streamOnlyBody);
     const body = await response.text();
@@ -107,17 +173,14 @@ describe('POST /api/chat', () => {
   }, 30_000);
 
   it('continues without the chat summary when the summary call fails', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-        // generateText (summary) vs streamText (chat) both hit /chat/completions.
-        if (!String(init?.body ?? '').includes('"stream":true')) {
-          return new Response(JSON.stringify({ error: { message: 'summary provider down' } }), { status: 400 });
-        }
+    stubGateway(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      // generateText (summary) vs streamText (chat) both hit /chat/completions.
+      if (!String(init?.body ?? '').includes('"stream":true')) {
+        return new Response(JSON.stringify({ error: { message: 'summary provider down' } }), { status: 400 });
+      }
 
-        return completionsResponse([{ content: 'hello', finishReason: 'stop' }]);
-      }),
-    );
+      return completionsResponse([{ content: 'hello', finishReason: 'stop' }]);
+    });
 
     const response = await invoke();
     const body = await response.text();
@@ -130,10 +193,7 @@ describe('POST /api/chat', () => {
   }, 30_000);
 
   it('sets a first-chunk deadline on the non-agent path (a hung provider must not hang the turn)', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => completionsResponse([{ content: 'x', finishReason: 'stop' }])),
-    );
+    stubGateway(async () => completionsResponse([{ content: 'x', finishReason: 'stop' }]));
 
     const response = await invoke(streamOnlyBody);
 
@@ -153,7 +213,7 @@ describe('POST /api/chat', () => {
 
   it('ends with a truncation notice when the segment cap is reached instead of throwing', async () => {
     const fetchMock = vi.fn(async () => completionsResponse([{ content: 'more ', finishReason: 'length' }]));
-    vi.stubGlobal('fetch', fetchMock);
+    stubGateway(fetchMock);
 
     const response = await invoke(streamOnlyBody);
     const body = await response.text();
@@ -170,16 +230,13 @@ describe('POST /api/chat', () => {
   it('sends `finish` only after the continuation text, in a single finished message', async () => {
     let chatCalls = 0;
 
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => {
-        chatCalls += 1;
+    stubGateway(async () => {
+      chatCalls += 1;
 
-        return chatCalls === 1
-          ? completionsResponse([{ content: 'part1 ', finishReason: 'length' }])
-          : completionsResponse([{ content: 'part2', finishReason: 'stop' }]);
-      }),
-    );
+      return chatCalls === 1
+        ? completionsResponse([{ content: 'part1 ', finishReason: 'length' }])
+        : completionsResponse([{ content: 'part2', finishReason: 'stop' }]);
+    });
 
     const response = await invoke(streamOnlyBody);
     const body = await response.text();

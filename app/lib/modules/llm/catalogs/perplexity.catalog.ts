@@ -13,29 +13,41 @@
 export interface CatalogModel {
   /** Model id as the gateway expects it. */
   id: string;
+
   /** Human label, from models.dev. */
   label: string;
+
   /** Context window in tokens. */
   context: number;
+
   /** Maximum output tokens. */
   maxOutput: number;
+
   /** Wire protocol the gateway speaks for this model. */
   protocol: 'chat' | 'responses' | 'messages';
+
   /** True when the model refuses `thinking: disabled`. */
   thinkingOnly: boolean;
+
   /** True for text+image input. */
   vision: boolean;
+
   /** True when the model supports tool calls (required for the agent loop). */
   tools: boolean;
+
   /** USD per million tokens, shown in the settings screen. */
   costInput: number | null;
   costOutput: number | null;
+
   /** models.dev lifecycle status; 'deprecated' entries stay available but are marked. */
   status: string | null;
+
   /** Where the entry comes from. */
   source: 'models.dev' | 'override';
+
   /** False for a thinking-only model: it refuses `thinking: disabled` (a 400 when forced). */
   canDisable: boolean;
+
   /** Reasoning levels the model accepts, from models.dev (`reasoning_effort` values). */
   efforts: string[];
 }
@@ -44,10 +56,70 @@ export interface CatalogModel {
 export const CATALOG_GENERATED_AT = '2026-10-19';
 
 export const PERPLEXITY_CATALOG: CatalogModel[] = [
-  { id: 'sonar', label: "Sonar", context: 128000, maxOutput: 4096, protocol: 'chat', thinkingOnly: false, vision: false, tools: false, costInput: 1, costOutput: 1, status: null, source: 'models.dev', canDisable: true, efforts: [] },
-  { id: 'sonar-deep-research', label: "Perplexity Sonar Deep Research", context: 128000, maxOutput: 32768, protocol: 'chat', thinkingOnly: false, vision: false, tools: false, costInput: 2, costOutput: 8, status: null, source: 'models.dev', canDisable: true, efforts: ['minimal', 'low', 'medium', 'high'] },
-  { id: 'sonar-pro', label: "Sonar Pro", context: 200000, maxOutput: 8192, protocol: 'chat', thinkingOnly: false, vision: true, tools: false, costInput: 3, costOutput: 15, status: null, source: 'models.dev', canDisable: true, efforts: [] },
-  { id: 'sonar-reasoning-pro', label: "Sonar Reasoning Pro", context: 128000, maxOutput: 4096, protocol: 'chat', thinkingOnly: false, vision: true, tools: false, costInput: 2, costOutput: 8, status: null, source: 'models.dev', canDisable: true, efforts: ['minimal', 'low', 'medium', 'high'] },
+  {
+    id: 'sonar',
+    label: 'Sonar',
+    context: 128000,
+    maxOutput: 4096,
+    protocol: 'chat',
+    thinkingOnly: false,
+    vision: false,
+    tools: false,
+    costInput: 1,
+    costOutput: 1,
+    status: null,
+    source: 'models.dev',
+    canDisable: true,
+    efforts: [],
+  },
+  {
+    id: 'sonar-deep-research',
+    label: 'Perplexity Sonar Deep Research',
+    context: 128000,
+    maxOutput: 32768,
+    protocol: 'chat',
+    thinkingOnly: false,
+    vision: false,
+    tools: false,
+    costInput: 2,
+    costOutput: 8,
+    status: null,
+    source: 'models.dev',
+    canDisable: true,
+    efforts: ['minimal', 'low', 'medium', 'high'],
+  },
+  {
+    id: 'sonar-pro',
+    label: 'Sonar Pro',
+    context: 200000,
+    maxOutput: 8192,
+    protocol: 'chat',
+    thinkingOnly: false,
+    vision: true,
+    tools: false,
+    costInput: 3,
+    costOutput: 15,
+    status: null,
+    source: 'models.dev',
+    canDisable: true,
+    efforts: [],
+  },
+  {
+    id: 'sonar-reasoning-pro',
+    label: 'Sonar Reasoning Pro',
+    context: 128000,
+    maxOutput: 4096,
+    protocol: 'chat',
+    thinkingOnly: false,
+    vision: true,
+    tools: false,
+    costInput: 2,
+    costOutput: 8,
+    status: null,
+    source: 'models.dev',
+    canDisable: true,
+    efforts: ['minimal', 'low', 'medium', 'high'],
+  },
 ];
 
 /** Protocol to use for a model, falling back to the id pattern for unknown ones. */

@@ -51,35 +51,14 @@ interface WorkspaceProps {
 const viewTransition = { ease: cubicEasingFn };
 
 const sliderOptions: SliderOptions<WorkbenchViewType> = {
-  left: {
-    value: 'code',
-    text: 'Code',
-  },
-  middle: {
-    value: 'diff',
-    text: 'Diff',
-  },
-  right: {
-    value: 'preview',
-    text: 'Preview',
-  },
+  left: { value: 'code', text: 'Code' },
+  middle: { value: 'diff', text: 'Diff' },
+  right: { value: 'preview', text: 'Aperçu' },
 };
 
 const workbenchVariants = {
-  closed: {
-    width: 0,
-    transition: {
-      duration: 0.2,
-      ease: cubicEasingFn,
-    },
-  },
-  open: {
-    width: 'var(--workbench-width)',
-    transition: {
-      duration: 0.2,
-      ease: cubicEasingFn,
-    },
-  },
+  closed: { width: 0, transition: { duration: 0.2, ease: cubicEasingFn } },
+  open: { width: 'var(--workbench-width)', transition: { duration: 0.2, ease: cubicEasingFn } },
 } satisfies Variants;
 
 const FileModifiedDropdown = memo(
@@ -116,10 +95,13 @@ const FileModifiedDropdown = memo(
       <div className="flex items-center gap-2">
         <Popover.Root>
           <Popover.Trigger asChild>
-            <button className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 transition-colors text-bolt-elements-item-contentDefault">
-              <span>File Changes</span>
+            <button
+              type="button"
+              className="flex items-center gap-2 px-3 py-1.5 min-h-11 text-sm rounded-lg bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 transition-colors text-bolt-elements-item-contentDefault"
+            >
+              <span>Modifications de fichiers</span>
               {hasChanges && (
-                <span className="w-5 h-5 rounded-full bg-accent-500/20 text-accent-500 text-xs flex items-center justify-center border border-accent-500/30">
+                <span className="w-5 h-5 rounded-full bg-accent-500/20 text-accent-700 text-xs flex items-center justify-center border border-accent-500/30">
                   {modifiedFiles.length}
                 </span>
               )}
@@ -135,7 +117,7 @@ const FileModifiedDropdown = memo(
                 <div className="relative mx-2 mb-2">
                   <input
                     type="text"
-                    placeholder="Search files..."
+                    placeholder="Rechercher des fichiers…"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor focus:outline-none focus:ring-2 focus:ring-blue-500/50"
@@ -155,7 +137,7 @@ const FileModifiedDropdown = memo(
                         <button
                           key={filePath}
                           onClick={() => onSelectFile(filePath)}
-                          className="w-full px-3 py-2 text-left rounded-md hover:bg-bolt-elements-background-depth-1 transition-colors group bg-transparent"
+                          className="w-full px-3 py-2 min-h-11 text-left rounded-md hover:bg-bolt-elements-background-depth-1 transition-colors group bg-transparent"
                         >
                           <div className="flex items-center gap-2">
                             <div className="shrink-0 w-5 h-5 text-bolt-elements-textTertiary">
@@ -241,8 +223,12 @@ const FileModifiedDropdown = memo(
                                   return (
                                     showStats && (
                                       <div className="flex items-center gap-1 text-xs shrink-0">
-                                        {additions > 0 && <span className="text-green-500">+{additions}</span>}
-                                        {deletions > 0 && <span className="text-red-500">-{deletions}</span>}
+                                        {additions > 0 && (
+                                          <span className="text-green-700 dark:text-green-400">+{additions}</span>
+                                        )}
+                                        {deletions > 0 && (
+                                          <span className="text-red-700 dark:text-red-400">-{deletions}</span>
+                                        )}
                                       </div>
                                     )
                                   );
@@ -259,10 +245,12 @@ const FileModifiedDropdown = memo(
                         <div className="i-ph:file-dashed" />
                       </div>
                       <p className="text-sm font-medium text-bolt-elements-textPrimary">
-                        {searchQuery ? 'No matching files' : 'No modified files'}
+                        {searchQuery ? 'Aucun fichier correspondant' : 'Aucun fichier modifié'}
                       </p>
-                      <p className="text-xs text-bolt-elements-textTertiary mt-1">
-                        {searchQuery ? 'Try another search' : 'Changes will appear here as you edit'}
+                      <p className="text-xs text-bolt-elements-textSecondary mt-1">
+                        {searchQuery
+                          ? 'Essayez une autre recherche'
+                          : 'Les modifications apparaîtront ici pendant l’édition'}
                       </p>
                     </div>
                   )}
@@ -274,13 +262,13 @@ const FileModifiedDropdown = memo(
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(filteredFiles.map(([filePath]) => filePath).join('\n'));
-                      toast('File list copied to clipboard', {
+                      toast('Liste des fichiers copiée', {
                         icon: <div className="i-ph:check-circle text-accent-500" />,
                       });
                     }}
-                    className="w-full flex items-center justify-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-bolt-elements-background-depth-1 hover:bg-bolt-elements-background-depth-3 transition-colors text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+                    className="w-full flex items-center justify-center gap-2 px-3 py-1.5 min-h-11 text-sm rounded-lg bg-bolt-elements-background-depth-1 hover:bg-bolt-elements-background-depth-3 transition-colors text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
                   >
-                    Copy File List
+                    Copier la liste des fichiers
                   </button>
                 </div>
               )}
@@ -318,7 +306,6 @@ export const Workbench = memo(
     const showTerminal = useStore(workbenchStore.showTerminal);
     const userSelectedView = useStore(workbenchStore.userSelectedView);
     const { showChat } = useStore(chatStore);
-    const canHideChat = showWorkbench || !showChat;
 
     const isSmallViewport = useViewport(1024);
     const folderSyncSupported = useMemo(() => canSyncToFolder(), []);
@@ -412,7 +399,7 @@ export const Workbench = memo(
           previewStore.refreshAllPreviews();
         })
         .catch(() => {
-          toast.error('Failed to update file content');
+          toast.error('Impossible de mettre à jour le contenu du fichier');
         });
     }, []);
 
@@ -431,10 +418,10 @@ export const Workbench = memo(
       try {
         const directoryHandle = await window.showDirectoryPicker();
         await workbenchStore.syncFiles(directoryHandle);
-        toast.success('Files synced successfully');
+        toast.success('Fichiers synchronisés');
       } catch (error) {
-        console.error('Error syncing files:', error);
-        toast.error('Failed to sync files');
+        console.error('Erreur de synchronisation des fichiers :', error);
+        toast.error('Impossible de synchroniser les fichiers');
       } finally {
         setIsSyncing(false);
       }
@@ -462,16 +449,18 @@ export const Workbench = memo(
             <div className="absolute inset-0 lg:px-4">
               <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border-t lg:border border-bolt-elements-borderColor shadow-sm lg:rounded-lg overflow-hidden">
                 <div className="flex items-center px-3 py-2 border-b border-bolt-elements-borderColor gap-1.5">
+                  {/*
+                   * Kept at every width and at its original compact size: below 1024px it is the
+                   * only way back to the conversation once the workbench fills the screen, so
+                   * hiding it (or boxing it at 44px) removed a control the operator needs.
+                   */}
                   <button
                     type="button"
                     aria-label={showChat ? 'Masquer la conversation' : 'Afficher la conversation'}
                     title={showChat ? 'Masquer la conversation' : 'Afficher la conversation'}
-                    className={`${showChat ? 'i-ph:sidebar-simple-fill' : 'i-ph:sidebar-simple'} text-lg text-bolt-elements-textSecondary mr-1`}
-                    disabled={!canHideChat || isSmallViewport}
+                    className={`${showChat ? 'i-ph:sidebar-simple-fill' : 'i-ph:sidebar-simple'} text-lg text-bolt-elements-textSecondary mr-1 p-1 rounded-md hover:bg-bolt-elements-item-backgroundActive focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500`}
                     onClick={() => {
-                      if (canHideChat) {
-                        chatStore.setKey('showChat', !showChat);
-                      }
+                      chatStore.setKey('showChat', !showChat);
                     }}
                   />
                   <Slider selected={selectedView} options={sliderOptions} setSelected={setSelectedView} />
@@ -481,15 +470,15 @@ export const Workbench = memo(
                       {/* Export Chat Button */}
                       <ExportChatButton exportChat={exportChat} />
 
-                      {/* Sync Button — only where the File System Access API exists (not Firefox). */}
+                      {/* Sync uniquement quand l’API File System Access est disponible. */}
                       {folderSyncSupported && (
                         <div className="flex border border-bolt-elements-borderColor rounded-md overflow-hidden ml-1">
                           <DropdownMenu.Root>
                             <DropdownMenu.Trigger
                               disabled={isSyncing || streaming}
-                              className="rounded-md items-center justify-center [&:is(:disabled,.disabled)]:cursor-not-allowed [&:is(:disabled,.disabled)]:opacity-60 px-3 py-1.5 text-xs bg-accent-500 text-white hover:text-bolt-elements-item-contentAccent [&:not(:disabled,.disabled)]:hover:bg-bolt-elements-button-primary-backgroundHover outline-accent-500 flex gap-1.7"
+                              className="rounded-md items-center justify-center [&:is(:disabled,.disabled)]:cursor-not-allowed [&:is(:disabled,.disabled)]:opacity-60 px-3 py-1.5 text-xs !bg-accent-700 !text-white hover:!text-white hover:!bg-accent-700 outline-accent-500 flex gap-1.7 min-h-11"
                             >
-                              {isSyncing ? 'Syncing...' : 'Sync'}
+                              {isSyncing ? 'Synchronisation…' : 'Synchroniser'}
                               <span className={classNames('i-ph:caret-down transition-transform')} />
                             </DropdownMenu.Trigger>
                             <DropdownMenu.Content
@@ -517,7 +506,7 @@ export const Workbench = memo(
                                   ) : (
                                     <div className="i-ph:cloud-arrow-down" />
                                   )}
-                                  <span>{isSyncing ? 'Syncing...' : 'Sync Files'}</span>
+                                  <span>{isSyncing ? 'Synchronisation…' : 'Synchroniser les fichiers'}</span>
                                 </div>
                               </DropdownMenu.Item>
                             </DropdownMenu.Content>
@@ -543,7 +532,13 @@ export const Workbench = memo(
                 <Group orientation="vertical" className="flex-1 min-h-0">
                   <Panel defaultSize={showTerminal ? 100 - DEFAULT_TERMINAL_SIZE : '100%'} minSize={20}>
                     <div className="relative h-full overflow-hidden">
-                      <View initial={{ x: '0%' }} animate={{ x: selectedView === 'code' ? '0%' : '-100%' }}>
+                      <View
+                        data-testid="workbench-code-view"
+                        aria-hidden={!showWorkbench || selectedView !== 'code'}
+                        inert={!showWorkbench || selectedView !== 'code' ? true : undefined}
+                        initial={{ x: '0%' }}
+                        animate={{ x: selectedView === 'code' ? '0%' : '-100%' }}
+                      >
                         <EditorPanel
                           editorDocument={currentDocument}
                           isStreaming={isStreaming}
@@ -560,6 +555,8 @@ export const Workbench = memo(
                       </View>
                       {loadedViews.has('diff') ? (
                         <View
+                          aria-hidden={!showWorkbench || selectedView !== 'diff'}
+                          inert={!showWorkbench || selectedView !== 'diff' ? true : undefined}
                           initial={{ x: '100%' }}
                           animate={{ x: selectedView === 'diff' ? '0%' : selectedView === 'code' ? '100%' : '-100%' }}
                         >
@@ -575,7 +572,12 @@ export const Workbench = memo(
                         </View>
                       ) : null}
                       {loadedViews.has('preview') ? (
-                        <View initial={{ x: '100%' }} animate={{ x: selectedView === 'preview' ? '0%' : '100%' }}>
+                        <View
+                          aria-hidden={!showWorkbench || selectedView !== 'preview'}
+                          inert={!showWorkbench || selectedView !== 'preview' ? true : undefined}
+                          initial={{ x: '100%' }}
+                          animate={{ x: selectedView === 'preview' ? '0%' : '100%' }}
+                        >
                           <Suspense
                             fallback={
                               <div className="flex items-center justify-center h-full">
@@ -594,7 +596,7 @@ export const Workbench = memo(
                 </Group>
                 {/*
                  * Lovable's mobile preview bar: one obvious way back to the chat.
-                 * The top-right X was the only exit and is easy to miss on a phone.
+                 * Le bouton X en haut à droite était la seule sortie et se repérait mal sur téléphone.
                  */}
                 {isSmallViewport && (
                   <div
@@ -608,7 +610,7 @@ export const Workbench = memo(
                       className="inline-flex h-10 items-center gap-1.5 rounded-full border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-4 text-sm font-medium text-bolt-elements-textPrimary shadow-xs transition-colors hover:bg-bolt-elements-background-depth-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500"
                     >
                       <span className="i-ph:caret-left text-base" aria-hidden="true" />
-                      Chat
+                      Discussion
                     </button>
                   </div>
                 )}

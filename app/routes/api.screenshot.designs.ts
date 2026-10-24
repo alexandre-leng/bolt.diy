@@ -14,9 +14,28 @@ import { getTrustedClientIP } from '~/lib/security';
  * The OpenAI key stays on the server: the browser posts a prompt and receives base64
  * images, never a credential.
  */
+const DIRECTIONS = [
+  'a clean, minimal, modern SaaS layout with generous whitespace and a single accent colour',
+  'a bold, high-contrast editorial layout with strong typography and large imagery',
+  'a warm, friendly product layout with rounded cards, soft shadows and an illustration',
+  'a dense, data-oriented dashboard layout with cards, charts and a sidebar',
+];
+
 const requestSchema = z.object({
   prompt: z.string().min(3, 'Describe the page you want.').max(1500, 'Keep it under 1500 characters.'),
   count: z.number().int().min(1).max(4).default(3),
+
+  /*
+   * Which direction slot this request starts at. The client asks for ONE mockup per call (so each
+   * gets its own deadline), so without this every call rebuilt the prompt from slot 0 and three
+   * "different" mockups came back as three tries at the same direction.
+   */
+  directionIndex: z
+    .number()
+    .int()
+    .min(0)
+    .max(DIRECTIONS.length - 1)
+    .default(0),
   model: z.enum(['gpt-image-1', 'dall-e-3']).default('gpt-image-1'),
   size: z.enum(['1024x1024', '1536x1024', '1024x1536']).default('1024x1024'),
 });
@@ -24,13 +43,6 @@ const requestSchema = z.object({
 const BASE_INSTRUCTION =
   'A flat UI mockup of a web page, straight-on view, no perspective, no device frame, ' +
   'crisp vector shapes, readable placeholder text, white background, web design wireframe style.';
-
-const DIRECTIONS = [
-  'a clean, minimal, modern SaaS layout with generous whitespace and a single accent colour',
-  'a bold, high-contrast editorial layout with strong typography and large imagery',
-  'a warm, friendly product layout with rounded cards, soft shadows and an illustration',
-  'a dense, data-oriented dashboard layout with cards, charts and a sidebar',
-];
 
 /** Per-IP throttle: image generation costs real money, so it must not be an open relay. */
 const WINDOW_MS = 10 * 60 * 1000;
@@ -95,7 +107,7 @@ async function requestDesignsFromService(args: {
     const response = await fetch(`${url.replace(/\/$/, '')}/api/internal/designs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-internal-token': token },
-      body: JSON.stringify({ prompt: parsed.prompt, count: parsed.count }),
+      body: JSON.stringify({ prompt: parsed.prompt, count: parsed.count, directionIndex: parsed.directionIndex }),
       signal: AbortSignal.timeout(180_000),
     });
 
@@ -142,6 +154,16 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   try {
     parsed = requestSchema.parse(await request.json());
+
+    /* Each mockup must own a DISTINCT direction: wrapping would repeat the first one. */
+    if (parsed.directionIndex + parsed.count > DIRECTIONS.length) {
+      return Response.json(
+        {
+          error: `Demandez au plus ${DIRECTIONS.length - parsed.directionIndex} maquette(s) à partir de cette direction.`,
+        },
+        { status: 400 },
+      );
+    }
   } catch (error) {
     if (error instanceof z.ZodError) {
       return Response.json({ error: error.issues[0]?.message ?? 'Invalid request' }, { status: 400 });
@@ -215,7 +237,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   for (let index = 0; index < parsed.count; index += 1) {
     try {
-      images.push(await generateOne(baseUrl, authHeaders, buildPrompt(parsed.prompt, index), parsed));
+      images.push(
+        await generateOne(baseUrl, authHeaders, buildPrompt(parsed.prompt, parsed.directionIndex + index), parsed),
+      );
     } catch (error) {
       lastError = error instanceof Error ? error.message : 'Design generation failed.';
     }

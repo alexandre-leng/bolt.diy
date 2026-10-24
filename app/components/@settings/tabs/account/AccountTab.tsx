@@ -203,7 +203,7 @@ export default function AccountTab() {
       <Card>
         <CardHeader>
           <CardTitle>Compte</CardTitle>
-          <CardDescription>Session expirée. Reconnecte-toi pour gérer ton compte.</CardDescription>
+          <CardDescription>Session expirée. Reconnectez-vous pour gérer votre compte.</CardDescription>
         </CardHeader>
         <CardContent>
           <a

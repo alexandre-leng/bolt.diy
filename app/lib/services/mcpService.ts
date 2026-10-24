@@ -275,6 +275,11 @@ export class MCPService {
   async updateConfig(config: MCPConfig) {
     // Names only: the config carries headers/env secrets.
     logger.debug('updating config', Object.keys(config?.mcpServers ?? {}).join(', '));
+
+    if (JSON.stringify(this._config) === JSON.stringify(config)) {
+      return this._mcpToolsPerServer;
+    }
+
     this._config = config;
     await this._createClients();
 

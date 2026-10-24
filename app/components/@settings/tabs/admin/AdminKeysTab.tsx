@@ -1,5 +1,6 @@
 import { AlertTriangle, CheckCircle2, Eye, EyeOff, KeyRound, Loader2, ShieldCheck, Trash2 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Select } from '~/components/ui/Select';
 import { fetchSession, type Session } from '~/lib/auth/session';
 import { classNames } from '~/utils/classNames';
 
@@ -29,11 +30,16 @@ interface AdminProvider {
   baseUrl: string;
   source: 'environment' | 'instance' | 'none';
   allowUserKeys: boolean;
+
+  /** The switchboard (instance rule). `null` means no policy was ever saved. */
+  enabled: boolean | null;
 }
 
 interface AdminPayload {
   ok: boolean;
   providers: AdminProvider[];
+  policy: ModelPolicy;
+  defaultProvider: { provider: string; model: string };
   imageService: { providers: Array<{ name: string; configured: boolean; maskedKey: string }> };
 }
 
@@ -47,7 +53,6 @@ type Verdict = { ok: boolean; detail: string } | null;
  * save button is how the two drifted apart in the first place.
  */
 interface ModelPolicy {
-  managedMode: boolean;
   defaultModel: { provider: string; model: string };
   allowedProviders: string[];
   allowedModels: Record<string, string[]>;
@@ -59,10 +64,12 @@ interface PolicyPayload {
   policy: ModelPolicy;
   providers: Array<{ name: string; label: string; needsKey: boolean }>;
   effortPolicies: string[];
+
+  /** The provider in force when the policy names none (the deployment's build-time default). */
+  defaultProvider?: { provider: string; model: string };
 }
 
 const EMPTY_POLICY: ModelPolicy = {
-  managedMode: false,
   defaultModel: { provider: '', model: '' },
   allowedProviders: [],
   allowedModels: {},
@@ -119,6 +126,7 @@ export function AdminKeysTab() {
 
       const data = (await response.json()) as AdminPayload;
       setPayload(data);
+
       setError('');
       setRows((current) => {
         const next: Record<string, RowState> = {};
@@ -150,6 +158,17 @@ export function AdminKeysTab() {
       }
 
       const data = (await response.json()) as PolicyPayload;
+
+      /*
+       * A never-configured instance has no default in its policy; the server tells us which one
+       * is in force instead (the build-time provider, OpenCode Go). Seeding the draft with it is
+       * what makes "Tout désactiver" keep a usable provider, and what protects it from being
+       * switched off: the server refuses a default that is not enabled.
+       */
+      if (!data.policy.defaultModel.provider && data.defaultProvider?.provider) {
+        data.policy = { ...data.policy, defaultModel: data.defaultProvider };
+      }
+
       setPolicyPayload(data);
       setPolicyDraft(data.policy);
       setPolicyError('');
@@ -196,13 +215,54 @@ export function AdminKeysTab() {
     }
   };
 
-  const toggleAllowedProvider = (name: string) => {
-    const allowed = policyDraft.allowedProviders.includes(name)
-      ? policyDraft.allowedProviders.filter((entry) => entry !== name)
-      : [...policyDraft.allowedProviders, name];
+  /**
+   * Enable or disable ONE provider for the whole instance, and save it in the same gesture.
+   *
+   * A switch that only changed local state would be a lie: the point of this panel is that the
+   * administrator's choice applies to every account, so the write goes to the server at once.
+   * The first write seeds the full catalogue (everything on, the default kept), so "disable a
+   * provider" cannot silently mean "and disable the sixteen others nobody mentioned".
+   */
+  const setProviderEnabled = async (name: string, enabled: boolean) => {
+    const current = policyDraft.allowedProviders.length > 0 ? policyDraft.allowedProviders : catalogue();
+    const next = enabled ? [...new Set([...current, name])] : current.filter((entry) => entry !== name);
 
-    setPolicyDraft({ ...policyDraft, allowedProviders: allowed });
+    const nextPolicy: ModelPolicy = { ...policyDraft, allowedProviders: next };
+    setPolicyDraft(nextPolicy);
+    await savePolicy(nextPolicy);
   };
+
+  /** The whole switchboard in one gesture: everything off, keeping only the default provider. */
+  const disableAllProviders = async () => {
+    const keep = policyDraft.defaultModel.provider;
+    const nextPolicy: ModelPolicy = { ...policyDraft, allowedProviders: keep ? [keep] : [] };
+
+    setPolicyDraft(nextPolicy);
+    await savePolicy(nextPolicy);
+  };
+
+  /**
+   * Is this provider served? `enabled: null` means no policy was ever saved, and then the
+   * catalogue is served as a whole: the switch shows "on" for everything, which is the truth.
+   */
+  const isProviderOn = (provider: AdminProvider): boolean =>
+    policyDraft.allowedProviders.length === 0 ? true : policyDraft.allowedProviders.includes(provider.name);
+
+  /**
+   * Every provider this instance can serve, in the catalogue order.
+   *
+   * Both sources are merged: the policy endpoint carries the admin's catalogue, the key grid
+   * carries the rows the page actually renders. Reading only one of them is how "Tout activer"
+   * used to seed an empty list (the grid had not loaded yet) and how a seeded list could miss
+   * the providers of the other source.
+   */
+  const catalogue = (): string[] => [
+    ...new Set([
+      ...(policyPayload?.providers ?? []).map((provider) => provider.name),
+      ...(payload?.providers ?? []).map((provider) => provider.name),
+      ...Object.keys(rows),
+    ]),
+  ];
 
   const row = (name: string): RowState => rows[name] ?? EMPTY_ROW;
 
@@ -372,41 +432,74 @@ export function AdminKeysTab() {
           </button>
         </div>
 
-        <label className="mt-2 flex items-start gap-2 text-xs text-bolt-elements-textSecondary">
-          <input
-            type="checkbox"
-            checked={policyDraft.managedMode}
-            onChange={(event) => setPolicyDraft({ ...policyDraft, managedMode: event.target.checked })}
-            className="mt-0.5"
-          />
-          <span>
-            <strong className="text-bolt-elements-textPrimary">Mode géré</strong> : les comptes choisissent un modèle
-            dans la liste autorisée et ne voient aucune clé, aucune URL, aucun réglage d'effort.
-          </span>
-        </label>
+        <p className="mt-2 text-xs text-bolt-elements-textSecondary">
+          Chaque interrupteur ci-dessous vaut pour{' '}
+          <strong className="text-bolt-elements-textPrimary">tous les comptes</strong> et tous les appareils : c'est la
+          règle de l'instance, pas une préférence de navigateur. Un fournisseur désactivé disparaît du sélecteur de
+          modèles et le serveur refuse ses requêtes.
+        </p>
 
         <fieldset className="mt-3">
           <legend className="text-[11px] font-medium text-bolt-elements-textSecondary">
-            Fournisseurs autorisés ({policyDraft.allowedProviders.length})
+            Fournisseurs de l'instance ({policyDraft.allowedProviders.length}
+            {policyDraft.allowedProviders.length === 0 ? ', aucune limite enregistrée' : ' activé(s)'})
           </legend>
+          <div className="mt-1 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={disableAllProviders}
+              disabled={policySaving || !policyPayload}
+              className="rounded-full border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-[11px] text-red-500 transition-colors hover:bg-red-500/20 disabled:opacity-60"
+            >
+              Tout désactiver
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const nextPolicy: ModelPolicy = { ...policyDraft, allowedProviders: catalogue() };
+
+                setPolicyDraft(nextPolicy);
+
+                return savePolicy(nextPolicy);
+              }}
+              disabled={policySaving || !policyPayload}
+              className="rounded-full border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-2 py-0.5 text-[11px] text-bolt-elements-textSecondary transition-colors hover:text-bolt-elements-textPrimary disabled:opacity-60"
+            >
+              Tout activer
+            </button>
+          </div>
           <div className="mt-1 flex max-h-32 flex-wrap gap-1.5 overflow-y-auto">
             {(policyPayload?.providers ?? []).map((provider) => {
               const checked = policyDraft.allowedProviders.includes(provider.name);
+              const isDefault = policyDraft.defaultModel.provider === provider.name;
 
               return (
                 <button
                   key={provider.name}
                   type="button"
                   aria-pressed={checked}
-                  onClick={() => toggleAllowedProvider(provider.name)}
+
+                  /*
+                   * The default provider cannot be switched off: the server refuses it (400), and
+                   * the button says why instead of letting the save fail silently.
+                   */
+                  disabled={policySaving || (isDefault && checked)}
+                  title={
+                    isDefault && checked
+                      ? 'Fournisseur par défaut : choisissez un autre défaut avant de le désactiver.'
+                      : undefined
+                  }
+                  onClick={() => void setProviderEnabled(provider.name, !checked)}
                   className={classNames(
                     'rounded-full border px-2 py-0.5 text-[11px] transition-colors',
                     checked
                       ? 'border-accent-500/40 bg-accent-500/20 text-bolt-elements-textPrimary'
                       : 'border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary',
+                    isDefault && checked ? 'cursor-not-allowed opacity-80' : '',
                   )}
                 >
                   {provider.label}
+                  {isDefault ? ' · défaut' : ''}
                 </button>
               );
             })}
@@ -421,7 +514,7 @@ export function AdminKeysTab() {
             >
               Modèle par défaut
             </label>
-            <select
+            <Select
               id="policy-default-provider"
               value={policyDraft.defaultModel.provider}
               onChange={(event) =>
@@ -440,7 +533,7 @@ export function AdminKeysTab() {
                     {provider.label}
                   </option>
                 ))}
-            </select>
+            </Select>
           </div>
 
           <div>
@@ -493,10 +586,10 @@ export function AdminKeysTab() {
           </p>
         )}
 
-        {policyDraft.managedMode && policyDraft.allowedProviders.length === 0 && (
+        {policyDraft.allowedProviders.length === 0 && (
           <p role="status" className="mt-2 rounded-md bg-amber-500/10 p-2 text-[11px] text-amber-500">
-            En mode géré, autorisez au moins un fournisseur : sinon aucun compte n'a de modèle utilisable et
-            l'enregistrement sera refusé.
+            Aucune limite n'est enregistrée : tous les fournisseurs de l'application sont servis. Activez-en au moins un
+            pour que cette liste devienne la règle.
           </p>
         )}
       </section>
@@ -538,6 +631,36 @@ export function AdminKeysTab() {
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium text-bolt-elements-textPrimary">{provider.label}</span>
+                  {/* The switchboard, row by row: this switch writes the instance rule at once. */}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isProviderOn(provider)}
+                    aria-label={`Servir ${provider.label} à tous les comptes`}
+                    data-testid={`admin-provider-switch-${provider.name}`}
+                    disabled={policySaving || !policyPayload || provider.name === policyDraft.defaultModel.provider}
+                    title={
+                      provider.name === policyDraft.defaultModel.provider
+                        ? 'Fournisseur par défaut : choisissez un autre défaut avant de le désactiver.'
+                        : 'Vaut pour tous les comptes et tous les appareils'
+                    }
+                    onClick={() => void setProviderEnabled(provider.name, !isProviderOn(provider))}
+                    className={classNames(
+                      'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors',
+                      isProviderOn(provider)
+                        ? 'border-accent-500/50 bg-accent-500/60'
+                        : 'border-bolt-elements-borderColor bg-bolt-elements-background-depth-3',
+                      'disabled:opacity-60',
+                    )}
+                  >
+                    <span
+                      className={classNames(
+                        'inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform',
+                        isProviderOn(provider) ? 'translate-x-4' : 'translate-x-0.5',
+                      )}
+                      aria-hidden="true"
+                    />
+                  </button>
                   <StatusBadge provider={provider} />
                   {provider.configured && provider.maskedKey && (
                     <code className="rounded bg-bolt-elements-background-depth-2 px-1.5 py-0.5 text-[11px] text-bolt-elements-textSecondary">

@@ -43,9 +43,26 @@ function renderItem() {
   );
 }
 
+/**
+ * Every debug run used to persist a real conversation that looked exactly like the user's own
+ * work. The sidebar now labels it, so it can be told apart at a glance and ignored.
+ */
+function renderWithMessages(messages: unknown[]) {
+  return render(
+    <MemoryRouter>
+      <HistoryItem
+        item={{ ...item, messages } as never}
+        exportChat={vi.fn()}
+        onDuplicate={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    </MemoryRouter>,
+  );
+}
+
 /** Rename button, found by its icon so the lookup does not depend on the fix under test. */
 function renameButton(container: HTMLElement) {
-  return container.querySelector('button.i-ph\\:pencil-fill') as HTMLButtonElement;
+  return container.querySelector('button[aria-label="Renommer"]') as HTMLButtonElement;
 }
 
 function saveCount() {
@@ -139,5 +156,72 @@ describe('HistoryItem accessible names (U12, U13)', () => {
     for (const name of ['Exporter', 'Dupliquer', 'Renommer', 'Supprimer']) {
       expect(screen.getByRole('button', { name })).toBeTruthy();
     }
+  });
+});
+
+describe('HistoryItem: titres déjà enregistrés avec « [Model: …] [Provider: …] » (A-02)', () => {
+  const legacy = {
+    ...item,
+    description: '[Model: beam-free] [Provider: OpenCodeGo] créer un site à 1 milliard',
+  };
+
+  function renderLegacy() {
+    return render(
+      <MemoryRouter>
+        <HistoryItem item={legacy as never} exportChat={vi.fn()} onDuplicate={vi.fn()} onDelete={vi.fn()} />
+      </MemoryRouter>,
+    );
+  }
+
+  it('affiche le titre nettoyé dans la ligne, sans rien réécrire', () => {
+    renderLegacy();
+
+    expect(screen.getByTestId('history-item-title').textContent).toBe('créer un site à 1 milliard');
+    expect(document.body.textContent).not.toContain('[Model:');
+    expect(saveCount()).toBe(0);
+  });
+
+  it('ouvre l’édition sur le titre nettoyé, et valider sans changement n’écrit rien', async () => {
+    const { container } = renderLegacy();
+
+    act(() => {
+      fireEvent.click(renameButton(container));
+    });
+
+    const input = screen.getByRole('textbox') as HTMLInputElement;
+    expect(input.value).toBe('créer un site à 1 milliard');
+
+    await act(async () => {
+      fireEvent.submit(input.closest('form') as HTMLFormElement);
+    });
+
+    expect(saveCount()).toBe(0);
+  });
+});
+
+describe('HistoryItem debug marker', () => {
+  it('labels a conversation created by a debug dispatcher', () => {
+    renderWithMessages([
+      { role: 'user', content: '[Model: deepseek-v4.1-flash] [Provider: OpenCodeGo] Construis une landing page' },
+    ]);
+
+    expect(screen.getByTestId('debug-badge').textContent).toBe('DEBUG');
+  });
+
+  it('labels a throwaway probe as a probe', () => {
+    renderWithMessages([{ role: 'user', content: '[Model: x]\n\n[Provider: y]\n\nDis simplement: bonjour' }]);
+
+    expect(screen.getByTestId('debug-badge').textContent).toBe('SONDE');
+  });
+
+  it('leaves a real conversation unlabelled', () => {
+    renderWithMessages([
+      {
+        role: 'user',
+        content: '[Model: x]\n\n[Provider: y]\n\nConstruis une landing page pour une boulangerie artisanale',
+      },
+    ]);
+
+    expect(screen.queryByTestId('debug-badge')).toBeNull();
   });
 });

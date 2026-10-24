@@ -18,15 +18,15 @@ export default class TogetherProvider extends BaseProvider {
    * the previous list carried stale limits and missed models. Regenerate with
    * `node scripts/generate-model-catalog.mjs --all`.
    */
-  staticModels: ModelInfo[] = TOGETHER_CATALOG
-    .filter((entry) => entry.tools && entry.status !== 'deprecated')
-    .map((entry) => ({
+  staticModels: ModelInfo[] = TOGETHER_CATALOG.filter((entry) => entry.tools && entry.status !== 'deprecated').map(
+    (entry) => ({
       name: entry.id,
       label: entry.label,
       provider: 'Together',
       maxTokenAllowed: entry.context,
       maxCompletionTokens: entry.maxOutput,
-    }));
+    }),
+  );
 
   async getDynamicModels(
     apiKeys?: Record<string, string>,

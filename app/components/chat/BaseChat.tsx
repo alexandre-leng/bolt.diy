@@ -9,13 +9,11 @@ import styles from './BaseChat.module.scss';
 import ChatAlert from './ChatAlert';
 import { ChatBox, type StartProjectArgs } from './ChatBox';
 import { ConnectToolsPill } from './ConnectToolsPill';
-import GitCloneButton from './GitCloneButton';
+import { HomeHeroText, HomeImportActions } from './HomeIntro';
 import LlmErrorAlert from './LLMApiAlert';
 import { Messages, type DisplayMessage } from './Messages.client';
 import ProgressCompilation from './ProgressCompilation';
 import { ToolApprovalTray } from './ToolApprovalTray';
-import { ImportFolderButton } from '~/components/chat/ImportFolderButton';
-import { ImportZipButton } from '~/components/chat/ImportZipButton';
 import DeployChatAlert from '~/components/deploy/DeployAlert';
 import { Menu } from '~/components/sidebar/Menu.client';
 import type { ElementInfo } from '~/components/workbench/Inspector';
@@ -28,7 +26,7 @@ const LazyWorkbench = lazy(() =>
 import { StickToBottom, useStickToBottomContext } from '~/lib/hooks';
 import { useSpeechRecognition } from '~/lib/hooks/useSpeechRecognition';
 import type { ModelInfo } from '~/lib/modules/llm/types';
-import { profileStore } from '~/lib/stores/profile';
+import type { DebugScope } from '~/lib/persistence/debugChat';
 import { expoUrlAtom } from '~/lib/stores/qrCodeStore';
 import { workbenchStore } from '~/lib/stores/workbench';
 import type { ActionAlert, DeployAlert, LlmErrorAlertType } from '~/types/actions';
@@ -64,6 +62,9 @@ interface BaseChatProps {
   enhancePrompt?: () => void;
   importChat?: (description: string, messages: UIMessage[]) => Promise<void>;
   exportChat?: () => void;
+
+  /** Set when this conversation is a debug session; renders the warning banner. */
+  debugScope?: DebugScope;
   uploadedFiles?: File[];
   setUploadedFiles?: React.Dispatch<React.SetStateAction<File[]>>;
   imageDataList?: string[];
@@ -88,6 +89,7 @@ interface BaseChatProps {
 
   /** Start a new project from a design or a screenshot (template + agent build). */
   onStartProject?: (args: StartProjectArgs) => void;
+  hasProjectFiles?: boolean;
 }
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
@@ -113,6 +115,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       handleStop,
       importChat,
       exportChat,
+      debugScope,
       uploadedFiles = [],
       setUploadedFiles,
       imageDataList = [],
@@ -138,6 +141,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         throw new Error('addToolOutput not implemented');
       },
       onStartProject,
+      hasProjectFiles = false,
     },
     ref,
   ) => {
@@ -411,15 +415,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] lg:h-full lg:min-h-0 min-h-0',
             )}
           >
+            {debugScope && <DebugSessionBanner scope={debugScope} />}
             {!chatStarted && (
               <div id="intro" className="mt-[8vh] lg:mt-[12vh] max-w-2xl mx-auto text-center px-4 lg:px-0">
                 <ConnectToolsPill />
-                <h1 className="text-[2rem] leading-[1.1] sm:text-5xl font-semibold tracking-[-0.03em] text-bolt-elements-textPrimary mb-3 animate-fade-in">
-                  <HeroTitle />
-                </h1>
-                <p className="text-base sm:text-lg mb-8 text-bolt-elements-textSecondary animate-fade-in animation-delay-200">
-                  Describe your app and Bolt builds it, live, in your browser.
-                </p>
+                <HomeHeroText />
               </div>
             )}
             <StickToBottom
@@ -447,9 +447,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     ) : null;
                   }}
                 </ClientOnly>
-                <ScrollToBottom />
                 {/* Reserves the fixed composer's height so the last message is not hidden behind it. */}
                 {chatStarted && <div className="shrink-0 h-[var(--composer-space,9.5rem)]" aria-hidden="true" />}
+                {/* Last: it is outside the transcript's padding, and drawn above the composer band. */}
+                <ScrollToBottom />
               </StickToBottom.Content>
               <div
                 className={classNames('flex flex-col w-full mx-auto', {
@@ -546,6 +547,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     setQrModalOpen={setQrModalOpen}
                     handleFileUpload={handleFileUpload}
                     onStartProject={onStartProject}
+                    hasProjectFiles={hasProjectFiles}
                     chatMode={chatMode}
                     setChatMode={setChatMode}
                     agentMode={agentMode}
@@ -560,16 +562,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             </StickToBottom>
             {!chatStarted && (
               <div className="flex flex-col items-center gap-8 px-4 pb-[var(--mobile-nav-space)] md:pb-12 w-full">
-                <div
-                  className="flex flex-wrap justify-center items-center gap-1 text-sm text-[#1c1c1c]/80 dark:text-white/80"
-                  aria-label="Import an existing project"
-                  role="group"
-                >
-                  <span className="mr-1">or import</span>
-                  <ImportFolderButton importChat={importChat} className={SECONDARY_ACTION} />
-                  <ImportZipButton importChat={importChat} className={SECONDARY_ACTION} />
-                  <GitCloneButton importChat={importChat} className={SECONDARY_ACTION} />
-                </div>
+                <HomeImportActions importChat={importChat} />
               </div>
             )}
           </div>
@@ -594,46 +587,52 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
   },
 );
 
-/*
- * Secondary landing actions (import folder / ZIP / clone) as quiet ghost
- * buttons, so they do not compete with the prompt. `!` overrides the default
- * Button styles, since classNames() concatenates instead of merging.
- */
-const SECONDARY_ACTION = classNames(
-  '!h-8 !min-w-0 !px-2.5 !py-1 !gap-1.5 !text-sm !font-normal !rounded-lg',
-
-  // Sits on the landing wash: near-black / near-white text keeps AA contrast on the pink band.
-  '!bg-transparent !border-transparent !text-[#1c1c1c] dark:!text-white',
-  'hover:!bg-white/60 dark:hover:!bg-white/10',
-  'focus-visible:!outline focus-visible:!outline-2 focus-visible:!outline-accent-500',
-);
-
-/*
- * Lovable greets the user by name. Client-only (the profile lives in
- * localStorage), so the server render shows the generic title.
- */
-function HeroTitle() {
-  const profile = useStore(profileStore);
-  const name = profile?.username?.trim();
-
-  return <>{name ? `What will you build, ${name}?` : 'What will you build today?'}</>;
-}
-
 function ScrollToBottom() {
   const { isAtBottom, scrollToBottom } = useStickToBottomContext();
 
+  /*
+   * The button used to sit INSIDE the scrolling transcript with `sticky z-50 bottom-0`: because it
+   * was the last child of the scroll container, "sticky" kept it pinned 5px below the container's
+   * bottom edge, which put it under the fixed composer (z-prompt), half hidden and unclickable.
+   * It is chrome like the composer, so it leaves the flow entirely and is anchored to the bottom
+   * of the chat column, just above the composer's reserved band, in a layer that stays under the
+   * composer and never covers it.
+   */
   return (
     !isAtBottom && (
-      <>
-        <div className="sticky bottom-0 left-0 right-0 bg-gradient-to-t from-bolt-elements-background-depth-1 to-transparent h-20 z-10" />
+      <div className="bolt-scroll-to-bottom">
         <button
-          className="sticky z-50 bottom-0 left-0 right-0 text-4xl rounded-lg px-1.5 py-0.5 flex items-center justify-center mx-auto gap-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor text-bolt-elements-textPrimary text-sm"
+          type="button"
+          className="rounded-lg px-1.5 py-0.5 flex items-center justify-center gap-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor text-bolt-elements-textPrimary text-sm shadow-md hover:bg-bolt-elements-background-depth-3"
           onClick={() => scrollToBottom()}
         >
-          Go to last message
+          Aller au dernier message
           <span className="i-ph:arrow-down animate-bounce" />
         </button>
-      </>
+      </div>
     )
+  );
+}
+
+/**
+ * Says, above the conversation, that it is a debug session.
+ *
+ * The sidebar chip is the primary mark, but it is out of sight while working: a debug run
+ * that lands in the project you are looking at looks like your own project, and reopening a
+ * real site from a mislabelled entry is how a correction ends up applied to the wrong one.
+ */
+function DebugSessionBanner({ scope }: { scope: DebugScope }) {
+  return (
+    <div
+      role="status"
+      data-testid="debug-session-banner"
+      className="mx-2 mt-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
+    >
+      <span className="font-semibold uppercase tracking-wide">{scope === 'probe' ? 'Sonde' : 'Session de debug'}</span>
+      {' — '}
+      {scope === 'probe'
+        ? 'conversation de test sans projet. Rien de ce qui est ici ne sera publié.'
+        : 'conversation créée par un test automatisé, identifiable dans la liste par son étiquette sonde ou debug.'}
+    </div>
   );
 }

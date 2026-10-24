@@ -24,7 +24,7 @@ export const ImportZipButton: React.FC<ImportZipButtonProps> = ({ className, imp
 
     setIsLoading(true);
 
-    const loadingToast = toast.loading(`Importing ${file.name}…`);
+    const loadingToast = toast.loading(`Importation de ${file.name}…`);
 
     try {
       const result = await createChatFromZip(file);
@@ -34,7 +34,9 @@ export const ImportZipButton: React.FC<ImportZipButtonProps> = ({ className, imp
           zipName: file.name,
           binaryCount: result.skippedBinary,
         });
-        toast.info(`Skipping ${result.skippedBinary} binary file${result.skippedBinary === 1 ? '' : 's'}`);
+        toast.info(
+          `${result.skippedBinary} fichier${result.skippedBinary > 1 ? 's' : ''} binaire${result.skippedBinary > 1 ? 's' : ''} ignoré${result.skippedBinary > 1 ? 's' : ''}`,
+        );
       }
 
       if (importChat) {
@@ -66,11 +68,11 @@ export const ImportZipButton: React.FC<ImportZipButtonProps> = ({ className, imp
         ignoredFileCount: result.skippedIgnored,
       });
 
-      toast.success('ZIP imported successfully');
+      toast.success('ZIP importé avec succès');
     } catch (error) {
       logStore.logError('Failed to import ZIP', error, { zipName: file.name });
       console.error('Failed to import ZIP:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to import ZIP');
+      toast.error(error instanceof Error ? error.message : 'Échec de l’importation du ZIP');
     } finally {
       setIsLoading(false);
       toast.dismiss(loadingToast);
@@ -87,7 +89,7 @@ export const ImportZipButton: React.FC<ImportZipButtonProps> = ({ className, imp
       <input ref={inputRef} type="file" className="hidden" accept=".zip" onChange={handleFileChange} />
       <Button
         onClick={() => inputRef.current?.click()}
-        title="Import ZIP"
+        title="Importer un ZIP"
         variant="default"
         size="lg"
         className={classNames(
@@ -102,7 +104,7 @@ export const ImportZipButton: React.FC<ImportZipButtonProps> = ({ className, imp
         disabled={isLoading}
       >
         <span className="i-ph:file-zip w-4 h-4" />
-        {isLoading ? 'Importing…' : 'Import ZIP'}
+        {isLoading ? 'Importation…' : 'Importer un ZIP'}
       </Button>
     </>
   );

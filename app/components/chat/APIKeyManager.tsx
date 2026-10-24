@@ -214,9 +214,8 @@ export const APIKeyManager: React.FC<APIKeyManagerProps> = ({ provider, apiKey, 
         ) : (
           <>
             {/*
-              A managed provider is not editable: the administrator owns that key. Offering the
-              pencil invited the user to paste a key the server would ignore, which reads as a
-              broken save. It only appears if the admin opened the provider to personal keys.
+              A provider key is editable only by an administrator. If it is managed, personal keys
+              must also have been explicitly allowed.
             */}
             {canEdit && (
               <IconButton

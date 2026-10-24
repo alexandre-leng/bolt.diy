@@ -32,7 +32,7 @@ export function McpTools({ open, onOpenChange }: McpToolsProps) {
     try {
       await checkServersAvailabilities();
     } catch (e) {
-      setError(`Failed to check server availability: ${e instanceof Error ? e.message : String(e)}`);
+      setError(`Impossible de vérifier la disponibilité des serveurs : ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setIsCheckingServers(false);
     }
@@ -51,7 +51,7 @@ export function McpTools({ open, onOpenChange }: McpToolsProps) {
           <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-2">
             <DialogTitle>
               <div className="i-bolt:mcp text-xl"></div>
-              MCP tools
+              Outils MCP
             </DialogTitle>
 
             <div className="space-y-4">
@@ -74,7 +74,7 @@ export function McpTools({ open, onOpenChange }: McpToolsProps) {
                     ) : (
                       <div className="i-ph:arrow-counter-clockwise w-3 h-3" />
                     )}
-                    Check availability
+                    Vérifier la disponibilité
                   </button>
                 </div>
                 {serverEntries.length > 0 ? (
@@ -87,8 +87,8 @@ export function McpTools({ open, onOpenChange }: McpToolsProps) {
                   />
                 ) : (
                   <div className="py-4 text-center text-bolt-elements-textSecondary">
-                    <p>No MCP servers configured</p>
-                    <p className="text-xs mt-1">Configure servers in Settings → MCP Servers</p>
+                    <p>Aucun serveur MCP n’est configuré</p>
+                    <p className="text-xs mt-1">Configurez les serveurs dans Paramètres → Serveurs MCP</p>
                   </div>
                 )}
               </div>
@@ -99,7 +99,7 @@ export function McpTools({ open, onOpenChange }: McpToolsProps) {
             <div className="flex justify-end gap-2 mt-6">
               <div className="flex gap-2">
                 <DialogClose asChild>
-                  <DialogButton type="secondary">Close</DialogButton>
+                  <DialogButton type="secondary">Fermer</DialogButton>
                 </DialogClose>
               </div>
             </div>

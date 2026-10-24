@@ -510,8 +510,83 @@ describe('lot 3 sync regressions', () => {
 
     const second = await migrateLocalHistoryToServer(db, ['1', '2']);
 
-    expect(second).toEqual({ pulled: 0, pushed: 0, offline: false });
+    expect(second).toEqual({ pulled: 0, pushed: 0, offline: false, failed: 0, pending: [] });
     expect(calls.filter((call) => call.path !== '' && call.path !== '/')).toEqual([]);
+  });
+
+  /*
+   * Production: one account held 28 conversations on the server and the list showed "Aucune
+   * conversation". The first sync pulled a handful, then `/api/history/<id>` streamed 1.6 MB and
+   * missed the 8 s read window; the abort ended the whole sync and no server chat was ever
+   * cached. The sync is now batched, retries what failed, and reports the remainder.
+   */
+  it('P10: a failed download is not a lost conversation — it is retried and reported', async () => {
+    const chats = [
+      { id: '1', urlId: 'u1', description: 'one', timestamp: '2026-01-01T00:00:00Z', messages: [{ id: 'a' }] },
+      { id: '2', urlId: 'u2', description: 'two', timestamp: '2026-01-02T00:00:00Z', messages: [{ id: 'b' }] },
+    ];
+
+    let firstDetailFailed = false;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const path = String(url).replace('/api/history', '');
+        const method = init?.method ?? 'GET';
+
+        if (method === 'PUT') {
+          return { ok: true, status: 200, json: async () => ({ ok: true }) };
+        }
+
+        if (path === '' || path === '/') {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ ok: true, chats: chats.map(({ messages: _m, ...rest }) => rest) }),
+          };
+        }
+
+        /*
+         * A detail read that times out: the client sees an aborted fetch (rejection), which
+         * request() turns into { ok: false }.
+         */
+        if (!firstDetailFailed) {
+          firstDetailFailed = true;
+          throw new DOMException('The operation was aborted.', 'AbortError');
+        }
+
+        const chat = chats.find((candidate) => path === `/${candidate.id}`);
+
+        return { ok: Boolean(chat), status: chat ? 200 : 404, json: async () => ({ ok: Boolean(chat), chat }) };
+      }),
+    );
+
+    const result = await migrateLocalHistoryToServer(db, []);
+
+    expect(result.failed).toBe(1);
+    expect(result.pending).toHaveLength(1);
+    expect(result.pulled).toBe(1);
+  });
+
+  it('P10: pulls at most the batch size, newest first, and reports the rest as pending', async () => {
+    const chats = Array.from({ length: 9 }, (_, index) => ({
+      id: String(index + 1),
+      urlId: `u${index + 1}`,
+      description: `chat ${index + 1}`,
+      timestamp: `2026-01-0${index + 1}T00:00:00Z`,
+      messages: [{ id: `m${index + 1}` }],
+    }));
+
+    stubServer(chats);
+
+    const result = await migrateLocalHistoryToServer(db, [], { batchSize: 4 });
+
+    expect(result.pulled).toBe(4);
+    expect(result.pending).toHaveLength(5);
+
+    // Newest first: chat 9 is pulled, chat 1 waits for the next pass.
+    expect(store.has('9')).toBe(true);
+    expect(store.has('1')).toBe(false);
   });
 
   it('P4: does not count a pull that could not be stored', async () => {

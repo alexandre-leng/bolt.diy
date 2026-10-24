@@ -25,15 +25,15 @@ export default class AmazonBedrockProvider extends BaseProvider {
    * the previous list carried stale limits and missed models. Regenerate with
    * `node scripts/generate-model-catalog.mjs --all`.
    */
-  staticModels: ModelInfo[] = AMAZON_BEDROCK_CATALOG
-    .filter((entry) => entry.tools && entry.status !== 'deprecated')
-    .map((entry) => ({
-      name: entry.id,
-      label: entry.label,
-      provider: 'AmazonBedrock',
-      maxTokenAllowed: entry.context,
-      maxCompletionTokens: entry.maxOutput,
-    }));
+  staticModels: ModelInfo[] = AMAZON_BEDROCK_CATALOG.filter(
+    (entry) => entry.tools && entry.status !== 'deprecated',
+  ).map((entry) => ({
+    name: entry.id,
+    label: entry.label,
+    provider: 'AmazonBedrock',
+    maxTokenAllowed: entry.context,
+    maxCompletionTokens: entry.maxOutput,
+  }));
 
   private _parseAndValidateConfig(apiKey: string): AWSBedRockConfig {
     let parsedConfig: AWSBedRockConfig;

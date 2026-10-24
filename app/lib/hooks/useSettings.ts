@@ -9,6 +9,7 @@ import {
   isEventLogsEnabled,
   promptStore,
   providersStore,
+  serverEnabledProvidersStore,
   latestBranchStore,
   autoSelectStarterTemplate,
   enableContextOptimizationStore,
@@ -78,10 +79,34 @@ export function useSettings(): UseSettingsReturn {
   const isLatestBranch = useStore(latestBranchStore);
   const autoSelectTemplate = useStore(autoSelectStarterTemplate);
 
-  const activeProviders = useMemo(
-    () => Object.values(providers).filter((provider) => provider.settings.enabled),
-    [providers],
-  );
+  /*
+   * The providers offered in the composer.
+   *
+   * `settings.enabled` is a PER-BROWSER preference (it lived in localStorage and a cookie), so it
+   * cannot decide what the instance serves: an admin switching a provider off there only closed
+   * it for their own browser. The list is therefore what the SERVER says the instance serves,
+   * filtered by the local choice; when the server says nothing (an unreachable accounts service,
+   * no policy) the local preference is all there is, which is the previous behaviour.
+   */
+  const serverEnabledProviders = useStore(serverEnabledProvidersStore);
+
+  const activeProviders = useMemo(() => {
+    const local = Object.values(providers).filter((provider) => provider.settings.enabled);
+
+    if (serverEnabledProviders.length === 0) {
+      return local;
+    }
+
+    const enabled = local.filter((provider) => serverEnabledProviders.includes(provider.name));
+
+    /*
+     * A browser that closed everything locally must not end up with an empty picker: the
+     * instance's list is the floor, the local choice only removes what the server allows.
+     */
+    return enabled.length > 0
+      ? enabled
+      : Object.values(providers).filter((provider) => serverEnabledProviders.includes(provider.name));
+  }, [providers, serverEnabledProviders]);
 
   const contextOptimizationEnabled = useStore(enableContextOptimizationStore);
   const tabConfiguration = useStore(tabConfigurationStore);
@@ -178,6 +203,34 @@ export function useSettings(): UseSettingsReturn {
   useEffect(() => {
     writeProvidersCookie(providersStore.get());
   }, [providers]);
+
+  /*
+   * Ask the server which providers the instance serves, once per page load. The answer is the
+   * admin's switchboard; a failure leaves the store empty, i.e. "no rule known", and the local
+   * preference keeps driving the composer as before.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch('/api/configured-providers', { headers: { Accept: 'application/json' } })
+      .then(async (response) => {
+        if (!response.ok) {
+          return undefined;
+        }
+
+        return (await response.json()) as { enabledProviders?: unknown };
+      })
+      .then((payload) => {
+        if (!cancelled && Array.isArray(payload?.enabledProviders)) {
+          serverEnabledProvidersStore.set(payload.enabledProviders.filter((name) => typeof name === 'string'));
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return {
     ...settings,

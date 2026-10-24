@@ -86,8 +86,8 @@ function ErrorCloseButton({ text }: { text: string }) {
           event.stopPropagation();
           void copy();
         }}
-        title="Copy error"
-        aria-label="Copy error message"
+        title="Copier le message d’erreur"
+        aria-label="Copier le message d’erreur"
         className={classNames(
           'rounded p-1 transition-colors',
           'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary',
@@ -98,7 +98,7 @@ function ErrorCloseButton({ text }: { text: string }) {
         <div className={copied ? 'i-ph:check-bold text-lg' : 'i-ph:copy text-lg'} aria-hidden="true" />
       </button>
       <span className="sr-only" aria-live="polite">
-        {copied ? 'Copied' : ''}
+        {copied ? 'Copié' : ''}
       </span>
     </div>
   );

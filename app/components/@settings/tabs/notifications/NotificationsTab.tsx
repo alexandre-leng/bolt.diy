@@ -2,7 +2,7 @@ import { useStore } from '@nanostores/react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { formatDistanceToNow } from 'date-fns';
 import { motion } from 'framer-motion';
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { logStore } from '~/lib/stores/logs';
 import { classNames } from '~/utils/classNames';
 
@@ -20,15 +20,6 @@ type FilterType = 'all' | 'system' | 'error' | 'warning' | 'update' | 'info' | '
 const NotificationsTab = () => {
   const [filter, setFilter] = useState<FilterType>('all');
   const logs = useStore(logStore.logs);
-
-  useEffect(() => {
-    const startTime = performance.now();
-
-    return () => {
-      const duration = performance.now() - startTime;
-      logStore.logPerformanceMetric('NotificationsTab', 'mount-duration', duration);
-    };
-  }, []);
 
   const handleClearNotifications = () => {
     const count = Object.keys(logs).length;
@@ -131,9 +122,9 @@ const NotificationsTab = () => {
         <div className="flex flex-col gap-2">
           <p className="text-sm text-gray-600 dark:text-gray-400">{details.message}</p>
           <div className="flex flex-col gap-1 text-xs text-gray-500 dark:text-gray-500">
-            <p>Current Version: {details.currentVersion}</p>
-            <p>Latest Version: {details.latestVersion}</p>
-            <p>Branch: {details.branch}</p>
+            <p>Version actuelle : {details.currentVersion}</p>
+            <p>Dernière version : {details.latestVersion}</p>
+            <p>Branche : {details.branch}</p>
           </div>
           <button
             onClick={() => details.updateUrl && handleUpdateAction(details.updateUrl)}
@@ -149,7 +140,7 @@ const NotificationsTab = () => {
             )}
           >
             <span className="i-ph:git-branch text-lg" />
-            View Changes
+            Voir les changements
           </button>
         </div>
       );
@@ -159,14 +150,14 @@ const NotificationsTab = () => {
   };
 
   const filterOptions: { id: FilterType; label: string; icon: string; color: string }[] = [
-    { id: 'all', label: 'All Notifications', icon: 'i-ph:bell', color: '#9333ea' },
-    { id: 'system', label: 'System', icon: 'i-ph:gear', color: '#6b7280' },
-    { id: 'update', label: 'Updates', icon: 'i-ph:arrow-circle-up', color: '#9333ea' },
-    { id: 'error', label: 'Errors', icon: 'i-ph:warning-circle', color: '#ef4444' },
-    { id: 'warning', label: 'Warnings', icon: 'i-ph:warning', color: '#f59e0b' },
-    { id: 'info', label: 'Information', icon: 'i-ph:info', color: '#3b82f6' },
-    { id: 'provider', label: 'Providers', icon: 'i-ph:robot', color: '#10b981' },
-    { id: 'network', label: 'Network', icon: 'i-ph:wifi-high', color: '#6366f1' },
+    { id: 'all', label: 'Toutes les notifications', icon: 'i-ph:bell', color: '#9333ea' },
+    { id: 'system', label: 'Système', icon: 'i-ph:gear', color: '#6b7280' },
+    { id: 'update', label: 'Mises à jour', icon: 'i-ph:arrow-circle-up', color: '#9333ea' },
+    { id: 'error', label: 'Erreurs', icon: 'i-ph:warning-circle', color: '#ef4444' },
+    { id: 'warning', label: 'Avertissements', icon: 'i-ph:warning', color: '#f59e0b' },
+    { id: 'info', label: 'Informations', icon: 'i-ph:info', color: '#3b82f6' },
+    { id: 'provider', label: 'Fournisseurs', icon: 'i-ph:robot', color: '#10b981' },
+    { id: 'network', label: 'Réseau', icon: 'i-ph:wifi-high', color: '#6366f1' },
   ];
 
   return (
@@ -189,7 +180,7 @@ const NotificationsTab = () => {
                 className={classNames('text-lg', filterOptions.find((opt) => opt.id === filter)?.icon || 'i-ph:funnel')}
                 style={{ color: filterOptions.find((opt) => opt.id === filter)?.color }}
               />
-              {filterOptions.find((opt) => opt.id === filter)?.label || 'Filter Notifications'}
+              {filterOptions.find((opt) => opt.id === filter)?.label || 'Filtrer les notifications'}
               <span className="i-ph:caret-down text-lg text-gray-500 dark:text-gray-400" />
             </button>
           </DropdownMenu.Trigger>
@@ -233,7 +224,7 @@ const NotificationsTab = () => {
           )}
         >
           <span className="i-ph:trash text-lg text-gray-500 dark:text-gray-400 group-hover:text-purple-500 transition-colors" />
-          Clear All
+          Tout effacer
         </button>
       </div>
 
@@ -251,8 +242,8 @@ const NotificationsTab = () => {
           >
             <span className="i-ph:bell-slash text-4xl text-gray-400 dark:text-gray-600" />
             <div className="flex flex-col gap-1">
-              <h3 className="text-sm font-medium text-bolt-elements-textPrimary">No Notifications</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">You're all caught up!</p>
+              <h3 className="text-sm font-medium text-bolt-elements-textPrimary">Aucune notification</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Vous êtes à jour !</p>
             </div>
           </motion.div>
         ) : (
@@ -279,7 +270,7 @@ const NotificationsTab = () => {
                       <h3 className="text-sm font-medium text-bolt-elements-textPrimary">{log.message}</h3>
                       {log.details && renderNotificationDetails(log.details as NotificationDetails)}
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Category: {log.category}
+                        Catégorie : {log.category}
                         {log.subCategory ? ` > ${log.subCategory}` : ''}
                       </p>
                     </div>

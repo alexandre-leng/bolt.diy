@@ -44,6 +44,7 @@ export function withAgentToolCallRecovery(model: LanguageModel, onRetry: () => v
     ...languageModelIdentity(normalized),
     doStream: async (params: Parameters<typeof normalized.doStream>[0]) => {
       const choice = params.toolChoice;
+      const availableToolNames = new Set(params.tools?.map((definition) => definition.name) ?? []);
 
       if (!choice || (choice.type !== 'required' && choice.type !== 'tool')) {
         return normalized.doStream(params);
@@ -67,8 +68,8 @@ export function withAgentToolCallRecovery(model: LanguageModel, onRetry: () => v
           async start(controller) {
             try {
               for (let attempt = 0; attempt < MAX_RECOVERY_ATTEMPTS && !cancelled; attempt++) {
-                const correction =
-                  'Your previous response did not call a required tool. Use the supplied native tools interface now. Do not print JSON or function calls as text. Follow the tool schema exactly.';
+                const correction = `Your previous response did not call an available required tool. The only available tools in this step are: ${[...availableToolNames].join(', ')}. Use the supplied native tools interface now. Do not print JSON or function calls as text. Follow the tool schema exactly.`;
+
                 const retryPrompt =
                   params.prompt[0]?.role === 'system'
                     ? [
@@ -90,6 +91,7 @@ export function withAgentToolCallRecovery(model: LanguageModel, onRetry: () => v
                 const buffered: Part[] = [];
 
                 let satisfied = false;
+                let rejectedBeforeAcceptance = false;
                 let failed = false;
                 let finished = false;
 
@@ -100,11 +102,17 @@ export function withAgentToolCallRecovery(model: LanguageModel, onRetry: () => v
                     break;
                   }
 
-                  if (
-                    value.type === 'tool-call' &&
-                    (choice.type === 'required' || value.toolName === choice.toolName)
-                  ) {
-                    satisfied = true;
+                  if (value.type === 'tool-call' && !satisfied) {
+                    const allowed =
+                      availableToolNames.has(value.toolName) &&
+                      (choice.type === 'required' || value.toolName === choice.toolName);
+
+                    /*
+                     * Reject the whole unaccepted attempt, not the project guard. No tool effect
+                     * has been exposed yet, so one corrective retry cannot duplicate a write.
+                     */
+                    rejectedBeforeAcceptance ||= !allowed;
+                    satisfied = allowed && !rejectedBeforeAcceptance;
                   }
 
                   if (satisfied) {

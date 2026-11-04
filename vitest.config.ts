@@ -48,6 +48,7 @@ const DOM_TESTS = [
   'app/components/ui/useConfirmDialog.spec.tsx',
   'app/components/@settings/tabs/providers/local/LocalProvidersTab.confirm.spec.tsx',
   'app/components/deploy/PublishButton.spec.tsx',
+  'app/components/deploy/PublishButton.naming.spec.tsx',
   'app/components/chat/AttachmentMenu.screenshot.spec.tsx',
   'app/components/chat/ImportZipButton.spec.tsx',
   'app/components/workbench/WorkbenchReopenButton.spec.tsx',

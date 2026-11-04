@@ -32,12 +32,34 @@ type PublishState =
  */
 const NON_PROJECT_ARTIFACT_IDS = new Set<string>(RESTORE_ARTIFACT_IDS);
 
+/*
+ * Artifacts that exist but are never the user's own project either.
+ *
+ * `imported-files` is what a folder/zip import, a starter template or a git clone writes, under
+ * the fixed id `imported-files` (zipImport.ts, folderImport.ts, selectStarterTemplate.ts,
+ * GitCloneButton.tsx). It carries a generic title ("Imported Files", "Create initial files",
+ * "Git Cloned Files"), so publishing a chat that was BUILD from an import named the site after
+ * the importer instead of the project. Its title is also the single most misleading one to
+ * advertise as the site's name.
+ *
+ * `User Updated Files` is `filesToArtifacts()`'s own title (fileUtils.ts), emitted whenever the
+ * client pushes edited files back as an artifact.
+ */
+const NON_PROJECT_ARTIFACT_IDS_EXTRA = new Set<string>(['imported-files']);
+const GENERIC_ARTIFACT_TITLES = new Set<string>(['user updated files']);
+
 function projectName(): string {
   const artifacts = workbenchStore.artifacts.get();
 
-  const fromArtifact = Object.entries(artifacts).find(
-    ([id, artifact]) => !NON_PROJECT_ARTIFACT_IDS.has(id) && artifact?.title,
-  )?.[1]?.title;
+  const fromArtifact = Object.entries(artifacts).find(([id, artifact]) => {
+    if (NON_PROJECT_ARTIFACT_IDS.has(id) || NON_PROJECT_ARTIFACT_IDS_EXTRA.has(id)) {
+      return false;
+    }
+
+    const title = artifact?.title?.trim();
+
+    return !!title && !GENERIC_ARTIFACT_TITLES.has(title.toLowerCase());
+  })?.[1]?.title;
 
   const fromStorage = typeof localStorage === 'undefined' ? '' : localStorage.getItem('bolt_project_name') || '';
 

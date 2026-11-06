@@ -55,7 +55,25 @@ const getGitHubRepoContent = async (
     const response = await fetch(`/api/github-template?repo=${encodeURIComponent(repoName)}`, { signal });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      /*
+       * The server already says WHY (GitHub rate limit, missing repo, upstream error) in an
+       * `error` field. Throwing a bare `HTTP error! status: 404` here threw that away and left
+       * the user with a number that pointed at the wrong thing: the template repo was fine, the
+       * GitHub quota was exhausted. Surface the server's sentence instead.
+       */
+      let detail = `HTTP ${response.status}`;
+
+      try {
+        const body = (await response.json()) as { error?: unknown };
+
+        if (typeof body?.error === 'string' && body.error.trim()) {
+          detail = body.error.trim();
+        }
+      } catch {
+        // Non-JSON error body: keep the status.
+      }
+
+      throw new Error(detail);
     }
 
     // Our API will return the files in the format we need

@@ -15,6 +15,7 @@ import {
 } from '~/lib/screenshot/generate';
 import { importScreenshotHtml, requiresScriptConsent, validateImportableHtml } from '~/lib/screenshot/import';
 import { buildProjectInstruction, pickTemplate, templateLabel } from '~/lib/screenshot/project';
+import { newRunId, startRun, finishRun, listRuns, type ScreenshotRun } from '~/lib/screenshot/runs';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
 
@@ -436,6 +437,11 @@ function localizeMessage(text: string): string {
     'Keep the description under 1500 characters.': 'Limitez la description à 1 500 caractères.',
     'Design generation returned no image.': 'La génération n’a renvoyé aucune maquette.',
     'Design generation returned no usable image.': 'La génération n’a renvoyé aucune maquette exploitable.',
+    'Template introuvable': 'Le modèle de projet est introuvable. Choisissez-en un autre dans la liste.',
+    'Failed to fetch template files':
+      'Impossible de charger le modèle de projet. Vérifiez votre connexion et réessayez.',
+    'GitHub API rate limit exceeded while fetching blueberry-llm/vite-shadcn. Set GITHUB_TOKEN to raise the limit.':
+      'Quota GitHub épuisé. Réessayez dans quelques minutes.',
     'Could not create the generated HTML file. Impossible d’enregistrer le fichier dans le projet.':
       'Impossible d’enregistrer le fichier HTML dans le projet.',
   };
@@ -467,6 +473,13 @@ export function ScreenshotToCode({
   const [file, setFile] = useState<File>();
 
   /*
+   * Generations precedentes, chargees au montage. Le dialogue ne gardait ses maquettes que
+   * dans son etat React : fermer l'onglet, perdre la connexion ou changer d'appareil
+   * detruisait deux minutes de calcul. La liste vient du serveur, donc elle survit a tout ca.
+   */
+  const [recentRuns, setRecentRuns] = useState<ScreenshotRun[]>([]);
+
+  /*
    * The stack selector is hidden (the user settled on React + TypeScript + Tailwind + shadcn/ui, and
    * Lovable/Bolt do not expose a per-generation framework choice either). The value stays because
    * the flat-file fallback path still needs one.
@@ -493,6 +506,22 @@ export function ScreenshotToCode({
     },
     [],
   );
+
+  /*
+   * Charge les generations precedentes a l'ouverture. Une liste indisponible n'est pas une
+   * erreur a montrer : le dialogue reste utilisable, on perd juste le rappel.
+   */
+  useEffect(() => {
+    const abort = new AbortController();
+
+    void listRuns(abort.signal).then((runs) => {
+      if (mounted.current && !abort.signal.aborted) {
+        setRecentRuns(runs);
+      }
+    });
+
+    return () => abort.abort();
+  }, []);
 
   const pushLog = (line: string) => {
     setLog((current) => [...current, line].slice(-MAX_LOG_LINES));
@@ -573,8 +602,17 @@ export function ScreenshotToCode({
     setChosenDesign(0);
     setStatus('Génération des maquettes...');
 
+    /*
+     * Chaque génération obtient un identifiant AVANT le premier appel : si l'onglet est
+     * fermé ou la connexion coupée en cours de route, la trace existe déjà côté serveur et
+     * la maquette reste retrouvable au lieu d'être perdue avec l'état React.
+     */
+    const runId = newRunId();
+
     try {
       const text = validateDesignPrompt(prompt);
+
+      void startRun({ id: runId, mode: 'design', prompt: text });
 
       /*
        * Progressive: each mockup appears the moment it is drawn. One subscription image takes
@@ -613,11 +651,19 @@ export function ScreenshotToCode({
             ? 'Maquette prête. Choisissez-la pour la transformer en code.'
             : `${result.length} maquettes prêtes. Choisissez celle à transformer en code.`,
         );
+
+        void finishRun({ id: runId, status: 'done' });
       }
     } catch (cause) {
       if (mounted.current && !abort.signal.aborted) {
         setError(cause instanceof Error ? localizeMessage(cause.message) : 'La génération du design a échoué.');
       }
+
+      void finishRun({
+        id: runId,
+        status: abort.signal.aborted ? 'cancelled' : 'failed',
+        error: cause instanceof Error ? cause.message : 'design generation failed',
+      });
     } finally {
       if (mounted.current) {
         setBusy(false);
@@ -647,6 +693,11 @@ export function ScreenshotToCode({
     setStatus('Transformation de la maquette en code...');
     setLog([]);
 
+    /*
+     * Pas d'identifiant ici : la maquette d'origine a deja sa trace cote serveur, et la
+     * conversion en code repart de la meme image. Un second enregistrement pour la meme
+     * intention doublerait les lignes sans rien apprendre a l'utilisateur.
+     */
     try {
       const asFile = await dataUrlToFile(chosen.image, `design-${chosenDesign + 1}.png`);
       const image = validateScreenshot(await readImage(asFile));
@@ -834,9 +885,7 @@ export function ScreenshotToCode({
               disabled={busy}
               onClick={() => switchMode(option.value)}
               className={classNames(
-                // eslint-disable-next-line @blitz/lines-around-comment
-                // A bare <button> keeps the UA's light grey fill, so the fill must be explicit.
-                'relative flex items-start gap-3 rounded-xl border p-3 text-left transition-all',
+                /* A bare <button> keeps the UA's light grey fill, so the fill must be explicit. */ 'relative flex items-start gap-3 rounded-xl border p-3 text-left transition-all',
 
                 /*
                  * A <button> without an explicit fill paints the UA grey (rgb(239,239,239)) in the
@@ -1075,6 +1124,45 @@ export function ScreenshotToCode({
         <p role="status" className="text-bolt-elements-textSecondary">
           {status}
         </p>
+      )}
+
+      {recentRuns.length > 0 && !busy && (
+        <details className="rounded-md border border-bolt-elements-borderColor px-3 py-2">
+          <summary className="cursor-pointer text-xs text-bolt-elements-textSecondary">
+            Reprendre une génération ({recentRuns.length})
+          </summary>
+          <ul className="mt-2 space-y-1">
+            {recentRuns.slice(0, 10).map((run) => (
+              <li key={run.id} className="flex items-center gap-2 text-xs">
+                <span
+                  aria-hidden="true"
+                  className={classNames(
+                    'w-1.5 h-1.5 rounded-full shrink-0',
+                    run.status === 'done' && 'bg-green-500',
+                    run.status === 'running' && 'bg-amber-500',
+                    run.status === 'failed' && 'bg-red-500',
+                    run.status === 'cancelled' && 'bg-bolt-elements-textTertiary',
+                  )}
+                />
+                <span className="truncate flex-1 text-bolt-elements-textSecondary">
+                  {run.prompt || '(sans description)'}
+                </span>
+                <span className="text-bolt-elements-textTertiary">
+                  {run.status === 'done'
+                    ? 'terminée'
+                    : run.status === 'running'
+                      ? 'en cours'
+                      : run.status === 'failed'
+                        ? 'échouée'
+                        : 'annulée'}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[11px] text-bolt-elements-textTertiary">
+            Les maquettes restent associées à votre compte : les retrouver ici ne relance aucun calcul.
+          </p>
+        </details>
       )}
 
       {log.length > 0 && (

@@ -417,7 +417,11 @@ export async function restoreApiKeysFromAccount(): Promise<'restored' | 'nothing
     return 'nothing';
   }
 
-  Cookies.set('apiKeys', JSON.stringify(merged), { expires: 365 });
+  /*
+   * L'ecriture du cookie est supprimee : plus aucune cle de fournisseur ne vit dans le
+   * navigateur sur cette instance. La fusion reste calculee pour que l'evenement ci-dessous
+   * garde son sens, mais rien n'est persiste en clair cote client.
+   */
   window.dispatchEvent(
     new CustomEvent<ApiKeysUpdatedDetail>(API_KEYS_UPDATED_EVENT, {
       detail: { apiKeys: merged, providerName: added[0] },

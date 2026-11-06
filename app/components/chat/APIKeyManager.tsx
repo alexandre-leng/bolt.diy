@@ -1,4 +1,3 @@
-import Cookies from 'js-cookie';
 import React, { useState, useEffect, useCallback } from 'react';
 import { IconButton } from '~/components/ui/IconButton';
 import { fetchSession } from '~/lib/auth/session';
@@ -25,22 +24,14 @@ interface KeyStatus {
 // cache which stores whether the provider's API key is set, and by whom
 const providerEnvKeyStatusCache: Record<string, KeyStatus> = {};
 
-const apiKeyMemoizeCache: { [k: string]: Record<string, string> } = {};
-
-export function getApiKeysFromCookies() {
-  const storedApiKeys = Cookies.get('apiKeys');
-
-  let parsedKeys: Record<string, string> = {};
-
-  if (storedApiKeys) {
-    parsedKeys = apiKeyMemoizeCache[storedApiKeys];
-
-    if (!parsedKeys) {
-      parsedKeys = apiKeyMemoizeCache[storedApiKeys] = JSON.parse(storedApiKeys);
-    }
-  }
-
-  return parsedKeys;
+/**
+ * Provider keys are server-side only on this deployment (see
+ * `lib/.server/api/instance-keys.ts`). The `apiKeys` cookie is no longer read anywhere: it
+ * used to hold plaintext keys readable by any script on the page. Kept as an always-empty
+ * accessor so the callers that still import it compile and simply see nothing.
+ */
+export function getApiKeysFromCookies(): Record<string, string> {
+  return {};
 }
 
 // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -132,14 +123,12 @@ export const APIKeyManager: React.FC<APIKeyManagerProps> = ({ provider, apiKey, 
   }, [checkEnvApiKey]);
 
   const handleSave = () => {
-    // Save to parent state
+    /*
+     * No cookie write. Provider keys are configured once by the administrator, server-side,
+     * and never travel through the browser; persisting here would reintroduce the plaintext
+     * credential in `document.cookie`.
+     */
     setApiKey(tempKey);
-
-    // Save to cookies
-    const currentKeys = getApiKeysFromCookies();
-    const newKeys = { ...currentKeys, [provider.name]: tempKey };
-    Cookies.set('apiKeys', JSON.stringify(newKeys));
-
     setIsEditing(false);
   };
 

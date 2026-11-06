@@ -48,7 +48,6 @@ export function useDataOperations({
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
-  const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
   const [progressMessage, setProgressMessage] = useState<string>('');
   const [progressPercent, setProgressPercent] = useState<number>(0);
   const [lastOperation, setLastOperation] = useState<{ type: string; data: any } | null>(null);
@@ -699,91 +698,6 @@ export function useDataOperations({
   );
 
   /**
-   * Import API keys from a JSON file
-   * @param file The file to import
-   */
-  const handleImportAPIKeys = useCallback(
-    async (file: File) => {
-      setIsImporting(true);
-      setProgressPercent(0);
-
-      // Dismiss any existing toast first
-      toast.dismiss('progress-toast');
-
-      toast.loading(`Importing API keys from ${file.name}...`, {
-        position: 'bottom-right',
-        autoClose: 3000,
-        toastId: 'progress-toast',
-      });
-
-      try {
-        // Step 1: Read file
-        showProgress('Reading file', 20);
-
-        const fileContent = await file.text();
-
-        // Step 2: Parse JSON
-        showProgress('Parsing API keys data', 40);
-
-        const importedData = JSON.parse(fileContent);
-
-        // Step 3: Validate data
-        showProgress('Validating API keys data', 60);
-
-        // Get current API keys from cookies for potential undo
-        const apiKeysStr = document.cookie.split(';').find((row) => row.trim().startsWith('apiKeys='));
-        const currentApiKeys = apiKeysStr ? JSON.parse(decodeURIComponent(apiKeysStr.split('=')[1])) : {};
-        setLastOperation({ type: 'import-api-keys', data: { previous: currentApiKeys } });
-
-        // Step 4: Import API keys
-        showProgress('Applying API keys', 80);
-
-        const newKeys = ImportExportService.importAPIKeys(importedData);
-        const apiKeysJson = JSON.stringify(newKeys);
-        document.cookie = `apiKeys=${apiKeysJson}; path=/; max-age=31536000`;
-
-        // Step 5: Complete
-        showProgress('Completing import', 100);
-
-        // Dismiss progress toast before showing success toast
-        toast.dismiss('progress-toast');
-
-        // Count how many keys were imported
-        const keyCount = Object.keys(newKeys).length;
-
-        const newKeyCount = Object.keys(newKeys).filter(
-          (key) => !currentApiKeys[key] || currentApiKeys[key] !== newKeys[key],
-        ).length;
-
-        toast.success(
-          `${keyCount} API keys imported successfully (${newKeyCount} new/updated)\n` +
-            'Note: Keys are stored in browser cookies. For server-side usage, add them to your .env.local file.',
-          { position: 'bottom-right', autoClose: 5000 },
-        );
-
-        if (onReloadSettings) {
-          onReloadSettings();
-        }
-      } catch (error) {
-        console.error('Error importing API keys:', error);
-
-        // Dismiss progress toast before showing error toast
-        toast.dismiss('progress-toast');
-
-        toast.error(`Failed to import API keys: ${error instanceof Error ? error.message : 'Unknown error'}`, {
-          position: 'bottom-right',
-          autoClose: 3000,
-        });
-      } finally {
-        setIsImporting(false);
-        setProgressPercent(0);
-        setProgressMessage('');
-      }
-    },
-    [onReloadSettings, showProgress],
-  );
-
-  /**
    * Reset all settings to default values
    */
   const handleResetSettings = useCallback(async () => {
@@ -919,71 +833,6 @@ export function useDataOperations({
 
   /**
    * Download API keys template
-   */
-  const handleDownloadTemplate = useCallback(async () => {
-    setIsDownloadingTemplate(true);
-    setProgressPercent(0);
-
-    // Dismiss any existing toast first
-    toast.dismiss('progress-toast');
-
-    toast.loading('Creating API keys template...', {
-      position: 'bottom-right',
-      autoClose: 3000,
-      toastId: 'progress-toast',
-    });
-
-    try {
-      // Step 1: Create template
-      showProgress('Creating template', 50);
-
-      const templateData = ImportExportService.createAPIKeysTemplate();
-
-      // Step 2: Download file
-      showProgress('Downloading template', 75);
-
-      const blob = new Blob([JSON.stringify(templateData, null, 2)], {
-        type: 'application/json',
-      });
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'bolt-api-keys-template.json';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      // Step 3: Complete
-      showProgress('Completing download', 100);
-
-      // Dismiss progress toast before showing success toast
-      toast.dismiss('progress-toast');
-
-      toast.success('Template downloaded successfully', {
-        position: 'bottom-right',
-        autoClose: 3000,
-      });
-    } catch (error) {
-      console.error('Error downloading template:', error);
-
-      // Dismiss progress toast before showing error toast
-      toast.dismiss('progress-toast');
-
-      toast.error(`Failed to download template: ${error instanceof Error ? error.message : 'Unknown error'}`, {
-        position: 'bottom-right',
-        autoClose: 3000,
-      });
-    } finally {
-      setIsDownloadingTemplate(false);
-      setProgressPercent(0);
-      setProgressMessage('');
-    }
-  }, [showProgress]);
-
-  /**
-   * Export API keys to a JSON file
    */
   const handleExportAPIKeys = useCallback(async () => {
     setIsExporting(true);
@@ -1182,28 +1031,6 @@ export function useDataOperations({
           break;
         }
 
-        case 'import-api-keys': {
-          // Restore previous API keys
-          const previousAPIKeys = lastOperation.data.previous;
-          const newKeys = ImportExportService.importAPIKeys(previousAPIKeys);
-          const apiKeysJson = JSON.stringify(newKeys);
-          document.cookie = `apiKeys=${apiKeysJson}; path=/; max-age=31536000`;
-
-          // Dismiss progress toast before showing success toast
-          toast.dismiss('progress-toast');
-
-          toast.success('Operation undone successfully', {
-            position: 'bottom-right',
-            autoClose: 3000,
-          });
-
-          if (onReloadSettings) {
-            onReloadSettings();
-          }
-
-          break;
-        }
-
         default:
           // Dismiss progress toast before showing error toast
           toast.dismiss('progress-toast');
@@ -1233,7 +1060,6 @@ export function useDataOperations({
     isExporting,
     isImporting,
     isResetting,
-    isDownloadingTemplate,
     progressMessage,
     progressPercent,
     lastOperation,
@@ -1243,10 +1069,8 @@ export function useDataOperations({
     handleExportSelectedChats,
     handleImportSettings,
     handleImportChats,
-    handleImportAPIKeys,
     handleResetSettings,
     handleResetChats,
-    handleDownloadTemplate,
     handleExportAPIKeys,
     handleUndo,
   };

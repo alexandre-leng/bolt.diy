@@ -329,13 +329,35 @@ export async function loader({ request, context }: { request: Request; context: 
     console.error('Repository:', repo);
     console.error('Error details:', error instanceof Error ? error.message : String(error));
 
-    const notFound =
-      error instanceof Error && /Repository not found|No main or master branch archive found/i.test(error.message);
+    const message = error instanceof Error ? error.message : String(error);
+
+    /*
+     * Three causes used to collapse into one 404 "Template introuvable": a missing repo, an
+     * exhausted GitHub quota, and a genuine upstream failure. Only the first is a 404. A rate
+     * limit reported as "template not found" sends the user hunting for a template bug that does
+     * not exist, which is exactly what happened when the deployment ran unauthenticated at
+     * 60 requests/hour shared by every account.
+     */
+    if (/rate limit|403|429/i.test(message)) {
+      return Response.json(
+        {
+          error:
+            'Quota GitHub épuisé : les templates ne peuvent pas être chargés pour le moment. ' +
+            'Réessayez dans quelques minutes (ou demandez à l’administrateur de configurer GITHUB_TOKEN).',
+          code: 'github_rate_limit',
+          details: message,
+        },
+        { status: 503 },
+      );
+    }
+
+    const notFound = /Repository not found|No main or master branch archive found/i.test(message);
 
     return Response.json(
       {
         error: notFound ? 'Template introuvable' : 'Failed to fetch template files',
-        details: error instanceof Error ? error.message : String(error),
+        code: notFound ? 'template_not_found' : 'template_upstream_error',
+        details: message,
       },
       { status: notFound ? 404 : 500 },
     );

@@ -1,4 +1,3 @@
-import Cookies from 'js-cookie';
 import React, { useEffect, useMemo, useState } from 'react';
 import { getApiKeysFromCookies } from '~/components/chat/APIKeyManager';
 import { ActionButton } from '~/components/ui/ActionButton';
@@ -202,7 +201,11 @@ export default function VoiceTab() {
       delete next[apiKeyId];
     }
 
-    Cookies.set('apiKeys', JSON.stringify(next));
+    /*
+     * Pas d'ecriture de cookie : les cles de fournisseur sont configurees cote serveur par
+     * l'administrateur. Persister ici remettrait une cle en clair dans document.cookie, lisible
+     * par n'importe quel script de la page.
+     */
     setApiKeys(next);
     setKeyDrafts((previous) => ({ ...previous, [apiKeyId]: '' }));
     setKeyVisible((previous) => ({ ...previous, [apiKeyId]: false }));

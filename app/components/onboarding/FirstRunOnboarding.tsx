@@ -287,7 +287,12 @@ export function FirstRunOnboarding() {
     }
 
     const apiKeys = { ...keys, [providerName]: apiKey.trim() };
-    Cookies.set('apiKeys', JSON.stringify(apiKeys), { expires: 365 });
+
+    /*
+     * Pas d'ecriture de cookie. Sur cette instance les cles sont fournies par l'administrateur
+     * et lues cote serveur ; une cle saisie dans le navigateur ne serait de toute facon plus
+     * acceptee, et la stocker exposerait un secret a tout script de la page.
+     */
     window.dispatchEvent(
       new CustomEvent<ApiKeysUpdatedDetail>(API_KEYS_UPDATED_EVENT, { detail: { apiKeys, providerName } }),
     );

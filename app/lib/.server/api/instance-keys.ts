@@ -115,21 +115,25 @@ export async function resolveProviderKeys(args: {
   return mergeLocalKeys(remote, cookieKeys);
 }
 
-/** Keep personal keys only for providers the last valid policy explicitly opens. */
+/**
+ * Provider keys are SERVER-SIDE ONLY on this deployment.
+ *
+ * A `cookieKeys` argument is still accepted so callers compile unchanged, but it is
+ * deliberately ignored: the `apiKeys` cookie used to carry plaintext provider keys and
+ * `document.cookie` handed them to any script on the page (no HttpOnly, no Secure, sent on
+ * every request). Removing the "personal key" path from the UI is not enough — a browser
+ * could still POST the cookie by hand — so the guard lives here, at the single place that
+ * merges browser input into the served key set. `allowUserKeys` is likewise reported empty:
+ * nothing can be opened for browser-side keys when no browser-side key is ever read.
+ */
 function mergeLocalKeys(remote: ResolvedKeys, cookieKeys?: Record<string, string>): ResolvedKeys {
   const apiKeys: Record<string, string> = {};
 
-  for (const [provider, value] of Object.entries(cookieKeys || {})) {
-    if (typeof value === 'string' && value && remote.allowUserKeys.includes(provider)) {
-      apiKeys[provider] = value;
-    }
+  if (cookieKeys && Object.keys(cookieKeys).length > 0) {
+    logger.warn('ignoring browser-supplied API keys: provider keys are server-side only');
   }
 
   const source: ResolvedKeys['source'] = {};
-
-  for (const provider of Object.keys(apiKeys)) {
-    source[provider] = 'user';
-  }
 
   for (const [provider, value] of Object.entries(remote.apiKeys)) {
     apiKeys[provider] = value;
@@ -139,7 +143,7 @@ function mergeLocalKeys(remote: ResolvedKeys, cookieKeys?: Record<string, string
   return {
     apiKeys,
     baseUrls: remote.baseUrls,
-    allowUserKeys: remote.allowUserKeys,
+    allowUserKeys: [],
     source,
     policy: remote.policy,
     policyUnavailable: remote.policyUnavailable,

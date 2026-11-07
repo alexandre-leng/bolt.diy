@@ -36,7 +36,19 @@ describe('design direction forwarding', () => {
     expect(response.status).toBe(200);
 
     const init = fetcher.mock.calls[0]?.[1] as RequestInit;
-    expect(JSON.parse(String(init.body))).toEqual({ prompt: 'Pagia landing', count: 1, directionIndex: 2 });
+
+    /*
+     * Le contrat porte les deux noms : `direction_index` est le seul champ que le service Python
+     * comprend, `directionIndex` reste envoyé pour ne pas casser un service qui l'aurait adopté.
+     * Le test verrouille la présence du nom snake_case, sans quoi la direction est ignorée en
+     * silence et les trois maquettes repartent de la même direction.
+     */
+    expect(JSON.parse(String(init.body))).toEqual({
+      prompt: 'Pagia landing',
+      count: 1,
+      directionIndex: 2,
+      direction_index: 2,
+    });
   });
   it('rejects a direction outside the fixed list', async () => {
     const response = await post({ prompt: 'Pagia landing', count: 1, directionIndex: 4 });

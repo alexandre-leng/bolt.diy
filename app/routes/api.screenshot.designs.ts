@@ -121,7 +121,15 @@ async function requestDesignsFromService(args: {
       body: JSON.stringify({
         prompt: parsed.prompt,
         count: parsed.count,
+
+        /*
+         * Deux orthographes volontairement envoyées : le service Pydantic ne possède que le champ
+         * `direction_index`, et l'ancien nom `directionIndex` est ignoré en silence. Sans le champ
+         * snake_case, chaque requête `count:1` repartait de la direction 0 : trois maquettes, une
+         * seule direction, écrasées sur le même fichier.
+         */
         directionIndex: parsed.directionIndex,
+        direction_index: parsed.directionIndex,
         ...(parsed.runId ? { run_id: parsed.runId } : {}),
       }),
       signal: AbortSignal.timeout(180_000),

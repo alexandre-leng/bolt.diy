@@ -609,6 +609,7 @@ export function ScreenshotToCode({
     setVariants([]);
     setDesigns([]);
     setChosenDesign(0);
+    setViewer(null);
     setStatus('Génération des maquettes...');
 
     /*
@@ -656,6 +657,19 @@ export function ScreenshotToCode({
         },
       });
 
+      if (result.length > 0) {
+        /*
+         * Le journal est clos MEME si le dialogue a été démonté pendant la génération : sinon la
+         * ligne reste « en cours » pour toujours et « Reprendre une génération » annonce une
+         * génération qui n'existe plus. Seul l'affichage dépend du montage, pas l'écriture.
+         */
+        void finishRun({
+          id: runId,
+          status: 'done',
+          images: result.map((design) => design.asset).filter((asset): asset is string => Boolean(asset)),
+        });
+      }
+
       if (mounted.current && !abort.signal.aborted && result.length > 0) {
         setDesigns(result);
         setStatus(
@@ -663,12 +677,6 @@ export function ScreenshotToCode({
             ? 'Maquette prête. Choisissez-la pour la transformer en code.'
             : `${result.length} maquettes prêtes. Choisissez celle à transformer en code.`,
         );
-
-        void finishRun({
-          id: runId,
-          status: 'done',
-          images: result.map((design) => design.asset).filter((asset): asset is string => Boolean(asset)),
-        });
       }
     } catch (cause) {
       if (mounted.current && !abort.signal.aborted) {
@@ -972,7 +980,9 @@ export function ScreenshotToCode({
             {busy ? (
               <>
                 <span className="i-ph:circle-notch-bold animate-spin" aria-hidden />
-                {designs.length > 0 ? `${designs.length} sur ${DESIGN_COUNT} prêtes…` : 'Génération en cours…'}
+                {designs.filter(Boolean).length > 0
+                  ? `${designs.filter(Boolean).length} sur ${DESIGN_COUNT} prêtes…`
+                  : 'Génération en cours…'}
               </>
             ) : designs.length > 0 ? (
               'Relancer la génération'

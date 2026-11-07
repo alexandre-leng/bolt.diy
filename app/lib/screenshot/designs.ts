@@ -26,12 +26,21 @@ export interface Design {
 
   /** Short label describing the direction this variant took. */
   direction: string;
+
+  /**
+   * Chemin de la copie sur disque, quand la génération a un identifiant. Permet de réafficher
+   * la maquette après un rechargement, sans garder 2,3 Mo de base64 dans l'état React.
+   */
+  asset?: string;
 }
 
 export interface DesignRequest {
   prompt: string;
   count?: number;
   model?: DesignModel;
+
+  /** Identifiant de la génération : sans lui, aucune copie n'est écrite sur disque. */
+  runId?: string;
 
   /** Portrait/landscape/square, mirrors the API's `size` parameter. */
   size?: '1024x1024' | '1536x1024' | '1024x1536';
@@ -98,6 +107,7 @@ async function requestOne(args: {
   model: DesignModel;
   size: '1024x1024' | '1536x1024' | '1024x1536';
   index: number;
+  runId?: string;
   signal?: AbortSignal;
 }): Promise<Design> {
   const response = await fetch('/api/screenshot/designs', {
@@ -109,6 +119,7 @@ async function requestOne(args: {
       directionIndex: args.index,
       model: args.model,
       size: args.size,
+      ...(args.runId ? { runId: args.runId } : {}),
     }),
     signal: args.signal,
   });
@@ -134,14 +145,17 @@ async function requestOne(args: {
     throw new Error(detail);
   }
 
-  const body = (await response.json()) as { images?: unknown };
+  const body = (await response.json()) as { images?: unknown; assets?: unknown };
   const [first] = Array.isArray(body.images) ? body.images : [];
 
   if (typeof first !== 'string') {
     throw new Error("La génération n'a renvoyé aucune image.");
   }
 
-  return toDesign(first, args.index);
+  const [asset] = Array.isArray(body.assets) ? body.assets : [];
+  const design = toDesign(first, args.index);
+
+  return typeof asset === 'string' && asset.startsWith('/assets/') ? { ...design, asset } : design;
 }
 
 /** Accept a bare base64 payload or a ready data URL; reject anything that is not an image. */
@@ -182,7 +196,7 @@ export async function generateDesigns(request: DesignRequest): Promise<Design[]>
        * with a finished design on screen.
        */
       try {
-        const design = await requestOne({ prompt, model, size, index, signal: request.signal });
+        const design = await requestOne({ prompt, model, size, index, runId: request.runId, signal: request.signal });
 
         slots[index] = design;
         finished += 1;

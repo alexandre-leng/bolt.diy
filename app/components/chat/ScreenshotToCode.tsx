@@ -14,7 +14,7 @@ import {
   type Variant,
 } from '~/lib/screenshot/generate';
 import { importScreenshotHtml, requiresScriptConsent, validateImportableHtml } from '~/lib/screenshot/import';
-import { buildProjectInstruction, pickTemplate, templateLabel } from '~/lib/screenshot/project';
+import { buildProjectInstruction, pickTemplate } from '~/lib/screenshot/project';
 import { newRunId, startRun, finishRun, listRuns, type ScreenshotRun } from '~/lib/screenshot/runs';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
@@ -48,9 +48,9 @@ type Mode = 'design' | 'screenshot';
  * Surface of the mode cards, shared by the stylesheet class and the spec.
  *
  * A bare <button> paints the UA grey in the dark theme, which read as a white, disabled card, so
- * every card names its own fill. The unchecked card sits one depth step above the dialog
- * (depth-2 -> depth-3); the checked one takes the accent tint, because depth-4 is a 7% white that
- * measures within a few points of depth-3 and left the active card looking as flat as the other.
+ * every card names its own fill. The unchecked card sits one step above the dialog surface
+ * (depth-1, since depth-2 is identical to the dialog); the checked one takes depth-3 plus the accent
+ * border, because depth-4 is a 7% white that left the active card looking as flat as the other.
  */
 const MODE_CARD_SURFACE = 'bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary';
 
@@ -497,6 +497,9 @@ export function ScreenshotToCode({
   /** Index of the mockup shown full screen, or null when the viewer is closed. */
   const [viewer, setViewer] = useState<number | null>(null);
   const controller = useRef<AbortController | null>(null);
+
+  /** Journal row of the generation in flight, so cancelling also closes it server-side. */
+  const runRef = useRef<string | null>(null);
   const mounted = useRef(true);
 
   useEffect(
@@ -529,6 +532,12 @@ export function ScreenshotToCode({
 
   const reset = () => {
     controller.current?.abort();
+
+    if (runRef.current) {
+      void finishRun({ id: runRef.current, status: 'cancelled', error: 'annulée par l’utilisateur' });
+      runRef.current = null;
+    }
+
     setStatus('');
     setLog([]);
     setError('');
@@ -609,6 +618,8 @@ export function ScreenshotToCode({
      */
     const runId = newRunId();
 
+    runRef.current = runId;
+
     try {
       const text = validateDesignPrompt(prompt);
 
@@ -621,6 +632,7 @@ export function ScreenshotToCode({
       const result = await designFor({
         prompt: text,
         count: DESIGN_COUNT,
+        runId,
         signal: abort.signal,
         onDesign: (design, index, done, total) => {
           if (!mounted.current || abort.signal.aborted) {
@@ -652,7 +664,11 @@ export function ScreenshotToCode({
             : `${result.length} maquettes prêtes. Choisissez celle à transformer en code.`,
         );
 
-        void finishRun({ id: runId, status: 'done' });
+        void finishRun({
+          id: runId,
+          status: 'done',
+          images: result.map((design) => design.asset).filter((asset): asset is string => Boolean(asset)),
+        });
       }
     } catch (cause) {
       if (mounted.current && !abort.signal.aborted) {
@@ -956,8 +972,10 @@ export function ScreenshotToCode({
             {busy ? (
               <>
                 <span className="i-ph:circle-notch-bold animate-spin" aria-hidden />
-                Génération en cours…
+                {designs.length > 0 ? `${designs.length} sur ${DESIGN_COUNT} prêtes…` : 'Génération en cours…'}
               </>
+            ) : designs.length > 0 ? (
+              'Relancer la génération'
             ) : (
               `Générer ${DESIGN_COUNT} maquettes`
             )}
@@ -968,7 +986,7 @@ export function ScreenshotToCode({
               {Array.from({ length: DESIGN_COUNT }, (_, index) => (
                 <div
                   key={index}
-                  className="aspect-[3/4] animate-pulse rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1"
+                  className="aspect-[4/3] animate-pulse rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1"
                 />
               ))}
             </div>
@@ -1011,7 +1029,15 @@ export function ScreenshotToCode({
                         <img
                           src={design.image}
                           alt={`Aperçu de la maquette ${design.direction}`}
-                          className="aspect-[3/4] w-full bg-bolt-elements-background-depth-3 object-cover object-top"
+
+                          /*
+                           * Paysage 4/3, pas portrait 3/4 : une maquette de page est large, et le
+                           * portrait réservait 420 px de haut par tuile. À trois tuiles, le bouton
+                           * « Créer le projet » passait sous la ligne de flottaison d'un écran
+                           * 720 px, invisible et sans indice de défilement : l'action principale
+                           * était hors d'atteinte alors qu'elle est le but du parcours.
+                           */
+                          className="aspect-[4/3] w-full bg-bolt-elements-background-depth-3 object-cover object-top"
                         />
                         <span className="flex items-center gap-2 px-3 py-2">
                           <span className="text-xs font-medium">{design.direction}</span>
@@ -1064,7 +1090,7 @@ export function ScreenshotToCode({
                 className="self-start gap-2 !rounded-full px-5 !bg-accent-700 !text-white hover:!bg-accent-800 disabled:!bg-accent-700/50"
               >
                 <span className="i-ph:rocket-launch-bold" aria-hidden />
-                {hasProjectFiles ? 'Créer un nouveau projet' : 'Créer le projet'} {templateLabel(pickTemplate(prompt))}
+                {hasProjectFiles ? 'Créer un nouveau projet' : 'Créer le projet'}
               </Button>
             </div>
           )}
@@ -1098,7 +1124,7 @@ export function ScreenshotToCode({
             className="self-start gap-2 !rounded-full px-5 !bg-accent-700 !text-white hover:!bg-accent-800 disabled:!bg-accent-700/50"
           >
             <span className="i-ph:rocket-launch-bold" aria-hidden />
-            {hasProjectFiles ? 'Créer un nouveau projet' : 'Créer le projet'} {templateLabel(pickTemplate(prompt))}
+            {hasProjectFiles ? 'Créer un nouveau projet' : 'Créer le projet'}
           </Button>
         </div>
       )}
@@ -1111,7 +1137,9 @@ export function ScreenshotToCode({
        */}
       <p className="flex items-center gap-2 text-xs text-bolt-elements-textSecondary">
         <span className="i-ph:info" aria-hidden />
-        Le projet sera créé en React + TypeScript + Tailwind + shadcn/ui.
+        {mode === 'design'
+          ? 'Le projet sera créé en React + TypeScript + Tailwind + shadcn/ui, à partir de la maquette choisie.'
+          : 'Le projet sera créé en React + TypeScript + Tailwind + shadcn/ui, à partir de l’image.'}
       </p>
 
       {busy && (
@@ -1133,29 +1161,59 @@ export function ScreenshotToCode({
           </summary>
           <ul className="mt-2 space-y-1">
             {recentRuns.slice(0, 10).map((run) => (
-              <li key={run.id} className="flex items-center gap-2 text-xs">
-                <span
-                  aria-hidden="true"
-                  className={classNames(
-                    'w-1.5 h-1.5 rounded-full shrink-0',
-                    run.status === 'done' && 'bg-green-500',
-                    run.status === 'running' && 'bg-amber-500',
-                    run.status === 'failed' && 'bg-red-500',
-                    run.status === 'cancelled' && 'bg-bolt-elements-textTertiary',
-                  )}
-                />
-                <span className="truncate flex-1 text-bolt-elements-textSecondary">
-                  {run.prompt || '(sans description)'}
-                </span>
-                <span className="text-bolt-elements-textTertiary">
-                  {run.status === 'done'
-                    ? 'terminée'
-                    : run.status === 'running'
-                      ? 'en cours'
-                      : run.status === 'failed'
-                        ? 'échouée'
-                        : 'annulée'}
-                </span>
+              <li key={run.id} className="space-y-1">
+                <div className="flex items-center gap-2 text-xs">
+                  <span
+                    aria-hidden="true"
+                    className={classNames(
+                      'w-1.5 h-1.5 rounded-full shrink-0',
+                      run.status === 'done' && 'bg-green-500',
+                      run.status === 'running' && 'bg-amber-500',
+                      run.status === 'failed' && 'bg-red-500',
+                      run.status === 'cancelled' && 'bg-bolt-elements-textTertiary',
+                    )}
+                  />
+                  <span className="truncate flex-1 text-bolt-elements-textSecondary">
+                    {run.prompt || '(sans description)'}
+                  </span>
+                  <span className="text-bolt-elements-textTertiary">
+                    {run.status === 'done'
+                      ? 'terminée'
+                      : run.status === 'running'
+                        ? 'en cours'
+                        : run.status === 'failed'
+                          ? 'échouée'
+                          : 'annulée'}
+                  </span>
+                </div>
+
+                {/*
+                 * Les vignettes viennent du disque, pas de la base : une maquette pese 2,3 Mo
+                 * en base64, la stocker en ligne ferait exploser la reponse. Le chemin relatif
+                 * est relu par le loader du Worker, qui relaie vers le service image.
+                 */}
+                {run.images.length > 0 && (
+                  <ul className="flex gap-1.5 pl-3.5">
+                    {run.images.slice(0, 4).map((asset, index) => {
+                      const match = /^\/assets\/([A-Za-z0-9_-]{1,64})\/(\d{1,2}\.png)$/.exec(asset);
+
+                      if (!match) {
+                        return null;
+                      }
+
+                      return (
+                        <li key={asset}>
+                          <img
+                            src={`/api/screenshot/designs?runId=${encodeURIComponent(match[1])}&name=${encodeURIComponent(match[2])}`}
+                            alt={`Maquette ${index + 1} de « ${run.prompt.slice(0, 40)} »`}
+                            loading="lazy"
+                            className="h-12 w-16 rounded border border-bolt-elements-borderColor object-cover object-top"
+                          />
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </li>
             ))}
           </ul>

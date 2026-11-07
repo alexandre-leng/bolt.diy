@@ -1,4 +1,4 @@
-import type { ActionFunctionArgs } from 'react-router';
+import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import { z } from 'zod';
 import { CODEX_BASE_URL, codexAuth, codexHeaders } from '~/lib/.server/codex-oauth';
 import { getTrustedClientIP } from '~/lib/security';
@@ -38,6 +38,17 @@ const requestSchema = z.object({
     .default(0),
   model: z.enum(['gpt-image-1', 'dall-e-3']).default('gpt-image-1'),
   size: z.enum(['1024x1024', '1536x1024', '1024x1536']).default('1024x1024'),
+
+  /*
+   * Identifiant de la generation, pose par le client. Quand il est present, le service image
+   * ecrit aussi chaque maquette sur disque et renvoie son chemin : c'est ce qui permet a
+   * « Reprendre une generation » de reafficher les vignettes apres un rechargement, sans
+   * stocker 2,3 Mo de base64 en base.
+   */
+  runId: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{1,64}$/)
+    .optional(),
 });
 
 const BASE_INSTRUCTION =
@@ -107,15 +118,24 @@ async function requestDesignsFromService(args: {
     const response = await fetch(`${url.replace(/\/$/, '')}/api/internal/designs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-internal-token': token },
-      body: JSON.stringify({ prompt: parsed.prompt, count: parsed.count, directionIndex: parsed.directionIndex }),
+      body: JSON.stringify({
+        prompt: parsed.prompt,
+        count: parsed.count,
+        directionIndex: parsed.directionIndex,
+        ...(parsed.runId ? { run_id: parsed.runId } : {}),
+      }),
       signal: AbortSignal.timeout(180_000),
     });
 
     if (response.ok) {
-      const body = (await response.json()) as { images?: string[]; model?: string };
+      const body = (await response.json()) as { images?: string[]; model?: string; assets?: string[] };
 
       if (Array.isArray(body.images) && body.images.length > 0) {
-        return Response.json({ images: body.images, model: body.model ?? parsed.model });
+        return Response.json({
+          images: body.images,
+          model: body.model ?? parsed.model,
+          ...(Array.isArray(body.assets) && body.assets.length > 0 ? { assets: body.assets } : {}),
+        });
       }
 
       return Response.json({ error: 'The image service returned no mockup.' }, { status: 502 });
@@ -135,6 +155,56 @@ async function requestDesignsFromService(args: {
   } catch {
     /* Unreachable service: let the caller try its own credentials. */
     return null;
+  }
+}
+
+/*
+ * Sert une maquette stockee par le service image.
+ *
+ * Le navigateur ne peut pas appeler le service directement : il est sur le reseau Docker, protege
+ * par un jeton interne. Ce loader relaie la requete, en gardant la meme garde de session que le
+ * reste de l'application — une maquette appartient a un compte, elle n'est pas publique.
+ */
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  const url = new URL(request.url);
+  const runId = url.searchParams.get('runId') ?? '';
+  const name = url.searchParams.get('name') ?? '';
+
+  // Meme forme que cote service : un identifiant, un numero de fichier, rien d'autre.
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(runId) || !/^\d{1,2}\.png$/.test(name)) {
+    return new Response('Not found', { status: 404 });
+  }
+
+  const env = (context?.cloudflare?.env as Record<string, any> | undefined) ?? {};
+  const serviceUrl = env.DESIGN_API_URL || process.env.DESIGN_API_URL;
+  const serviceToken = env.DESIGN_API_INTERNAL_TOKEN || process.env.DESIGN_API_INTERNAL_TOKEN;
+
+  if (!serviceUrl || !serviceToken) {
+    return new Response('Image service is not configured', { status: 503 });
+  }
+
+  const target = `${serviceUrl.replace(/\/$/, '')}/api/internal/designs/asset/${runId}/${name}`;
+
+  try {
+    const response = await fetch(target, {
+      headers: { 'x-internal-token': serviceToken },
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    if (!response.ok) {
+      return new Response('Not found', { status: response.status === 404 ? 404 : 502 });
+    }
+
+    return new Response(response.body, {
+      headers: {
+        'Content-Type': 'image/png',
+
+        // Prive : la maquette reflete le travail d'un compte, un cache partage la divulguerait.
+        'Cache-Control': 'private, max-age=3600',
+      },
+    });
+  } catch {
+    return new Response('Image service unreachable', { status: 502 });
   }
 }
 

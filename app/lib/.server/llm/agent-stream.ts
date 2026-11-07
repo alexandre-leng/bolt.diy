@@ -180,6 +180,36 @@ export function withAgentToolCallRecovery(model: LanguageModel, onRetry: () => v
                   continue;
                 }
 
+                /*
+                 * Derniere tentative, toujours sans appel d'outil : le tour est VIDE.
+                 *
+                 * Mesure sur deepseek-v4.1-flash, thinking actif : le budget part entierement en
+                 * `reasoning_tokens`, la reponse arrive en `finish: length` avec zero appel et
+                 * zero texte. `recoverJsonToolCalls('')` ne trouve rien, donc le tour se terminait
+                 * sans erreur : l'interface restait sur « Generating Response » et l'utilisateur
+                 * attendait des minutes un resultat qui n'arriverait jamais.
+                 *
+                 * Un echec explicite vaut mieux qu'un silence : on nomme la cause probable et le
+                 * geste a faire, au lieu de laisser l'attente ouverte.
+                 */
+                const producedText = buffered.some((part) => part.type === 'text-delta' && Boolean(part.delta?.trim()));
+
+                const producedCall = buffered.some((part) => part.type === 'tool-call');
+
+                if (finished && !satisfied && !failed && !producedText && !producedCall) {
+                  controller.enqueue({
+                    type: 'error',
+                    error: new Error(
+                      'The model returned an empty step: it spent its whole budget on reasoning and ' +
+                        'never called the required tool. Retry the message; if it repeats, pick a ' +
+                        'model without extended reasoning for this turn.',
+                    ),
+                  });
+                  controller.close();
+
+                  return;
+                }
+
                 for (const part of buffered) {
                   controller.enqueue(part);
                 }

@@ -359,13 +359,35 @@ export default class OpenCodeGoProvider extends BaseProvider {
 
         const wanted = chosen ?? (disableThinking ? { thinking: { type: 'disabled' as const } } : null);
 
-        if (wanted && init?.body && typeof init.body === 'string') {
+        if (init?.body && typeof init.body === 'string') {
           try {
             const body = JSON.parse(init.body);
 
-            if (body && typeof body === 'object' && !body.thinking && !body.reasoning_effort) {
-              Object.assign(body, wanted);
-              init = { ...init, body: JSON.stringify(body) };
+            if (body && typeof body === 'object') {
+              /*
+               * Un tour qui EXIGE un appel d'outil ne peut pas se permettre de raisonner d'abord.
+               *
+               * Mesure sur deepseek-v4.1-flash avec `tool_choice: required` et un budget serré :
+               * sans `thinking: disabled`, les tokens de sortie partent entierement en
+               * `reasoning_tokens`, la reponse revient en `finish: length` avec zero appel et
+               * zero texte. Le tour est vide, et l'interface attend un resultat qui n'arrivera
+               * jamais. Avec `thinking: disabled`, le meme appel rend un tool_call a tous les
+               * coups (verifie a 300, 800 et 1500 tokens).
+               *
+               * Le raisonnement l'emporte donc sur le niveau demande par l'utilisateur quand un
+               * outil est obligatoire : un agent qui ne peut pas appeler son outil n'est pas un
+               * agent plus reflechi, c'est un agent arrete.
+               */
+              const requiresTool = body.tool_choice === 'required' || body.tool_choice === 'any';
+
+              if (requiresTool && catalogCanDisableThinking(model)) {
+                body.thinking = { type: 'disabled' };
+                delete body.reasoning_effort;
+                init = { ...init, body: JSON.stringify(body) };
+              } else if (wanted && !body.thinking && !body.reasoning_effort) {
+                Object.assign(body, wanted);
+                init = { ...init, body: JSON.stringify(body) };
+              }
             }
           } catch {
             /* Not JSON (or an empty body): leave the request untouched. */

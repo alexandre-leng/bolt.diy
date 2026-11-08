@@ -64,7 +64,15 @@ export interface GenerationOptions {
   images?: string[];
   videos?: string[];
 
-  /** Ask the backend to generate image assets for the page. */
+  /**
+   * Ask the backend to generate image assets for the page.
+   *
+   * Defaults to TRUE: the generation price is already paid for the page, and a hero image the
+   * model had to fake with a gradient or a stock URL is the visible gap between "a page" and
+   * "the page on the screenshot". The backend serves those images from its own
+   * `/local-assets`, which nginx exposes on `/screenshot-api/local-assets/` — a URL the model
+   * can put straight into an `<img src>`.
+   */
   shouldGenerateImages?: boolean;
   shouldExtractAssets?: boolean;
 
@@ -292,7 +300,7 @@ export function generateMany(images: string[], options: GenerationOptions = {}):
             images: [...images, ...(options.images ?? [])],
             videos: options.videos ?? [],
           },
-          isImageGenerationEnabled: options.shouldGenerateImages ?? false,
+          isImageGenerationEnabled: options.shouldGenerateImages ?? true,
           isAssetExtractionEnabled: options.shouldExtractAssets ?? false,
           ...(options.designSystem ? { designSystem: options.designSystem } : {}),
         }),

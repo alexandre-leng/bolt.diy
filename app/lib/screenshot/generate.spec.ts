@@ -111,7 +111,14 @@ describe('screenshot generation', () => {
       inputMode: 'image',
       generationType: 'create',
       prompt: { text: '', images: [image], videos: [] },
-      isImageGenerationEnabled: false,
+
+      /*
+       * Image generation is ON by default. It shipped as `false` and that single flag kept the
+       * backend's generate_images tool out of the model's toolset entirely: the capability
+       * existed server-side, the panel never asked for it, and every recreated page fell back to
+       * gradients or stock URLs where the screenshot had a real picture.
+       */
+      isImageGenerationEnabled: true,
       isAssetExtractionEnabled: false,
     });
     socket.message({ type: 'setCode', variantIndex: 0, value: html });

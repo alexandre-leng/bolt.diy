@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BaseProvider } from './base-provider';
 import { LLMManager } from './manager';
+import { MODELS_DEV_PROVIDERS } from '~/lib/modules/llm/catalogs/models-dev-providers.catalog';
+import { registerModelsDevProviders } from '~/lib/modules/llm/register-models-dev.server';
 
 class FakeProvider extends BaseProvider {
   name = 'FakeProvider';
@@ -49,12 +51,23 @@ describe('LLMManager', () => {
     expect(names.length).toBeGreaterThan(0);
   });
 
-  it('registers exactly the enabled providers', () => {
+  it('registers the dedicated providers AND every generated models.dev provider', () => {
     const manager = LLMManager.getInstance({});
-    const names = manager.getAllProviders().map((p) => p.name);
 
-    // All 23 providers should now be registered (22 upstream + OpenCodeGo)
-    expect(names.sort()).toEqual([
+    registerModelsDevProviders(manager);
+
+    const names = manager.getAllProviders().map((p) => p.name);
+    const unique = new Set(names);
+
+    /*
+     * The allow-list no longer describes the whole registered set: every OpenAI-compatible
+     * provider models.dev publishes is registered from the generated table, so enumerating 23
+     * names here would go stale at the next catalogue refresh. What must hold is:
+     *  - each dedicated class is present;
+     *  - each generated provider is present;
+     *  - nothing is registered twice.
+     */
+    for (const dedicated of [
       'AmazonBedrock',
       'Anthropic',
       'Cerebras',
@@ -78,22 +91,28 @@ describe('LLMManager', () => {
       'Together',
       'Z.ai',
       'xAI',
-    ]);
+    ]) {
+      expect(unique.has(dedicated)).toBe(true);
+    }
+
+    for (const provider of MODELS_DEV_PROVIDERS) {
+      expect(unique.has(provider.id)).toBe(true);
+    }
+
+    expect(names.length).toBe(unique.size);
   });
 
-  it('registers all 23 providers including newly restored ones', () => {
+  it('never lets the generated table shadow a dedicated class', () => {
     const manager = LLMManager.getInstance({});
-    const names = manager.getAllProviders().map((p) => p.name);
 
-    // Verify newly restored providers are registered
-    expect(names).toContain('Groq');
-    expect(names).toContain('Together');
-    expect(names).toContain('Ollama');
-    expect(names).toContain('HuggingFace');
-    expect(names).toContain('Cohere');
-    expect(names).toContain('Mistral');
-    expect(names).toContain('OpenCodeGo');
-    expect(names.length).toBe(23);
+    /*
+     * A dedicated provider speaks a protocol the generic chat-completions adapter does not
+     * (Responses API, Messages API, Gemini). The generated table excludes them by construction,
+     * and the registration order keeps a dedicated class in place even if an id overlapped.
+     */
+    const openai = manager.getProvider('OpenAI');
+    expect(openai).toBeDefined();
+    expect(openai?.constructor.name).toBe('OpenAIProvider');
   });
 
   it('exposes each enabled provider via getProvider', () => {

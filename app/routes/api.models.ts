@@ -1,6 +1,7 @@
 import { policyUnavailableResponse, resolveProviderKeys } from '~/lib/.server/api/instance-keys';
 import { getApiKeysFromCookie, getProviderSettingsFromCookie } from '~/lib/api/cookies';
 import { LLMManager } from '~/lib/modules/llm/manager';
+import { registerModelsDevProviders } from '~/lib/modules/llm/register-models-dev.server';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { ProviderInfo } from '~/types/model';
 
@@ -46,6 +47,13 @@ export async function loader({
   };
 }): Promise<Response> {
   const llmManager = LLMManager.getInstance(context.cloudflare?.env);
+
+  /*
+   * The models.dev providers are registered here, not in the manager's constructor: the manager is
+   * part of the browser bundle (via `~/utils/constants`), and pulling their ~1 MB catalogue into a
+   * client chunk is exactly what this route exists to avoid. See the module's own header.
+   */
+  registerModelsDevProviders(llmManager);
 
   // Get client side maintained API keys and provider settings from cookies
   const cookieHeader = request.headers.get('Cookie');

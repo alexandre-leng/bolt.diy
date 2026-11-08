@@ -88,6 +88,32 @@ export class StreamingMessageParser {
   parse(messageId: string, input: string) {
     let state = this.#messages.get(messageId);
 
+    /*
+     * Un message déjà consommé en ENTIER est rejoué quand le même texte final revient.
+     *
+     * `position` existe pour le streaming : chaque fragment n'est lu qu'une fois. Mais
+     * `Chat.client.tsx` reparse le même lot de messages après l'import du template (effet
+     * « setup » qui attend la fin des actions fichier), et sans cette remise à zéro le second
+     * passage ne rendait AUCUNE action : la carte « Project Setup » restait vide, la carte
+     * d'artifact existait déjà au même id, et ni `npm install` ni `npm run dev` ne partaient.
+     * D'où `vite: not found` sur un projet fraîchement créé.
+     *
+     * La remise à zéro n'est appliquée qu'à un texte COMPLET présenté une seconde fois : une
+     * passe de streaming ne doit jamais reculer, sinon un fragment qui se termine comme un texte
+     * déjà consommé (le cas des balises coupées) serait relu et dupliqué. Un message complet est
+     * reconnu à ses tags fermants, qu'un fragment en cours de route ne porte pas.
+     */
+    const looksComplete = input.includes('</boltArtifact>') || input.includes('</boltAction>');
+
+    if (state && looksComplete && state.position >= input.length && input.length > 0) {
+      state.position = 0;
+      state.insideAction = false;
+      state.insideArtifact = false;
+      state.currentAction = { content: '' };
+      state.actionId = 0;
+      state.artifactCounter = 0;
+    }
+
     if (!state) {
       state = {
         position: 0,

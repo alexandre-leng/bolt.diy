@@ -1194,7 +1194,14 @@ export const ChatImpl = memo(
             id: `1-${new Date().getTime()}`,
             role: 'user',
             content: preamble,
-            parts: [...createMessageParts(preamble, [args.image]), imagePart],
+
+            /*
+             * UNE seule fois l'image. `createMessageParts(preamble, [args.image])` en ajoute déjà
+             * une, et concaténer `imagePart` derrière la dupliquait : le tour partait avec deux
+             * copies du même PNG de ~3 Mo, 6 Mo de charge utile, et le modèle s'arrêtait après son
+             * plan sans jamais écrire ni installer le projet.
+             */
+            parts: createMessageParts(preamble, [args.image]),
           },
           {
             id: `2-${new Date().getTime()}`,
@@ -1202,6 +1209,23 @@ export const ChatImpl = memo(
             content: temResp.assistantMessage,
             parts: [{ type: 'text', text: temResp.assistantMessage }],
           },
+
+          /*
+           * L'installation fait partie de l'import du template, comme dans le parcours « starter »
+           * (`StarterTemplateImport.client.tsx`). Sans ce message, le projet arrivait avec des
+           * fichiers et AUCUNE dépendance : `npm run dev` répondait `vite: not found`, et l'agent
+           * planifiait sans jamais installer. Un message vide n'est pas ajouté.
+           */
+          ...(temResp.setupMessage
+            ? [
+                {
+                  id: `3-${new Date().getTime()}`,
+                  role: 'assistant',
+                  content: temResp.setupMessage,
+                  parts: [{ type: 'text', text: temResp.setupMessage }],
+                },
+              ]
+            : []),
         ] as any);
 
         setInput('');

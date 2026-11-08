@@ -58,4 +58,24 @@ describe('buildProjectInstruction', () => {
     expect(text).not.toContain('mockup');
     expect(text).toContain('The attached image is the design to reproduce.');
   });
+
+  it('tells the agent that pictures must stay real images, not gradients', () => {
+    /*
+     * Le service qui a produit la maquette sait generer un asset manquant sur la session
+     * ChatGPT et rend une URL absolue. Sans cette consigne, l'agent remplace la photo par un
+     * degrade ou une image de stock d'une autre marque : c'est exactement l'ecart visible
+     * quand on compare la page au design.
+     */
+    const text = buildProjectInstruction({
+      prompt: 'une boulangerie',
+      template: 'Vite Shadcn',
+      designCount: 1,
+      chosenIndex: 0,
+    });
+
+    expect(text).toContain('real <img>');
+    expect(text).toContain('absolute URL');
+    expect(text).toContain('Never replace a picture');
+    expect(text).not.toContain('placehold.co');
+  });
 });

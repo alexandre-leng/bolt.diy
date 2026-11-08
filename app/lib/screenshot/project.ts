@@ -75,6 +75,22 @@ export function buildProjectInstruction(args: {
     'Recreate the design as real components in the existing project, not as a single HTML file:',
     'split the page into components, put the copy in the components, and use shadcn/ui primitives',
     'where they fit. Keep the project installable and runnable as it is.',
+
+    /*
+     * The design carries real pictures. Neither the agent runtime nor the browser can be told
+     * to "download one from the internet": the sandbox has no outbound access, and the
+     * screenshot-to-code service generates the missing assets over the ChatGPT OAuth session
+     * and publishes them on /screenshot-api-assets/ as absolute URLs. The agent is told where
+     * that capability lives, because a silent fallback to gradients or stock photos from
+     * another brand is exactly the gap the user notices when comparing the two pages.
+     */
+    'Pictures in the design (photos, illustrations, product shots) must appear as real <img>',
+    'elements at the same placement, crop and aspect ratio. The screenshot service that',
+    'produced this design can generate any asset it is missing from a text prompt and returns a',
+    'ready-to-use absolute URL; ask for them through that service rather than inventing file',
+    'paths. Never replace a picture with a gradient, a CSS shape or a stock photo from an',
+    'unrelated brand. If an asset genuinely cannot be generated, use a placeholder of the same',
+    'aspect ratio and say so in your final message.',
   ]
     .filter(Boolean)
     .join(' ');
